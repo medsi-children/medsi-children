@@ -128,7 +128,7 @@ export function createChatOperations(sql) {
         if (target)m.reply={messageKey:target.messageKey,side:target.side,type:target.type,text:target.text,fileId:target.fileId};
       });
       return {ok:true,phone:phone10,parentName:profile.parent_name||'',
-        childName:[child?.registered_first_name,child?.surname].filter(Boolean).join(' '),
+        childName:[child?.registered_first_name,child?.surname].filter(Boolean).join(' ')||profile.child_name||'',
         relationship:profile.relationship||'Родитель',messages,hasMore};
     });
   }

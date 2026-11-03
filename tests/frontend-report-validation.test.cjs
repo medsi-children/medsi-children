@@ -38,7 +38,7 @@ test('a pinned general note and the same child block are caught before submissio
     '',
     'Эрнест: Основной детский блок.',
     'Лиза: Основной блок второго ребёнка.'
-  ].join('\\n');
+  ].join('\n');
   const result = validate('evening', source);
   assert.equal(result.ok, false);
   assert.equal(result.issues[0].reason, 'duplicate_name');
@@ -50,9 +50,9 @@ test('a pinned general note and the same child block are caught before submissio
 
 test('decorative prefixes are accepted for distinct headers, not ordinary prose', () => {
   assert.equal(validate('evening',
-    '📌Эрнест: Основной текст.\\n\\n📌У Лизы было мероприятие.\\nЛиза: Другой детский блок.').ok, true);
+    '📌Эрнест: Основной текст.\n\n📌У Лизы было мероприятие.\nЛиза: Другой детский блок.').ok, true);
   const response = validate('morning',
-    '📌 Лена А.: Первый текст.\\n\\nЛена А. — Снова тот же ребёнок.');
+    '📌 Лена А.: Первый текст.\n\nЛена А. — Снова тот же ребёнок.');
   assert.equal(response.ok, false);
   assert.equal(response.issues[0].reason, 'duplicate_header');
   assert.match(response.message, /общий комментарий для врачей/);

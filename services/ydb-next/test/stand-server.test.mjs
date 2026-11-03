@@ -14,7 +14,9 @@ function fakeServices(){
     parentRegistration:{register:async()=>({ok:true,status:'PENDING'})},
     parentAccess:{request:async()=>({ok:true,status:'PENDING'})},
     parentDeletion:{enqueue:async()=>({ok:true})},
-    push:{},dbHealth:async()=>{}
+    push:{},dbHealth:async()=>{},
+    media:{grantCookie:(_req,_res,next)=>next(),upload:async(_req,res)=>res.status(503).end(),
+      open:async(_req,res)=>res.status(404).end()}
   };
 }
 test('stand refuses to start without explicit isolated mode and tutor credentials',()=>{
@@ -41,6 +43,6 @@ test('stand keeps public entry limited, requires educator auth and closes media 
     assert.equal(response.status,401);
 
     response=await fetch(base+'/media/s3/secret-file');
-    assert.equal(response.status,503);
+    assert.equal(response.status,404);
   }finally{await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
 });

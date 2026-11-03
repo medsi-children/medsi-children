@@ -4,8 +4,8 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys}) {
-  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys];
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,push}) {
+  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
   router.use(express.json({limit:'1mb'}));
@@ -51,6 +51,45 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(auth?.preview){res.status(403).json({ok:false,message:'Предварительный просмотр только для чтения.'});return true}
     return false;
   };
+  // Public entry points create pending requests only; staff must verify a
+  // real adult in person before approving access to medical information.
+  const publicRequests=new Map();
+  const publicLimit=(req,res,next)=>{
+    const now=Date.now(),key=String(req.ip||req.socket?.remoteAddress||'unknown');
+    if(publicRequests.size>5000){
+      for(const [k,v] of publicRequests)if(v.expires<=now)publicRequests.delete(k);
+      if(publicRequests.size>5000)publicRequests.clear();
+    }
+    const prior=publicRequests.get(key);
+    const item=prior&&prior.expires>now?prior:{count:0,expires:now+60000};
+    item.count++;publicRequests.set(key,item);
+    if(item.count>45)return res.status(429).json({ok:false,message:'Слишком много запросов. Повторите позже.'});
+    next();
+  };
+  router.use(['/parent-registration','/parent-auth/request',
+    '/parent-auth/status','/parent-passkeys/authentication/options',
+    '/parent-passkeys/authentication/verify'],publicLimit);
+
+  router.post('/parent-registration',run(req=>parentRegistration.register(req.body||{})));
+  router.get('/parent-registration/status',run(req=>parentRegistration.status(req.query||{})));
+  router.get('/parent-registration/pending',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentRegistration.listPending();
+  }));
+  router.post('/parent-registration/decision',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    return parentRegistration.decide({...req.body,approvedBy:'educator'});
+  }));
+  router.post('/parent-auth/request',run(req=>parentAccess.request(req.body||{})));
+  router.post('/parent-auth/status',run(req=>parentAccess.status(req.body||{})));
+  router.get('/parent-access/requests',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentAccess.listPending();
+  }));
+  router.post('/parent-access/decision',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentAccess.decide(req.body||{});
+  }));
   router.post('/parent-passkeys/authentication/options',run(async()=>{
     return passkeys.authenticationOptions();
   }));
@@ -192,9 +231,7 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     return {ok:true,submissionId,...result};
   }));
 
-  // Registration, deletion queue and passkey routes are wired only when their
-  // dedicated YDB services are complete. They MUST never fall back to foreign
-  // backends in the new version: missing route fails closed.
+  // Unimplemented operations MUST fail closed, never use foreign backends.
   router.use((_req,res)=>res.status(404).json({ok:false,message:'Маршрут новой системы пока не подключён.'}));
   return router;
 }

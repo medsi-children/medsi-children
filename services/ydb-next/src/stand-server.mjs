@@ -9,7 +9,7 @@ import {createReportReader} from './report-reader.mjs';
 import {createReportSubmissionService} from './report-submission-service.mjs';
 import {createChatStore} from './chat-store.mjs';
 import {createChatOperations} from './chat-operations.mjs';
-import {createEducatorReportDashboard} from './educator-report-dashboard.mjs';
+import {createEducatorReportsDashboardStore} from './educator-report-dashboard.mjs';
 import {createNameVariantsStore} from './name-variants-store.mjs';
 import {createPushService} from './push-service.mjs';
 import {createParentPasskeyService} from './parent-passkeys.mjs';
@@ -21,8 +21,8 @@ import {createLegacyBridge} from './legacy-bridge.mjs';
 
 const ROOT=fileURLToPath(new URL('../../../',import.meta.url));
 const require=createRequire(import.meta.url);
-const phone10=value=>String(value||'').replace(/\\D/g,'').slice(-10);
-const PHONE=/^\\d{10}$/;
+const phone10=value=>String(value||'').replace(/\D/g,'').slice(-10);
+const PHONE=/^\d{10}$/;
 const PUBLIC_ASSETS=[
   '/favicon.ico','/apple-touch-icon.png','/apple-touch-icon2.png',
   '/manifest.json','/tutors-manifest.json','/sw.js'
@@ -45,7 +45,7 @@ export function createNextServices({sql,env=process.env}) {
   });
   const reportReader=createReportReader(sql),reports=createReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
-  const dashboard=createEducatorReportDashboard(sql),nameVariants=createNameVariantsStore(sql);
+  const dashboard=createEducatorReportsDashboardStore(sql),nameVariants=createNameVariantsStore(sql);
   const push=createPushService({sql,env});
   const parentRegistration=createParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});

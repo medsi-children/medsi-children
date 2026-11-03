@@ -172,7 +172,7 @@
           try {
             const sent = await api.submitReport(payload.kind,payload.text,payload.id);
             draft = null;
-            return result(sent.accepted ? 'Готово. Отчёт сохранён, можно закрыть приложение.' : 'Отчёт отправлен.',[], 'happy');
+            return result(sent.accepted ? 'Отчёт принят сервером в обработку. Можно закрыть приложение. Если обработка завершится ошибкой, предупреждение появится в главном меню.' : 'Отчёт отправлен.',[], 'happy');
           } catch (error) {
             if(error&&error.code==='REPORT_FORMAT_ERROR')return result(error.message,[
               {label:'Изменить текст',run:async()=>{if(!alive||draft!==payload)return expired();version++;draft=null;return requestReport(payload.kind);}}

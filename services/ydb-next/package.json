@@ -6,7 +6,7 @@
   "engines": { "node": ">=20.19.0" },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/connection.mjs && node --check src/report-publications.mjs && npm test"
+    "check": "node --check src/connection.mjs && node --check src/report-publications.mjs && node --check src/chat-store.mjs && npm test"
   },
   "dependencies": {
     "@ydbjs/auth": "6.3.1",

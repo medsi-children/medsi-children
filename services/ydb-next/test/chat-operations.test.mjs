@@ -35,6 +35,7 @@ function sqlFixture() {
       if(query.includes('FROM chat_pins')) return [data.pins];
       if(query.includes('FROM parent_profiles')) return [data.profiles];
       if(query.includes('FROM children')) return [data.children];
+      if(query.includes('FROM chat_messages')) return [[]];
       throw new Error('Unexpected SQL: '+query);
     };
     return run(tx);
@@ -74,4 +75,9 @@ test('parent-entered child name survives while clinical roster has not been matc
   assert.equal(parents.parents[0].childName,'Вася Пробный');
   const chats=await ops.listChats();
   assert.equal(chats.chats[0].childName,'Вася Пробный');
+  // When the clinical roster is not linked, the opened thread must not lose
+  // the parent-provided name that was already visible in the chat list.
+  data.children=[];
+  const thread=await ops.thread('9000000001');
+  assert.equal(thread.childName,'Вася Пробный');
 });

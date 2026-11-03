@@ -54,6 +54,12 @@ export function createChatStore(sql) {
         }
         const [[profile]] = await tx`SELECT phone10 FROM parent_profiles WHERE phone10 = ${phone10}`;
         if (!profile) throw new Error('Chat is closed: parent profile is inactive.');
+        if (type !== 'text') {
+          const [[registered]]=await tx`SELECT phone10 FROM chat_media WHERE file_id=${fileId}`;
+          if (!registered || registered.phone10 !== phone10) {
+            throw new Error('Media upload does not belong to this chat.');
+          }
+        }
         if (replyToKey) {
           const [[target]] = await tx`SELECT message_key FROM chat_messages
             WHERE phone10 = ${phone10} AND message_key = ${replyToKey} AND status = ${'active'}`;

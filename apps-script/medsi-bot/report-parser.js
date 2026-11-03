@@ -276,16 +276,10 @@ function normalizeReportBlockBody_(bodyRaw) {
 }
 
 function formatReportBlockBody_(bodyRaw) {
-  // Для показа сохраняем смысловые переносы, отдельно поправляя каждую строку.
-  return String(bodyRaw || '')
-    .replace(/[ \t]*\n[ \t]*/g, '\n')
-    .split('\n')
-    .map(function(line) {
-      return normalizeReportBlockPunctuation_(line.replace(/[ \t]{2,}/g, ' '));
-    })
-    .join('\n')
-    .replace(/^\n+|\n+$/g, '')
-    .trim();
+  // Parents receive one continuous paragraph per child, even when an older
+  // raw report still contains internal line breaks before canonicalization.
+  // Reuse the ownership normalizer so the child's content remains unchanged.
+  return normalizeReportBlockBody_(bodyRaw);
 }
 
 function normalizeReportBlockPunctuation_(text) {

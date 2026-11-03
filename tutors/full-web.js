@@ -162,7 +162,7 @@
     $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';animateScreen($(name));window.scrollTo(0,0)
   }
   function showMenu(){if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();refreshDeletionJobs();scheduleD1Warm()}
-  function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Групповая терапия','Вставьте отчёт по групповой терапии.'];setScreen('screenForm',spec[0],spec[1])}
+  function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('reportError').classList.remove('report-validation-warning');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Групповая терапия','Вставьте отчёт по групповой терапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function submitReportPayload(type,text,submissionId) {
     if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
     const validator=window.MedsiReportValidation;
@@ -180,16 +180,16 @@
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');
     if(btn.disabled)return;
-    $('reportError').classList.add('hidden');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
+    $('reportError').classList.add('hidden');$('reportError').classList.remove('report-validation-warning');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
     // An uncertain network result must reuse the same ID on another attempt.
     if(!reportAttempt||reportAttempt.type!==type||reportAttempt.text!==text)reportAttempt={type,text,id:reportSubmissionId()};
     btn.disabled=true;btn.textContent='Отправляем…';
     try { await submitReportPayload(type,text,reportAttempt.id); reportAttempt=null;showReportSent(); }
-    catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message)}
+    catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message,e&&e.code==='REPORT_FORMAT_ERROR')}
     finally{btn.disabled=false;btn.textContent='Отправить'}
   }
   function showReportSent(){$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт сохранён. Можно закрыть приложение.')}
-  function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
+  function showReportError(text,isFormatError=false){const el=$('reportError');el.textContent=(isFormatError?'⚠️ ':'')+text;el.classList.toggle('report-validation-warning',!!isFormatError);el.classList.remove('hidden')}
 
   async function prewarmParents(){
     try{await refreshPhones()}catch(_){}

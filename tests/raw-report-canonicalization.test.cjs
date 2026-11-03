@@ -68,7 +68,7 @@ test('canonicalizer normalizes initial punctuation and delimiter without touchin
   });
 });
 
-test('report submission repairs comma spacing while preserving meaningful line breaks', () => {
+test('report submission repairs spacing and flattens each child body into one paragraph', () => {
   const x = api();
   const lisa = child(x, 'Лиза', 'Федорова', '89990000001');
   const raw = 'Лиза Ф: Утром играла ,общалась ( очень активно ).\nПосле обеда читала ,отдыхала.';
@@ -76,11 +76,11 @@ test('report submission repairs comma spacing while preserving meaningful line b
 
   assert.equal(
     result.text,
-    'Лиза Ф. — Утром играла, общалась (очень активно).\nПосле обеда читала, отдыхала.'
+    'Лиза Ф. — Утром играла, общалась (очень активно). После обеда читала, отдыхала.'
   );
 
   const parsed = x.parseReportBlocks_(result.text, x.buildKnownBaseKeys_([lisa]), x.buildDistributionContext_([lisa], []));
-  assert.equal(parsed.blocks[0].body, 'Утром играла, общалась (очень активно).\nПосле обеда читала, отдыхала.');
+  assert.equal(parsed.blocks[0].body, 'Утром играла, общалась (очень активно). После обеда читала, отдыхала.');
   assert.equal(
     x.normalizeReportBlockBody_(parsed.blocks[0].body),
     x.normalizeReportBlockBody_('Утром играла, общалась (очень активно). После обеда читала, отдыхала.')
@@ -93,6 +93,48 @@ test('report submission repairs comma spacing while preserving meaningful line b
   );
   assert.equal(twoChildren.text,'Лиза Ф. — Текст первого ребёнка.\nМаша С. — Текст второго ребёнка.');
   assert.equal(x.parseReportBlocks_(twoChildren.text,x.buildKnownBaseKeys_([lisa,masha]),x.buildDistributionContext_([lisa,masha],[])).blocks.length,2);
+});
+
+
+test('manual and queued reports flatten many paragraphs without merging children', () => {
+  const x = api();
+  const lena = child(x, 'Лена', 'Тестовая', '89990000001');
+  const masha = child(x, 'Маша', 'Учебная', '89990000002');
+  const stepan = child(x, 'Степан', 'Условная', '89990000003');
+  x.buildReportValidationChildren_ = () => [lena, masha, stepan];
+  const raw = [
+    'Синтетический вечерний отчёт',
+    'Игры и общение',
+    '',
+    'Лена: Первая фраза.',
+    '',
+    'Вторая фраза без заголовка.',
+    '',
+    '',
+    'Третья фраза.',
+    '',
+    'Маша: Начало.',
+    'Продолжение на новой строке.',
+    'Ещё одно предложение.',
+    '',
+    'Степан: Самостоятельный блок.'
+  ].join('\n');
+  const expected = [
+    'Лена Т. — Первая фраза. Вторая фраза без заголовка. Третья фраза.',
+    'Маша У. — Начало. Продолжение на новой строке. Ещё одно предложение.',
+    'Степан У. — Самостоятельный блок.'
+  ].join('\n');
+  const prepared = x.prepareRawReportSourceText_('evening', raw);
+  assert.equal(prepared.ok, true);
+  assert.equal(prepared.text, expected);
+  const context = x.buildDistributionContext_([lena,masha,stepan], []);
+  const parsed = x.parseReportBlocks_(prepared.text,x.buildKnownBaseKeys_([lena,masha,stepan]),context);
+  assert.equal(parsed.blocks.length, 3);
+  assert.ok(parsed.blocks.every(block => !block.body.includes('\n')));
+  // Distribution also flattens older raw sources that still have line breaks.
+  const legacy = x.parseReportBlocks_(raw, x.buildKnownBaseKeys_([lena,masha,stepan]), context);
+  assert.equal(legacy.blocks.length, 3);
+  assert.ok(legacy.blocks.every(block => !block.body.includes('\n')));
 });
 
 test('room number before a child header is removed without consuming the name separator', () => {
@@ -287,7 +329,7 @@ test('a child name without colon or dash is plain text, never a canonicalized he
 
   assert.equal(
     result.text,
-    'Маша — Сегодня общалась с Лиза Ф\nЛиза Ф потом присоединилась к игре.'
+    'Маша — Сегодня общалась с Лиза Ф Лиза Ф потом присоединилась к игре.'
   );
   assert.doesNotMatch(result.text, /Лиза Ф\. —/);
 });
@@ -365,7 +407,7 @@ test('room cleanup preserves multiline child content and removes only separate l
   assert.equal(prepared.ok,true);
   const parsed=x.parseReportBlocks_(prepared.text,x.buildKnownBaseKeys_(children),x.buildDistributionContext_(children,[]));
   assert.match(parsed.blocks[0].body,/комнату 502:/);
-  assert.match(parsed.blocks[0].body,/504\nЭто число/);
+  assert.match(parsed.blocks[0].body,/504 Это число/);
   assert.match(parsed.blocks[1].body,/палату 507/);
   assert.match(parsed.blocks[1].body,/509$/);
 });
@@ -411,7 +453,7 @@ test('web and manual sheet edits share structural rules and allow correctable fo
   x.distributeChildReports=()=>{};
   const edited=x.processRawReportSourceEdit_('morning',{});
   assert.equal(edited.ok,true);
-  assert.equal(saved,'Лена Т. — Была активна, играла.\nПосле обеда отдыхала, читала.');
+  assert.equal(saved,'Лена Т. — Была активна, играла. После обеда отдыхала, читала.');
 });
 
 

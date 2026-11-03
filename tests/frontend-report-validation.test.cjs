@@ -25,6 +25,39 @@ test('doctor and comment phrases inside a child body are ordinary prose', () => 
     'Лена — Передала заметку для врачей. Это общий комментарий о занятии.').ok, true);
 });
 
+
+test('a pinned general note and the same child block are caught before submission', () => {
+  const source = [
+    '02.11 ВЕЧЕР',
+    'Игры и общение',
+    '',
+    '📌Эрнест: Синтетический комментарий для персонала.',
+    '',
+    '📌У Лизы сегодня был разговор без отдельного заголовка.',
+    '',
+    '',
+    'Эрнест: Основной детский блок.',
+    'Лиза: Основной блок второго ребёнка.'
+  ].join('\n');
+  const result = validate('evening', source);
+  assert.equal(result.ok, false);
+  assert.equal(result.issues[0].reason, 'duplicate_name');
+  assert.deepEqual(result.issues[0].lines, [4, 9]);
+  assert.match(result.message, /два блока с именем «Эрнест»/);
+  assert.match(result.message, /строки 4 и 9/);
+  assert.match(result.message, /общий комментарий для врачей/);
+});
+
+test('decorative prefixes are accepted for distinct headers, not ordinary prose', () => {
+  assert.equal(validate('evening',
+    '📌Эрнест: Основной текст.\n\n📌У Лизы было мероприятие.\nЛиза: Другой детский блок.').ok, true);
+  const response = validate('morning',
+    '📌 Лена А.: Первый текст.\n\nЛена А. — Снова тот же ребёнок.');
+  assert.equal(response.ok, false);
+  assert.equal(response.issues[0].reason, 'duplicate_header');
+  assert.match(response.message, /общий комментарий для врачей/);
+});
+
 test('a single bare child name is allowed; bare duplicates are rejected', () => {
   assert.equal(validate('morning', 'Лена: Основной текст.').ok, true);
   const result = validate('morning', 'Лена — Первый текст.\nЛена: Второй текст.');
@@ -138,6 +171,16 @@ test('report form keeps invalid text and shows success only after queue receipt'
   assert.equal(context.document.body.dataset.screen, 'report-morning');
   assert.equal(queued.length, 0);
 
+  // An emoji-prefixed staff note followed by a true child section must
+  // be blocked locally, even if there is no "Для врачей" heading.
+  const duplicated = '📌Лена: Синтетический комментарий.\n\nЛена: Основной блок.';
+  element('text').value = duplicated;
+  await element('btnSend').handlers.click();
+  assert.equal(queued.length, 0);
+  assert.equal(element('text').value, duplicated);
+  assert.match(element('reportError').textContent, /два блока с именем «Лена»/);
+  assert.equal(element('reportError').classList.contains('report-validation-warning'), true);
+
   const valid = 'Лена — Основной текст.';
   element('text').value = valid;
   const sending = element('btnSend').handlers.click();
@@ -168,7 +211,7 @@ test('queue failure never falls back to Apps Script or returns a success receipt
 test('manual retry reuses an uncertain submission id and preserves form text', async () => {
   const source=fs.readFileSync(path.join(__dirname,'../tutors/full-web.js'),'utf8');
   const send=source.slice(source.indexOf('  async function sendReport('),source.indexOf('  function showReportSent('));
-  const elements={btnSend:{dataset:{type:'morning'},disabled:false},text:{value:'Лена — Основной текст.'},reportError:{classList:{add(){}}}};
+  const elements={btnSend:{dataset:{type:'morning'},disabled:false},text:{value:'Лена — Основной текст.'},reportError:{classList:{add(){},remove(){},toggle(){}}}};
   const ids=[];let errors=0,successes=0,nextId=0;
   const context={$:id=>elements[id],reportAttempt:null,reportSubmissionId:()=>`report_synthetic_${++nextId}`,
     submitReportPayload:async(_kind,_text,id)=>{ids.push(id);if(ids.length===1)throw Object.assign(new Error('Network failed'),{code:'NETWORK'});},

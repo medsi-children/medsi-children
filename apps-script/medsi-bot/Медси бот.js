@@ -3916,11 +3916,28 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
     }
   });
 
+  // A child block is one paragraph in the stored report. Flatten only the
+  // body spans delimited by recognized headers; keep the newline that belongs
+  // to the next child's header. Use the same body normalizer as the existing
+  // ownership fingerprints so formatting cannot transfer reports to a child.
+  candidates.forEach(function(item, index) {
+    const end = index + 1 < candidates.length ? candidates[index + 1].start : text.length;
+    const rawBody = text.slice(item.bodyStart, end);
+    // A staff-only section is never part of a child's paragraph. Preserve
+    // its separate heading when a caller invokes canonicalization directly;
+    // normal web/manual report entry rejects it before distribution.
+    const serviceMarker = /(?:^|\n)\s*[^\p{L}\p{N}\n]*(?:для[ \t]+врач(?:ей|а)|врачам|общ(?:ий|ие)[ \t]+комментар(?:ий|ии))(?=[^\p{L}]|$)/iu;
+    if (serviceMarker.test(rawBody)) return;
+    const flatBody = normalizeReportBlockBody_(rawBody);
+    if (rawBody !== flatBody) {
+      replacements.push({start:item.bodyStart, end:end, text:flatBody});
+    }
+  });
+
   let next = text;
-  for (let i = replacements.length - 1; i >= 0; i -= 1) {
-    const replacement = replacements[i];
+  replacements.sort(function(a, b) { return b.start - a.start; }).forEach(function(replacement) {
     next = next.slice(0, replacement.start) + replacement.text + next.slice(replacement.end);
-  }
+  });
 
   // Everything before the first explicit child header is source-report boilerplate:
   // date, activities, authors, separators, etc.  Only a candidate that already

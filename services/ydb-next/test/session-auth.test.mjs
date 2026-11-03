@@ -40,6 +40,8 @@ test('parent sessions survive cutover only with the same profile generation',asy
   assert.equal((await service.verifyWorker(issued.token)).phone10,'9000000001');
   const different=createSessionService({sql:fakeDb('gen_CHANGED'),secret,login:'tutor',password:'pw',tutorVersion:'v1',now:()=>now});
   assert.equal(await different.verifyWorker(issued.token),null);
+  const generationless=signCompatibleWorkerSession({role:'parent',phone10:'9000000001',exp:now+600000},secret);
+  assert.equal(await service.verifyWorker(generationless),null);
   const wrong=service.loginTutor('tutor','no');
   assert.equal(wrong.ok,false);
   const logged=service.loginTutor('tutor','pw');

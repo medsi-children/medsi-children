@@ -53,7 +53,10 @@ test('S3 upload binds file identifier to verified active parent phone',async()=>
   assert.equal(res.body.ok,true);
   assert.equal(state.media.get('s3:'+key).phone10,phone);
   assert.equal(res.body.fileId,'s3:'+key);
-  assert.equal((await service.upload({...req,get:k=>k==='x-medsi-chat-session'?'invalid':req.get(k)},response())).body,undefined);
+  const denied=response();
+  await service.upload({...req,get:k=>k==='x-medsi-chat-session'?'invalid':req.get(k)},denied);
+  assert.equal(denied.statusCode,401);
+  assert.equal(denied.body.ok,false);
 });
 test('media cookies are HttpOnly and cannot reveal another parent chat',async()=>{
   const {service,state,response}=harness();

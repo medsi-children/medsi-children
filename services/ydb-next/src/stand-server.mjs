@@ -301,6 +301,7 @@ export async function startIsolatedStand(env=process.env,{
          msg.includes('Unrecognized YDB table scope')
         ?'YDB_TEST_SCOPE_INVALID'
         :msg.includes('YDB NEXT is disabled')?'YDB_DISABLED'
+        :msg.includes('YDB NEXT connection timed out')?'YDB_CONNECT_TIMEOUT'
         :msg.includes('YDB NEXT connection failed')?'YDB_CONNECT_FAILED'
         :'NEXT_STARTUP_FAILED';
       state.phase='failed';

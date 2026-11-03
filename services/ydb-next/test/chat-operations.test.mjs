@@ -81,3 +81,24 @@ test('parent-entered child name survives while clinical roster has not been matc
   const thread=await ops.thread('9000000001');
   assert.equal(thread.childName,'Вася Пробный');
 });
+
+test('foreign or expired thread cursor is rejected instead of replaying first page',async()=>{
+  const sql={async begin(_options,run) {
+    const tx=async strings=>{
+      const query=strings.join('?').replace(/\s+/g,' ').trim();
+      if(query.includes('FROM parent_profiles'))return [[{
+        phone10:'9000000001',parent_name:'Test',child_id:'child-1',child_name:'Fake Child'
+      }]];
+      if(query.includes('FROM children'))return [[{
+        registered_first_name:'Fake',surname:'Child'
+      }]];
+      if(query.includes('FROM chat_messages'))return [[]];
+      throw new Error('Unexpected query: '+query);
+    };
+    return run(tx);
+  }};
+  await assert.rejects(
+    ()=>createChatOperations(sql).thread('9000000001','foreign-message-key'),
+    /Invalid or expired chat cursor/
+  );
+});

@@ -3,48 +3,43 @@ import assert from 'node:assert/strict';
 import {createParentAccessService} from '../src/parent-access.mjs';
 
 const phone='9991112233';
-function database(){
-  let request=null;
-  const child={registered_first_name:'Лена',surname:'Тестовая'};
-  const sql={begin:async(_,fn)=>fn(async(strings,...params)=>{
-    const query=strings.join('?').replace(/\\s+/g,' ').trim();
-    if(query.startsWith('SELECT')&&query.includes('FROM parent_profiles')){
-      return [[{phone10:phone,parent_name:'Мария Тестовая',child_id:'child-1'}]];
-    }
-    if(query.startsWith('SELECT')&&query.includes('FROM parent_auth_profiles'))return [[{user_handle:'handle-1'}]];
-    if(query.startsWith('SELECT')&&query.includes('FROM parent_passkeys'))return [[]];
-    if(query.startsWith('SELECT')&&query.includes('FROM parent_access_requests'))return [request?[{...request}]:[]];
-    if(query.startsWith('SELECT')&&query.includes('FROM children'))return [[child]];
-    if(query.startsWith('UPSERT INTO parent_access_requests')){
-      request={request_id:params[0],phone10:params[1],request_secret_hash:params[2],
-        status:params[3],decision:params[4],created_at:1000,updated_at:1000,expires_at:1000+86400000};
-      return [];
-    }
-    if(query.startsWith('UPDATE parent_access_requests')){
-      const status=params[0];
-      request.status=status;request.updated_at=1000;
-      return [];
-    }
-    throw new Error('Unexpected test SQL: '+query);
+function fakeDatabase({hasPasskey=false,profileExists=true}={}) {
+  const sql={begin:async(_opts,fn)=>fn(async(strings,...values)=>{
+    const q=strings.join('?').replace(/\s+/g,' ').trim();
+    if(q.includes('FROM parent_profiles'))return [profileExists?[{
+      phone10:phone,parent_name:'Мария Тестовая',
+      child_name:'Лена Тестовая',child_id:''
+    }]:[]];
+    if(q.includes('FROM parent_auth_profiles'))return [[{user_handle:'handle-1'}]];
+    if(q.includes('FROM parent_passkeys'))return [hasPasskey?[{credential_id:'credential-1',revoked_at:0}]:[]];
+    throw new Error('Unexpected test SQL '+q);
   })};
   return sql;
 }
-test('staff approval required before new parent session is issued',async()=>{
+test('old phone-only recovery returns a session without educator approval',async()=>{
   let issued=0;
-  const sessions={issueParent:async()=>{issued++;return {token:'signed',expiresAt:99999}}};
-  const service=createParentAccessService({sql:database(),sessions,now:()=>2000});
-  const input={phone:'8'+phone,requestId:'auth_1234567890123456789012',requestSecret:'z'.repeat(48)};
-  assert.deepEqual(await service.request(input),{ok:true,status:'PENDING'});
-  assert.equal((await service.status(input)).status,'PENDING');
-  assert.equal(issued,0);
-  assert.equal((await service.status({...input,requestSecret:'y'.repeat(48)})).status,'NOT_FOUND');
-  assert.equal((await service.decide({requestId:input.requestId,decision:'APPROVE'})).status,'APPROVED');
-  const approved=await service.status(input);
-  assert.equal(approved.status,'APPROVED');
-  assert.equal(approved.parentSession,'signed');
+  const service=createParentAccessService({sql:fakeDatabase(),sessions:{
+    issueParent:async()=>{issued++;return {token:'signed',expiresAt:99999}}}});
+  const input={phone:'8'+phone,requestId:'auth_1234567890123456789012',requestSecret:'x'.repeat(48)};
+  const response=await service.request(input);
+  assert.equal(response.status,'APPROVED');
+  assert.equal(response.parentSession,'signed');
+  assert.equal(response.childName,'Лена Тестовая');
   assert.equal(issued,1);
+  assert.equal((await service.status(input)).status,'APPROVED');
+  assert.deepEqual(await service.listPending(),{ok:true,requests:[]});
+  assert.equal((await service.decide()).code,'PARENT_APPROVAL_DISABLED');
 });
-test('invalid secret and identifier are refused',async()=>{
-  const s=createParentAccessService({sql:database(),sessions:{issueParent:async()=>({})}});
-  await assert.rejects(()=>s.request({phone,requestId:'auth_short',requestSecret:'abc'}),/Invalid recovery request/);
+test('existing Face ID credential prevents phone-based recovery',async()=>{
+  let issued=0;
+  const service=createParentAccessService({sql:fakeDatabase({hasPasskey:true}),sessions:{
+    issueParent:async()=>{issued++;return {token:'signed'}}}});
+  const result=await service.request({phone});
+  assert.equal(result.code,'PASSKEY_REQUIRED');
+  assert.equal(issued,0);
+});
+test('unknown phone cannot enter another parent profile',async()=>{
+  const service=createParentAccessService({sql:fakeDatabase({profileExists:false}),sessions:{
+    issueParent:async()=>({token:'signed'})}});
+  assert.equal((await service.request({phone})).code,'NOT_FOUND');
 });

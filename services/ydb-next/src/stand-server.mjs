@@ -202,7 +202,9 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
 export async function startIsolatedStand(env=process.env,{
   connect=connectYdbNext,
   makeServices=createNextServices,
-  makeApp=createNextStandApp
+  makeApp=createNextStandApp,
+  externalServer=null,
+  installHandler=null
 }={}) {
   if(env.MEDSI_NEXT_STAND!=='1') {
     throw new Error('Isolated YDB stand mode must be explicitly enabled.');
@@ -238,9 +240,15 @@ export async function startIsolatedStand(env=process.env,{
     });
   });
   const port=Number(env.PORT??3000);
-  const server=app.listen(port,'0.0.0.0',()=>{
+  // In Timeweb, the dependency-free CommonJS bootstrap has already bound
+  // the port. Attach the protected Express router to that SAME server.
+  if(Boolean(externalServer)!==Boolean(installHandler)){
+    throw new Error('NEXT standalone HTTP handoff must be complete.');
+  }
+  const server=externalServer||app.listen(port,'0.0.0.0',()=>{
     console.log('MEDSI_NEXT_STAND_HTTP_LISTENING');
   });
+  if(externalServer)installHandler(app);
   const shutdown=async()=>{
     stopped=true;
     if(ticker)clearInterval(ticker);

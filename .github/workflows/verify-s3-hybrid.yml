@@ -18,8 +18,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - run: node --check server.js
-      - run: node --test tests/s3-hybrid-stand.test.cjs
+      - run: npm ci
+      - run: node --check server.js && node --check services/s3-hybrid/object-store.cjs && node --check services/s3-hybrid/chat-store.cjs && node --check services/s3-hybrid/report-store.cjs
+      - run: node --test tests/s3-hybrid-stand.test.cjs tests/s3-hybrid-storage.test.cjs
 
   legacy_regression:
     runs-on: ubuntu-latest

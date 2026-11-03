@@ -25,6 +25,39 @@ test('doctor and comment phrases inside a child body are ordinary prose', () => 
     'Лена — Передала заметку для врачей. Это общий комментарий о занятии.').ok, true);
 });
 
+
+test('a pinned general note and the same child block are caught before submission', () => {
+  const source = [
+    '02.11 ВЕЧЕР',
+    'Игры и общение',
+    '',
+    '📌Эрнест: Синтетический комментарий для персонала.',
+    '',
+    '📌У Лизы сегодня был разговор без отдельного заголовка.',
+    '',
+    '',
+    'Эрнест: Основной детский блок.',
+    'Лиза: Основной блок второго ребёнка.'
+  ].join('\\n');
+  const result = validate('evening', source);
+  assert.equal(result.ok, false);
+  assert.equal(result.issues[0].reason, 'duplicate_name');
+  assert.deepEqual(result.issues[0].lines, [4, 9]);
+  assert.match(result.message, /два блока с именем «Эрнест»/);
+  assert.match(result.message, /строки 4 и 9/);
+  assert.match(result.message, /общий комментарий для врачей/);
+});
+
+test('decorative prefixes are accepted for distinct headers, not ordinary prose', () => {
+  assert.equal(validate('evening',
+    '📌Эрнест: Основной текст.\\n\\n📌У Лизы было мероприятие.\\nЛиза: Другой детский блок.').ok, true);
+  const response = validate('morning',
+    '📌 Лена А.: Первый текст.\\n\\nЛена А. — Снова тот же ребёнок.');
+  assert.equal(response.ok, false);
+  assert.equal(response.issues[0].reason, 'duplicate_header');
+  assert.match(response.message, /общий комментарий для врачей/);
+});
+
 test('a single bare child name is allowed; bare duplicates are rejected', () => {
   assert.equal(validate('morning', 'Лена: Основной текст.').ok, true);
   const result = validate('morning', 'Лена — Первый текст.\nЛена: Второй текст.');

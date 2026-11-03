@@ -1,0 +1,104 @@
+/* YDB NEXT: educator settings/report library, intentionally branch-only.
+   Original menu, legacy event handlers and confirmation flow remain mounted. */
+.medsi-settings-next-enabled .tutor-settings-body > .tutor-setting-block { display: none !important; }
+.medsi-settings-next-enabled .tutor-settings-body { gap: 14px; }
+.medsi-settings-next { position: relative; min-width: 0; }
+.medsi-setting-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
+.medsi-setting-tile {
+  appearance: none; min-width: 0; min-height: 152px; padding: 18px 15px; display: flex;
+  flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 7px;
+  border: 1px solid #d7e8ec; border-radius: 20px; background: #f4fafb;
+  font-family: inherit; text-align: left; color: #144650; cursor: pointer;
+  box-shadow: 0 5px 15px rgba(26,87,105,.045);
+  transition: transform .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease;
+}
+.medsi-setting-tile:hover { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(26,87,105,.09); }
+.medsi-setting-tile:focus-visible { outline: 3px solid #6ec4c9; outline-offset: 2px; }
+.medsi-setting-tile:disabled { opacity: .6; cursor: wait; }
+.medsi-tile-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: rgba(255,255,255,.6); }
+.medsi-tile-heading { font-size: 16px; line-height: 1.16; font-weight: 800; letter-spacing: -.32px; overflow-wrap: anywhere; }
+.medsi-tile-sub { font-size: 12px; line-height: 1.3; font-weight: 500; opacity: .75; }
+.medsi-tile-reports { background: #e9f6fc; border-color: #c9e6f3; color: #276f92; }
+.medsi-tile-push { background: #fff5e8; border-color: #f4dfc1; color: #9b6c2c; }
+.medsi-tile-push[data-enabled="1"] { background: #e8f7ec; border-color: #b8e3cb; color: #28794f; }
+.medsi-tile-parent { background: #eeeafc; border-color: #dcd6f6; color: #7362a3; }
+.medsi-tile-delete { background: #fff0f1; border-color: #f4d8db; color: #a45b64; }
+.medsi-setting-feedback { margin: 0; font-size: 12px; line-height: 1.5; color: #935e64; }
+.medsi-setting-feedback:empty { display: none; }
+.medsi-setting-picker { display: flex; flex-direction: column; gap: 12px; min-height: 180px; max-height: 55dvh; }
+.medsi-setting-picker.hidden { display:none; }
+.medsi-setting-picker-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.medsi-setting-picker-head h3 { font-size: 19px; font-weight: 760; line-height: 1.2; margin: 0; }
+.medsi-setting-picker-head button { width: 40px; height: 40px; flex: none; border: 1px solid #d6eaed; border-radius: 14px; background: white; color:#16474f; font-size: 23px; }
+.medsi-setting-picker-list { overflow-y: auto; overscroll-behavior: contain; min-height: 0; display: grid; align-content: start; gap: 9px; }
+.medsi-picker-option { min-height: 58px; border: 1px solid #d8e9ed; border-radius: 14px; padding: 12px 14px;
+  background: #fff; color:#16474f; text-align: left; font-family: inherit; font-size: 14px; font-weight: 650; cursor: pointer; }
+.medsi-picker-option:hover,.medsi-picker-option:focus-visible { background:#e9f8fb; outline: 2px solid #93d3dc; }
+.medsi-picker-empty { margin: 0; font-size: 14px; color:#66838d; }
+
+body.medsi-report-library-open { overflow: hidden; }
+.medsi-tutor-reports { position: fixed; z-index: 1500; inset: 0; display: flex;
+  justify-content: center; padding: max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));
+  background: #f4f9fb; color: #16474f; overflow: auto; overscroll-behavior: contain; }
+.medsi-tutor-reports.hidden { display: none; }
+.medsi-reports-shell { width: min(100%,1080px); min-height: 100%; display: flex; flex-direction: column; gap: 17px; }
+.medsi-reports-header { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px 0; }
+.medsi-reports-header h2 { margin: 0; font-size: clamp(23px,4vw,34px); letter-spacing:-.8px; font-weight:800; }
+.medsi-reports-back,.medsi-reports-refresh { display: inline-flex; align-items: center; gap: 6px;
+  border:1px solid #d9e9ec; border-radius: 14px; padding: 11px 13px; background: white;
+  color: #21616a; font: 700 13px/1.3 inherit; cursor:pointer; }
+.medsi-reports-refresh { font-size: 22px; line-height: .6; min-width: 42px; justify-content:center; }
+.medsi-reports-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 6px;
+  border-radius: 18px; background: #e9f0f2; }
+.medsi-reports-switch button { min-height: 49px; border: 0; border-radius: 13px; background: transparent;
+  color:#6a8b91; font: 750 14px/1.2 inherit; cursor:pointer; }
+.medsi-reports-switch button[aria-selected="true"] { background: white; color:#1d626f; box-shadow: 0 3px 10px rgba(42,97,108,.1); }
+.medsi-reports-feedback { font-size: 14px; color: #a06b60; margin: 0; }
+.medsi-reports-feedback:empty { display:none; }
+.medsi-reports-content { display:grid; align-content: start; gap:14px; padding:0 0 28px; }
+.medsi-reports-content.hidden { display:none; }
+.medsi-raw-report { border:1px solid #e0ecef; border-radius: 20px; background: white; padding:22px;
+  box-shadow: 0 5px 18px rgba(36,91,104,.045); }
+.medsi-raw-report h3 { margin:0; font-size:18px; font-weight:800; }
+.medsi-raw-morning { border-left: 5px solid #eabc59; }
+.medsi-raw-evening { border-left: 5px solid #7cb9e7; }
+.medsi-raw-psychology { border-left: 5px solid #dc9ec1; }
+.medsi-report-date { color:#849aa0; font-size:12px; margin: 5px 0 17px; }
+.medsi-report-body { font-size: 14px; line-height: 1.58; color:#244d55;
+  overflow-wrap: anywhere; white-space: pre-wrap; }
+.medsi-child-report-card { display: grid; grid-template-columns:minmax(0, .8fr) minmax(0, 1.4fr); gap:0;
+  border:1px solid #dbeaec; border-radius:21px; overflow:hidden; background:#fff;
+  box-shadow:0 5px 18px rgba(36,91,104,.045); }
+.medsi-child-details { padding:22px; background:#f1f8fa; border-right:1px solid #deecef; }
+.medsi-child-name { font-size:clamp(23px,3vw,30px); line-height:1.12; margin:0 0 5px;
+  letter-spacing:-.75px; overflow-wrap:anywhere; }
+.medsi-child-meta { color:#658791; margin:0 0 15px; font-size:14px; }
+.medsi-child-parent { margin-top:14px; border-top:1px solid #d5e6e9; padding-top:12px; }
+.medsi-parent-name { font-size:14px; font-weight:750; }
+.medsi-parent-phone { margin-top:3px; font-size:13px; color:#597a84; }
+.medsi-child-report-view { min-width:0; padding:21px; }
+.medsi-child-report-view h4 { font-size:16px; margin:0 0 12px; font-weight:800; }
+.medsi-child-report-view h5 { font-size:12px; margin:17px 0 7px; text-transform:uppercase; letter-spacing:.04em; color:#7a9094; }
+.medsi-child-report-version + .medsi-child-report-version { border-top:1px solid #e3edef; margin-top:20px; padding-top:12px; }
+.medsi-view-parent { font-size:13px; font-weight:750; color:#46848d; }
+.medsi-reports-empty { font-size:15px; color:#64818a; padding:28px 10px; text-align:center; }
+@media (max-width:600px) {
+  .medsi-setting-grid { gap:9px; }
+  .medsi-setting-tile { min-height: 139px; padding:13px 11px; border-radius:16px; gap:6px; }
+  .medsi-tile-icon { width:35px; height:35px; border-radius:11px; }
+  .medsi-tile-icon svg { width:24px; height:24px; }
+  .medsi-tile-heading { font-size:14px; }
+  .medsi-tile-sub { font-size:11px; }
+  .medsi-reports-shell { gap:12px; }
+  .medsi-reports-back span { display:none; }
+  .medsi-reports-header h2 { font-size:25px; }
+  .medsi-reports-switch button { font-size:12px; }
+  .medsi-child-report-card { grid-template-columns: 1fr; }
+  .medsi-child-details { border-right:0; border-bottom:1px solid #deecef; padding:18px; }
+  .medsi-child-report-view { padding:18px; }
+  .medsi-raw-report { padding:18px; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .medsi-setting-tile { transition:none; }
+  .medsi-setting-tile:hover { transform:none; }
+}

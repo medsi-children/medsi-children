@@ -4,8 +4,8 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,push}) {
-  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,push];
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
+  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
   router.use(express.json({limit:'1mb'}));
@@ -89,6 +89,22 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
   router.post('/parent-access/decision',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return parentAccess.decide(req.body||{});
+  }));
+  router.post('/parent-delete',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentDeletion.enqueue(req.body||{});
+  }));
+  router.get('/parent-delete/status',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentDeletion.status(req.query.operationId);
+  }));
+  router.get('/parent-delete/pending',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentDeletion.pending();
+  }));
+  router.post('/parent-delete/retry',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentDeletion.retry(req.body?.operationId);
   }));
   router.post('/parent-passkeys/authentication/options',run(async()=>{
     return passkeys.authenticationOptions();

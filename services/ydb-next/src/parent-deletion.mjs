@@ -1,5 +1,4 @@
 import {Uint64} from '@ydbjs/value/primitive';
-import {identifier} from '@ydbjs/query';
 
 const PHONE=/^\d{10}$/;
 const OP=/^del_[A-Za-z0-9_-]{12,125}$/;
@@ -139,7 +138,7 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
           'parent_access_requests','push_subscriptions','push_outbox',
           'parent_current_reports','parent_report_history']) {
           // Identifier is statically allowlisted, only the phone is parameterized.
-          await tx`DELETE FROM ${identifier(table)} WHERE phone10 = ${phone10}`;
+          await tx`DELETE FROM ${sql.identifier(table)} WHERE phone10 = ${phone10}`;
         }
         await tx`UPDATE parent_deletion_queue SET status=${'completed'},last_error=${''},
           updated_at=${num(now())} WHERE operation_id=${id}`;

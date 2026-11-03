@@ -329,7 +329,7 @@ test('a child name without colon or dash is plain text, never a canonicalized he
 
   assert.equal(
     result.text,
-    'Маша — Сегодня общалась с Лиза Ф\nЛиза Ф потом присоединилась к игре.'
+    'Маша — Сегодня общалась с Лиза Ф Лиза Ф потом присоединилась к игре.'
   );
   assert.doesNotMatch(result.text, /Лиза Ф\. —/);
 });

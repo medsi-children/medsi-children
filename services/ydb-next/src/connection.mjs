@@ -16,11 +16,30 @@ export function readConnectionConfig(env = process.env) {
   let serviceAccount;
   try {
     serviceAccount = JSON.parse(String(env.YDB_SERVICE_ACCOUNT_JSON || ''));
+    // Some secret managers encode JSON a second time. Accept the equivalent
+    // JSON string, but never guess at malformed plaintext or print its value.
+    if (typeof serviceAccount === 'string') {
+      serviceAccount = JSON.parse(serviceAccount);
+    }
   } catch (_) {
     throw new Error('YDB_SERVICE_ACCOUNT_JSON is missing or invalid.');
   }
-  if (!serviceAccount || !serviceAccount.id || !serviceAccount.service_account_id ||
-      !/^-----BEGIN PRIVATE KEY-----/.test(String(serviceAccount.private_key || ''))) {
+  // Yandex Cloud's downloaded authorized key can contain an official notice
+  // BEFORE the PEM block:
+  // "PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <...>"
+  // OpenSSL and the YDB credentials provider need the PEM block itself.
+  // Accept only that exact optional preamble, bound to the same key ID.
+  const originalPrivateKey=String(serviceAccount?.private_key||'').trim();
+  const notice=/^PLEASE DO NOT REMOVE THIS LINE! Yandex\.Cloud SA Key ID <([A-Za-z0-9_-]+)>\r?\n/;
+  const matched=notice.exec(originalPrivateKey);
+  const normalizedPrivateKey=matched
+    ?originalPrivateKey.slice(matched[0].length):originalPrivateKey;
+  if (!serviceAccount || typeof serviceAccount!=='object' ||
+      typeof serviceAccount.id!=='string' || !serviceAccount.id ||
+      typeof serviceAccount.service_account_id!=='string' ||
+      !serviceAccount.service_account_id ||
+      (matched && matched[1]!==serviceAccount.id) ||
+      !/^-----BEGIN PRIVATE KEY-----/.test(normalizedPrivateKey)) {
     throw new Error('YDB service account JSON lacks required authorized-key fields.');
   }
   const tableScope=String(env.MEDSI_NEXT_YDB_TABLE_SCOPE||'').trim();
@@ -33,7 +52,7 @@ export function readConnectionConfig(env = process.env) {
   return { connectionString, tableScope, serviceAccount: {
     id: serviceAccount.service_account_id,
     keyId: serviceAccount.id,
-    privateKey: serviceAccount.private_key
+    privateKey: normalizedPrivateKey
   } };
 }
 

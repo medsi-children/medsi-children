@@ -1,0 +1,174 @@
+import express from 'express';
+import {createHash} from 'node:crypto';
+
+// Mount ONLY inside the independent test application until approved cutover.
+// app.use('/lab', createNextLabRouter(services)) is intentionally absent from
+// production server.js, so no live users can accidentally reach this code.
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants}) {
+  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants];
+  if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
+  const router=express.Router();
+  router.use(express.json({limit:'1mb'}));
+  router.use((req,res,next)=>{res.setHeader('cache-control','no-store');next()});
+
+  const run=handler=>async (req,res)=>{
+    try {
+      const result=await handler(req,res);
+      if(!res.headersSent&&result!==undefined)return res.json(result);
+    }catch(error) {
+      const safe=String(error?.message||'');
+      // Never echo internal/YDB exception bodies or medical report contents.
+      const known=/^(Invalid |Unsupported |Bad |Forbidden|Unauthorized|Only own |Reply target|Chat is closed|Message not found|Subscription belongs|Report blocked|Parent roster changed|Report ownership changed)/.test(safe);
+      if(!res.headersSent)return res.status(known?400:503).json({
+        ok:false,message:known?safe:'Операция временно недоступна. Повторите позже.'
+      });
+    }
+  };
+  const authenticate=async(req,res,role)=>{
+    const token=String(req.get('X-Medsi-Chat-Session')||'');
+    const auth=await sessions.verifyWorker(token);
+    if(!auth||(role&&auth.role!==role)) {
+      res.status(401).json({ok:false,message:'Требуется вход в систему.'});
+      return null;
+    }
+    return auth;
+  };
+  const readParent=async(req,res)=>{
+    const auth=await authenticate(req,res,'parent');
+    return auth;
+  };
+  const educator=async(req,res)=>authenticate(req,res,'educator');
+  const owner=async(req,res,rawPhone)=>{
+    const auth=await authenticate(req,res);
+    if(!auth)return null;
+    const phone=String(rawPhone||'').replace(/\D/g,'').slice(-10);
+    if(!/^\d{10}$/.test(phone)||(auth.role==='parent'&&phone!==auth.phone10)) {
+      res.status(403).json({ok:false,message:'Недостаточно прав.'});return null;
+    }
+    return {auth,phone};
+  };
+  const rejectPreview=(auth,res)=>{
+    if(auth?.preview){res.status(403).json({ok:false,message:'Предварительный просмотр только для чтения.'});return true}
+    return false;
+  };
+  router.get('/admin/reports/dashboard',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return dashboard.readForEducator();
+  }));
+  router.get('/admin/name-variants',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return nameVariants.list();
+  }));
+  router.post('/admin/name-variants',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return nameVariants.save(req.body);
+  }));
+  router.delete('/admin/name-variants/:baseKey',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return nameVariants.remove(req.params.baseKey);
+  }));
+  router.get('/parents',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return chatOperations.listParents();
+  }));
+  router.get('/chats',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return chatOperations.listChats(String(req.query.bucket||'all'));
+  }));
+  router.get('/threads/:phone',run(async(req,res)=>{
+    if(!await owner(req,res,req.params.phone))return;
+    return chatOperations.thread(req.params.phone,req.query.before,req.query.limit);
+  }));
+  router.post('/messages',run(async(req,res)=>{
+    const authorized=await owner(req,res,req.body?.phone);
+    if(!authorized)return;
+    if(rejectPreview(authorized.auth,res))return;
+    if(req.body?.side && req.body.side!==authorized.auth.role)return res.status(403).json({ok:false,message:'Недостаточно прав.'});
+    const message={...req.body,phone10:authorized.phone,side:authorized.auth.role};
+    const result=await chatStore.send(message);
+    return {ok:true,duplicate:result.status==='duplicate',
+      message:{messageKey:result.messageKey,phone:authorized.phone,side:authorized.auth.role,
+        type:message.type||'text',text:message.text||'',fileId:message.fileId||'',
+        reply:message.replyToKey?{messageKey:message.replyToKey}:null,
+        timestamp:result.timestamp||Date.now()}};
+  }));
+  router.post('/read/:phone',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return chatOperations.markRead('educator',req.params.phone,false);
+  }));
+  router.post('/unread/:phone',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return chatOperations.markRead('educator',req.params.phone,true);
+  }));
+  router.post('/read-parent/:phone',run(async(req,res)=>{
+    const owned=await owner(req,res,req.params.phone);if(!owned)return;
+    if(rejectPreview(owned.auth,res))return;
+    return chatOperations.markRead('parent',owned.phone);
+  }));
+  router.post('/pin/:phone',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return chatOperations.pin(req.params.phone,String(req.body?.bucket||''));
+  }));
+  for(const kind of ['reaction','edit','delete']) {
+    router.post('/'+kind+'/:messageKey',run(async(req,res)=>{
+      const auth=await authenticate(req,res);if(!auth)return;
+      if(rejectPreview(auth,res))return;
+      return chatOperations.mutate(kind,req.params.messageKey,auth,req.body||{});
+    }));
+  }
+  router.get('/profile',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    return reportReader.profile(auth.phone10);
+  }));
+  router.get('/report-current',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    return reportReader.current(auth.phone10);
+  }));
+  router.get('/report-history',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    return reportReader.history(auth.phone10);
+  }));
+  router.get('/parent-unread',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    const [chat,report]=await Promise.all([
+      chatOperations.parentUnread(auth.phone10),reportReader.unread(auth.phone10)
+    ]);
+    return {ok:true,hasUnread:Boolean(chat.hasUnread),reportUnread:report.reportUnread||{}};
+  }));
+  router.post('/report-read',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    return reportReader.markRead(auth.phone10,String(req.body?.kind||''),String(req.body?.version||''));
+  }));
+  router.post('/parent-preview',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    const phone=String(req.body?.phone||'').replace(/\D/g,'').slice(-10);
+    if(!/^\d{10}$/.test(phone))throw new Error('Invalid parent phone.');
+    const profile=await reportReader.profile(phone);
+    if(!profile.ok)return res.status(404).json(profile);
+    const expiresAt=Date.now()+15*60*1000;
+    const session=await sessions.issueParent(phone,expiresAt,{preview:true});
+    return {ok:true,phone,parentName:profile.parentName,childName:profile.childName,
+      parentSession:session.token,expiresAt};
+  }));
+  router.post('/report-submit',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    const token=String(req.get('X-Medsi-Chat-Session')||'');
+    const authorId='educator_'+createHash('sha256').update(token).digest('hex').slice(0,20);
+    const {text,reportType,submissionId}=req.body||{};
+    const result=await reports.submit({kind:reportType,rawText:text,submissionId,authorId});
+    return {ok:true,accepted:true,submissionId,status:'completed',result};
+  }));
+  router.get('/report-submit/status',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    const submissionId=String(req.query.submissionId||'');
+    const result=await reports.status(submissionId);
+    return {ok:true,submissionId,...result};
+  }));
+
+  // Registration, deletion queue and passkey routes are wired only when their
+  // dedicated YDB services are complete. They MUST never fall back to foreign
+  // backends in the new version: missing route fails closed.
+  router.use((_req,res)=>res.status(404).json({ok:false,message:'Маршрут новой системы пока не подключён.'}));
+  return router;
+}

@@ -18,9 +18,11 @@ test('Timeweb PM2 server.js boots NEXT only and fails closed without standalone 
     encoding:'utf8',
     timeout:12000
   });
-  if(result.error)throw result.error;
-  assert.notEqual(result.status,0,'missing test-only secrets must prevent startup');
-  assert.match(result.stderr,/MEDSI_NEXT_STAND_START_FAILED/);
+  // The HTTP listener intentionally stays alive in diagnostic mode, so
+  // a timeout indicates the fail-closed stand is reachable by Timeweb.
+  assert.equal(result.error?.code,'ETIMEDOUT');
+  assert.match(result.stdout,/MEDSI_NEXT_STAND_HTTP_LISTENING/);
+  assert.match(result.stderr,/MEDSI_NEXT_STAND_BOOT_FAILED: STAND_ENV_INVALID/);
   assert.doesNotMatch(result.stdout+'\n'+result.stderr,/Medsi Timeweb gateway listening/);
   assert.doesNotMatch(result.stdout+'\n'+result.stderr,/TIMEWEB_SESSION_BRIDGE_FAILED/);
 });

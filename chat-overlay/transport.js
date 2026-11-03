@@ -288,6 +288,10 @@
     return request(session, '/lab/report-submit/status?submissionId=' + encodeURIComponent(String(submissionId || '')));
   }
 
+  function reportFailures(session) {
+    return request(session, '/lab/report-failures');
+  }
+
   function parentDelete(session, payload) {
     return request(session, '/lab/parent-delete', {
       method:'POST',
@@ -452,6 +456,7 @@
     upload,
     reportSubmit,
     reportStatus,
+    reportFailures,
     parentDelete,
     parentDeleteStatus,
     parentDeletePending,

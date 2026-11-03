@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'node:path';
+import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {connectYdbNext} from './connection.mjs';
@@ -14,10 +15,12 @@ import {createPushService} from './push-service.mjs';
 import {createParentPasskeyService} from './parent-passkeys.mjs';
 import {createParentAccessService} from './parent-access.mjs';
 import {createParentRegistrationService} from './parent-registration.mjs';
+import {createParentDeletionService} from './parent-deletion.mjs';
 import {createNextLabRouter} from './api-router.mjs';
 import {createLegacyBridge} from './legacy-bridge.mjs';
 
 const ROOT=fileURLToPath(new URL('../../../',import.meta.url));
+const require=createRequire(import.meta.url);
 const phone10=value=>String(value||'').replace(/\\D/g,'').slice(-10);
 const PHONE=/^\\d{10}$/;
 const PUBLIC_ASSETS=[
@@ -46,13 +49,21 @@ export function createNextServices({sql,env=process.env}) {
   const push=createPushService({sql,env});
   const parentRegistration=createParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});
+  const parentDeletion=createParentDeletionService({sql,
+    enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1',
+    removeMedia:async key=>{
+      const storage=require('../../../lib/s3-storage.js');
+      if(!storage.configured)throw new Error('Private S3 storage is not configured.');
+      await storage.removeObject(key);
+    }
+  });
   const passkeys=env.PARENT_PASSKEY_RP_ID&&env.PARENT_PASSKEY_ORIGIN
     ?createParentPasskeyService({sql,sessions,env})
     :Object.fromEntries(['authenticationOptions','authenticationVerify','hasPasskey',
        'registrationOptions','registrationVerify'].map(method=>[method,
       async()=>{throw new Error('Passkeys unavailable until origin and RP ID are configured.');}]));
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,
-    nameVariants,push,parentRegistration,parentAccess,passkeys};
+    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys};
 }
 
 function handler(fn) {
@@ -170,6 +181,10 @@ export async function startIsolatedStand(env=process.env) {
     try{
       const ids=await services.push.pendingEvents(20);
       for(const id of ids)await services.push.deliverEvent(id);
+      if(env.MEDSI_NEXT_DELETION_ENABLED==='1'){
+        const cleanup=await services.parentDeletion.processNext();
+        if(cleanup.ok===false)console.warn('NEXT_PARENT_DELETION_RETRY_REQUIRED');
+      }
     }catch(_){
       // A failed notification cannot stop reports or chat.
       console.warn('NEXT_PUSH_DISPATCH_UNAVAILABLE');

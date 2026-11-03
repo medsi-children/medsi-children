@@ -37,3 +37,13 @@ test('legacy bridge denies cross-parent access and unsupported old writes',async
   await assert.rejects(()=>legacy('deleteReportChildByPhone',['89991112233','tutor-ok']),/Unsupported/);
   assert.equal(calls.length,0);
 });
+
+test('registration callback is local and bound to the authenticated parent',async()=>{
+  const {legacy}=setup();
+  const result=await legacy('mirrorCloudflareParentRegistration',[
+    '89991112233','reg_testregistration000001','parent-token']);
+  assert.equal(result.synced,true);
+  assert.equal(result.source,'ydb');
+  await assert.rejects(()=>legacy('mirrorCloudflareParentRegistration',[
+    '89990001122','reg_testregistration000001','parent-token']),/Unauthorized/);
+});

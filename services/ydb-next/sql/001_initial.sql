@@ -62,6 +62,12 @@ CREATE TABLE IF NOT EXISTS raw_reports (
   revision Uint64,
   PRIMARY KEY (publication_id)
 );
+CREATE TABLE IF NOT EXISTS report_ownership (
+  owner_key Utf8 NOT NULL,
+  record_json Utf8,
+  updated_at Uint64,
+  PRIMARY KEY (owner_key)
+);
 CREATE TABLE IF NOT EXISTS parent_current_reports (
   phone10 Utf8 NOT NULL,
   kind Utf8 NOT NULL,

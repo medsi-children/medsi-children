@@ -5,6 +5,8 @@ import webpush from 'web-push';
 const sha=value=>createHash('sha256').update(value,'utf8').digest('hex');
 const PHONE=/^\d{10}$/;
 const VALID_ROLES=new Set(['parent','educator']);
+// A crashed dispatcher must not strand an outbox event in 'processing'.
+const PROCESSING_LEASE_MS=5*60*1000;
 const nowUint=()=>new Uint64(BigInt(Date.now()));
 
 function validateSubscription(value) {
@@ -64,9 +66,15 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     const job=await write(async tx=>{
       const [[row]]=await tx`SELECT event_id,role,phone10,notification_json,status,attempts,next_attempt_at
         FROM push_outbox WHERE event_id=${eventId}`;
-      if(!row||!['pending','retry'].includes(row.status)||Number(row.next_attempt_at)>now)return null;
-      await tx`UPDATE push_outbox SET status=${'processing'} WHERE event_id=${eventId}`;
-      return row;
+      if(!row||!['pending','retry','processing'].includes(row.status)||
+         Number(row.next_attempt_at||0)>now)return null;
+      const attempt=Number(row.attempts||0)+1;
+      const leaseUntil=now+PROCESSING_LEASE_MS;
+      await tx`UPDATE push_outbox
+        SET status=${'processing'},attempts=${new Uint64(BigInt(attempt))},
+            next_attempt_at=${new Uint64(BigInt(leaseUntil))}
+        WHERE event_id=${eventId}`;
+      return {...row,attempt,leaseUntil};
     });
     if(!job)return {ok:true,skipped:true};
     const [subscriptions]=await read(tx=>tx`SELECT subscription_id,role,phone10,subscription_json,enabled
@@ -74,7 +82,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     const targets=subscriptions.filter(s=>s.enabled&&s.role===job.role&&
       (job.role==='educator'||s.phone10===job.phone10));
     let failed=0,sent=0;
-    const attempts=Number(job.attempts||0)+1;
+    const attempts=job.attempt;
     for(const target of targets) {
       try {
         const payload=JSON.parse(job.notification_json||'{}');
@@ -93,16 +101,20 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     await write(async tx=>{
       const nextStatus=failed?(attempts<6?'retry':'failed'):'completed';
       const due=new Uint64(BigInt(now+Math.min(3600000,10000*2**Math.min(8,attempts))));
+      // A late sender may not overwrite a newer attempt which recovered its lease.
       await tx`UPDATE push_outbox
-        SET status=${nextStatus},attempts=${new Uint64(BigInt(attempts))},next_attempt_at=${due}
-        WHERE event_id=${eventId} AND status=${'processing'}`;
+        SET status=${nextStatus},next_attempt_at=${due}
+        WHERE event_id=${eventId} AND status=${'processing'}
+          AND attempts=${new Uint64(BigInt(attempts))}
+          AND next_attempt_at=${new Uint64(BigInt(job.leaseUntil))}`;
     });
     return {ok:true,sent,failed};
   }
   async function pendingEvents(limit=30) {
     return read(async tx=>{
       const [events]=await tx`SELECT event_id,status,next_attempt_at
-        FROM push_outbox WHERE status=${'pending'} OR status=${'retry'}`;
+        FROM push_outbox WHERE status=${'pending'} OR status=${'retry'}
+          OR status=${'processing'}`;
       return events.filter(r=>Number(r.next_attempt_at||0)<=Date.now()).slice(0,Math.max(1,Math.min(100,limit)))
         .map(r=>r.event_id);
     });

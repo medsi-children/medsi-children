@@ -9,7 +9,7 @@ export function readConnectionConfig(env = process.env) {
     throw new Error('YDB NEXT is disabled; explicit test-only opt-in is required.');
   }
   const connectionString = String(env.YDB_CONNECTION_STRING || '');
-  if (!/^grpcs:\/\/ydb\.serverless\.yandexcloud\.net:2135\//.test(connectionString)) {
+  if (!/^grpcs:\/\/ydb\.serverless\.yandexcloud\.net:2135\/\?database=\/ru-central1\//.test(connectionString)) {
     throw new Error('YDB NEXT requires an encrypted Yandex YDB Serverless endpoint.');
   }
   let serviceAccount;

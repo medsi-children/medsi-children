@@ -166,9 +166,15 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     return chatOperations.markRead('educator',req.params.phone,true);
   }));
   router.post('/read-parent/:phone',run(async(req,res)=>{
-    const owned=await owner(req,res,req.params.phone);if(!owned)return;
-    if(rejectPreview(owned.auth,res))return;
-    return chatOperations.markRead('parent',owned.phone);
+    // Only the actual parent can acknowledge their own incoming messages.
+    // Educator preview is read-only and staff cannot modify a parent's read state.
+    const auth=await readParent(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    const phone=String(req.params.phone||'').replace(/\D/g,'').slice(-10);
+    if(!/^\d{10}$/.test(phone)||auth.phone10!==phone){
+      return res.status(403).json({ok:false,message:'Недостаточно прав.'});
+    }
+    return chatOperations.markRead('parent',phone);
   }));
   router.post('/pin/:phone',run(async(req,res)=>{
     if(!await educator(req,res))return;

@@ -16,8 +16,7 @@ jobs:
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 12
-    # This workflow deliberately has no production environments, deployments
-    # or access to Timeweb, Cloudflare, Apps Script, or YDB credentials.
+    # No production environments, deployments, or Timeweb/YDB credentials.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -25,47 +24,9 @@ jobs:
           node-version: 22
       - run: npm install --ignore-scripts --no-audit --no-fund
         working-directory: services/ydb-next
-      - name: Parent access unit tests
-        continue-on-error: true
-        run: node --test test/parent-access.test.mjs
-        working-directory: services/ydb-next
-      - name: Parent registration unit tests
-        continue-on-error: true
-        run: node --test test/parent-registration.test.mjs
-        working-directory: services/ydb-next
-      - name: Legacy bridge unit tests
-        continue-on-error: true
-        run: node --test test/legacy-bridge.test.mjs
-        working-directory: services/ydb-next
-      - name: Syntax of newly introduced modules
-        continue-on-error: true
-        run: |
-          for file in src/parent-access.mjs src/parent-registration.mjs src/legacy-bridge.mjs src/stand-server.mjs src/stand-entry.mjs src/schema-cli.mjs; do
-            node --check "$file" || exit 1
-          done
-        working-directory: services/ydb-next
-      - name: All YDB unit tests
-        continue-on-error: true
-        run: npm test
-        working-directory: services/ydb-next
-      - name: API router syntax
-        continue-on-error: true
-        run: node --check src/api-router.mjs
-        working-directory: services/ydb-next
-      - name: Educator settings syntax
-        continue-on-error: true
-        run: node --check ../../tutors/next-settings.js
-        working-directory: services/ydb-next
-      - name: All pre-existing module syntax
-        continue-on-error: true
-        run: |
-          for file in src/connection.mjs src/report-publications.mjs src/report-engine.mjs src/report-reader.mjs src/report-submission-service.mjs src/chat-store.mjs src/chat-operations.mjs src/session-auth.mjs src/educator-report-dashboard.mjs src/name-variants-store.mjs src/push-service.mjs src/parent-passkeys.mjs; do
-            node --check "$file" || exit 1
-          done
-        working-directory: services/ydb-next
-      - name: Final composite syntax verification
+      - name: Verify syntax
         run: npm run check:syntax
         working-directory: services/ydb-next
-      - name: Final complete YDB test suite
+      - name: Run complete isolated YDB unit test suite
         run: npm test
         working-directory: services/ydb-next

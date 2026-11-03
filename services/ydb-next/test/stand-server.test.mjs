@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNextStandApp} from '../src/stand-server.mjs';
+import {createNextStandApp,readLegacyAuthConfig} from '../src/stand-server.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
   NEXT_TUTOR_LOGIN:'staff',NEXT_TUTOR_PASSWORD:'long-fake-test-password',
@@ -83,4 +83,21 @@ test('legacy browser request envelope remains compatible for tutor login and rej
   }finally{
     await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
   }
+});
+
+test('legacy continuity cannot activate accidentally or with partial signing credentials',()=>{
+  assert.deepEqual(readLegacyAuthConfig({}),{});
+  assert.deepEqual(readLegacyAuthConfig({NEXT_LEGACY_D1_SESSION_SECRET:'secret-exists'}),{});
+  assert.throws(()=>readLegacyAuthConfig({
+    MEDSI_NEXT_LEGACY_AUTH_ENABLED:'1',NEXT_LEGACY_D1_SESSION_SECRET:'fake'
+  }),/Incomplete legacy/);
+  const result=readLegacyAuthConfig({
+    MEDSI_NEXT_LEGACY_AUTH_ENABLED:'1',
+    NEXT_LEGACY_D1_SESSION_SECRET:'x'.repeat(64),
+    NEXT_LEGACY_TUTOR_LOGIN:'old-staff',
+    NEXT_LEGACY_TUTOR_PASSWORD:'old-synthetic-password',
+    NEXT_LEGACY_TUTOR_VERSION:'old-version'
+  });
+  assert.equal(result.legacyWorkerSecret.length,64);
+  assert.equal(result.legacyTutor.version,'old-version');
 });

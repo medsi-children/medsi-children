@@ -64,8 +64,8 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
         VALUES (${phone10},${parentName},${childName},${'Родитель'},
           ${unique?.child_id||''},${unique?.admission_id||''},${attemptId},
           ${''},${numeric(timestamp)},${numeric(timestamp)})`;
-      await tx`UPSERT INTO parent_auth_profiles (phone10,user_handle,generation_id)
-        VALUES (${phone10},${userHandle},${attemptId})`;
+      await tx`UPSERT INTO parent_auth_profiles (phone10,user_handle,generation_id,created_at)
+        VALUES (${phone10},${userHandle},${attemptId},${numeric(timestamp)})`;
       await tx`UPSERT INTO parent_registration_attempts
         (attempt_id,phone10,parent_name,child_name,status,child_id,admission_id,
         approved_by,created_at,updated_at)

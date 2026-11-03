@@ -95,12 +95,14 @@ export function createSessionService({sql,secret,login,password,tutorVersion,now
     }
     return claims;
   };
-  const issueParent = async (phone10, expiry=now()+365*ONE_DAY) => {
+  const issueParent = async (phone10, expiry=now()+365*ONE_DAY, options={}) => {
     if (!PHONE.test(phone10)) throw new Error('Invalid parent phone.');
     const profile=await loadParent(phone10);
     if (!profile) throw new Error('Parent profile is missing.');
     if (!numberCheck(expiry) || expiry<=now()) throw new Error('Invalid session expiry.');
-    const claims={role:'parent',phone10,exp:expiry,authGeneration:profile.generation_id,version:'cf-parent-v2'};
+    const claims={role:'parent',phone10,exp:expiry,authGeneration:profile.generation_id,
+      version: options.preview ? 'cf-parent-preview-v1' : 'cf-parent-v2',
+      ...(options.preview ? {preview:true} : {})};
     return { token:signCompatibleWorkerSession(claims,secret),expiresAt:expiry };
   };
   const issueEducator = () => {

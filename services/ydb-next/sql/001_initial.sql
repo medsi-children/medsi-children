@@ -104,6 +104,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   INDEX chat_messages_by_time GLOBAL ON (phone10, created_at),
   PRIMARY KEY (phone10, message_key)
 );
+CREATE TABLE IF NOT EXISTS chat_message_dedup (
+  phone10 Utf8 NOT NULL,
+  client_message_id Utf8 NOT NULL,
+  message_key Utf8,
+  payload_hash Utf8,
+  created_at Uint64,
+  PRIMARY KEY (phone10, client_message_id)
+);
 CREATE TABLE IF NOT EXISTS chat_pins (
   phone10 Utf8 NOT NULL,
   bucket Utf8,

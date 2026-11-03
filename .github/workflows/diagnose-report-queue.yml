@@ -1,0 +1,62 @@
+name: Read-only diagnosis of report queue
+
+on:
+  push:
+    branches:
+      - timeweb-next
+    paths:
+      - .github/workflows/diagnose-report-queue.yml
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: cloudflare-auto
+    env:
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Inspect metadata of report delivery without medical text or identifiers
+        run: |
+          set -euo pipefail
+          test -n "$CLOUDFLARE_ACCOUNT_ID" && test -n "$CLOUDFLARE_API_TOKEN"
+          npx --yes wrangler@4.101.0 d1 execute medsi-chat-production --remote --config services/cloudflare/chat-worker/wrangler.production.toml --json --command "SELECT report_type, status, attempts, created_at, updated_at, last_error, length(report_text) AS text_length, CASE WHEN result_json LIKE '%\"superseded\":true%' THEN 1 ELSE 0 END AS superseded FROM report_submission_queue ORDER BY created_at DESC LIMIT 75;" > "$RUNNER_TEMP/medsi-report-queue-readonly.json"
+          node <<'NODE'
+          const fs = require('node:fs');
+          const raw = JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/medsi-report-queue-readonly.json','utf8'));
+          if(!Array.isArray(raw) || raw.some(x=>x.success!==true))throw new Error('Read-only query did not succeed');
+          const rows=raw.flatMap(x=>x.results||[]);
+          function errorCategory(s){
+            if(!s)return 'none';
+            const e=String(s);
+            if(/unauthoriz|forbidden|access denied|доступ|авторизац/i.test(e))return 'authorization';
+            if(/quota|too many times|rate.limit|429|лимит|превышен/i.test(e))return 'quota-or-rate-limit';
+            if(/lock|блокиров|занят|обработк/i.test(e))return 'concurrent-processing-or-lock';
+            if(/timeout|time.out|timed out|время ожидания|превышено время|deadline/i.test(e))return 'timeout';
+            if(/spreadsheet|sheet|таблиц|document|документ/i.test(e))return 'google-sheets-operation';
+            if(/validation|format|формат|заголов|некоррект|неоднознач|имя|отчёт/i.test(e))return 'report-validation';
+            if(/HTTP \d+|bad gateway|fetch failed|network|связ|сеть|сервера/i.test(e))return 'http-or-network';
+            if(/syntax|json|parse|unexpected token/i.test(e))return 'response-parse';
+            return 'other';
+          }
+          function t(ms) {return ms?new Date(Number(ms)).toISOString():'unknown';}
+          const totals={};
+          for(const r of rows){const k=r.report_type+'/'+r.status;totals[k]=(totals[k]||0)+1;}
+          console.log('SCANNED_LAST',rows.length,'GROUPS',JSON.stringify(totals));
+          for(const r of rows){
+            const category=errorCategory(r.last_error);
+            console.log(JSON.stringify({
+              kind:r.report_type,status:r.status,attempts:Number(r.attempts),
+              createdUTC:t(r.created_at),updatedUTC:t(r.updated_at),
+              errorCategory:category,errorLength:String(r.last_error||'').length,
+              reportCharacters:Number(r.text_length||0),superseded:Boolean(r.superseded)
+            }));
+          }
+          NODE

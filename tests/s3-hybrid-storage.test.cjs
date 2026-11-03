@@ -52,7 +52,7 @@ function fakeS3(){
     get puts(){return puts;},
     failAfter(extra){failAt=puts+extra;},
     clearFailure(){failAt=0;},
-    set unsupported(v){failUnsupported=v;}
+    setUnsupported(v){failUnsupported=Boolean(v);}
   };
 }
 function setup(){
@@ -88,7 +88,7 @@ test('S3 adapter enforces conditional immutable puts, bounds, pagination and con
 });
 
 test('conditional-put incompatibility fails closed rather than silently overwriting',async()=>{
-  const ctx=setup();ctx.unsupported=true;
+  const ctx=setup();ctx.setUnsupported(true);
   await assert.rejects(ctx.objects.putOnce('demo/a.json',{a:1}),
     /CONDITIONAL_PUT_UNSUPPORTED/);
   assert.equal(ctx.data.size,0);

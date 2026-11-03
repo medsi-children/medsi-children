@@ -19,3 +19,34 @@ test('test stands cannot operate in database root or live YDB table scope',()=>{
   assert.equal(readConnectionConfig({...env,MEDSI_NEXT_YDB_TABLE_SCOPE:'medsi_next_test'}).tableScope,
     'medsi_next_test');
 });
+
+test('Yandex downloaded authorized key notice is stripped before handing PEM to SDK',()=>{
+  const notice='PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <synthetic-key>\\n';
+  const pem='-----BEGIN PRIVATE KEY-----\\nSYNTHETIC-FAKE-KEY\\n-----END PRIVATE KEY-----\\n';
+  const sample={id:'synthetic-key',service_account_id:'synthetic-service',
+    private_key:notice+pem};
+  const scoped={...env,MEDSI_NEXT_YDB_TABLE_SCOPE:'medsi_next_test',
+    YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(sample)};
+  const result=readConnectionConfig(scoped);
+  assert.equal(result.serviceAccount.privateKey,pem.trim());
+  assert.equal(result.serviceAccount.keyId,'synthetic-key');
+  assert.equal(result.tableScope,'medsi_next_test');
+  // A secret manager may encode a JSON string a second time.
+  assert.equal(readConnectionConfig({...scoped,
+    YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(scoped.YDB_SERVICE_ACCOUNT_JSON)})
+    .serviceAccount.privateKey,pem.trim());
+});
+
+test('unknown notices, incorrect key IDs and invalid JSON fail closed',()=>{
+  const pem='-----BEGIN PRIVATE KEY-----\\nSYNTHETIC-FAKE-KEY';
+  const sample={id:'synthetic-key',service_account_id:'synthetic-service',
+    private_key:'PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <other-key>\\n'+pem};
+  const scoped={...env,MEDSI_NEXT_YDB_TABLE_SCOPE:'medsi_next_test'};
+  assert.throws(()=>readConnectionConfig({...scoped,
+    YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(sample)}),/authorized-key fields/);
+  sample.private_key='SURPRISE HEADER\\n'+pem;
+  assert.throws(()=>readConnectionConfig({...scoped,
+    YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(sample)}),/authorized-key fields/);
+  assert.throws(()=>readConnectionConfig({...scoped,
+    YDB_SERVICE_ACCOUNT_JSON:'"unparseable{'}),/missing or invalid/);
+});

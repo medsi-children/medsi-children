@@ -1,4 +1,5 @@
 /** ========= НАСТРОЙКИ ========= **/
+// Report parsing fixes are deployed by the production Apps Script release workflow.
 const SPREADSHEET_ID_PROPERTY = 'MEDSI_SPREADSHEET_ID';
 const DATA_SHEET_NAME         = 'REPORTS';
 

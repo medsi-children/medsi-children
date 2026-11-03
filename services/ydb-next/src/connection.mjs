@@ -24,6 +24,11 @@ export function readConnectionConfig(env = process.env) {
     throw new Error('YDB service account JSON lacks required authorized-key fields.');
   }
   const tableScope=String(env.MEDSI_NEXT_YDB_TABLE_SCOPE||'').trim();
+  // Never allow an isolated stand, synthetic seed, or schema bootstrap to
+  // touch database-root or live tables, including when sharing one YDB.
+  if(env.MEDSI_NEXT_STAND==='1' && tableScope!=='medsi_next_test') {
+    throw new Error('Isolated YDB operations require an explicit test table scope.');
+  }
   if(tableScope)validateTableScope(tableScope,{stand:env.MEDSI_NEXT_STAND==='1'});
   return { connectionString, tableScope, serviceAccount: {
     id: serviceAccount.service_account_id,

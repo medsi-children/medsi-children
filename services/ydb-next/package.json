@@ -8,7 +8,7 @@
   },
   "scripts": {
     "test": "node --test test/*.test.mjs",
-    "check": "node --check src/connection.mjs && node --check src/report-publications.mjs && node --check src/report-engine.mjs && node --check src/report-reader.mjs && node --check src/report-submission-service.mjs && node --check src/chat-store.mjs && node --check src/chat-operations.mjs && node --check src/session-auth.mjs && node --check src/educator-report-dashboard.mjs && node --check src/name-variants-store.mjs && node --check src/push-service.mjs && node --check ../../tutors/next-settings.js && npm test"
+    "check": "node --check src/connection.mjs && node --check src/report-publications.mjs && node --check src/report-engine.mjs && node --check src/report-reader.mjs && node --check src/report-submission-service.mjs && node --check src/chat-store.mjs && node --check src/chat-operations.mjs && node --check src/session-auth.mjs && node --check src/educator-report-dashboard.mjs && node --check src/name-variants-store.mjs && node --check src/push-service.mjs && node --check src/parent-passkeys.mjs && node --check src/api-router.mjs && node --check ../../tutors/next-settings.js && npm test"
   },
   "dependencies": {
     "@ydbjs/auth": "6.3.1",
@@ -17,6 +17,7 @@
     "@ydbjs/query": "6.3.0",
     "@ydbjs/value": "6.0.8",
     "web-push": "^3.6.7",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "@simplewebauthn/server": "^14.0.3"
   }
 }

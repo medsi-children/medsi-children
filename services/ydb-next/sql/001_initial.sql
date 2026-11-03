@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS admissions (
 CREATE TABLE IF NOT EXISTS parent_profiles (
   phone10 Utf8 NOT NULL,
   parent_name Utf8,
+  child_name Utf8,
   relationship Utf8,
   child_id Utf8,
   admission_id Utf8,

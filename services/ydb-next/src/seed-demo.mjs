@@ -47,8 +47,8 @@ export async function seedSyntheticRoster({sql,now=()=>Date.now()}) {
          profile_generation,child_genitive,created_at,updated_at)
         VALUES (${parent.phone},${parent.name},${childName},${'Родитель'},
           ${child.childId},${admissionId},${gen},${''},${timestamp},${timestamp})`;
-      await tx`UPSERT INTO parent_auth_profiles (phone10,user_handle,generation_id)
-        VALUES (${parent.phone},${userHandle},${gen})`;
+      await tx`UPSERT INTO parent_auth_profiles (phone10,user_handle,generation_id,created_at)
+        VALUES (${parent.phone},${userHandle},${gen},${timestamp})`;
     }
     return {children:DEMO_CHILDREN.length,parents:DEMO_PARENTS.length};
   });

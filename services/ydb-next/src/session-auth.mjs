@@ -64,14 +64,23 @@ export function verifyCompatibleTutorSession(token, login, password, version) {
   } catch (_) {return false;}
 }
 
-export function createSessionService({sql,secret,login,password,tutorVersion,now=()=>Date.now()}) {
+export function createSessionService({
+  sql,secret,login,password,tutorVersion,
+  legacyWorkerSecret='',legacyTutor=null,now=()=>Date.now()
+}) {
   if (!sql || typeof sql.begin !== 'function') throw new Error('YDB client required.');
   if (String(secret || '').length < 32 || !login || !password || !tutorVersion) {
     throw new Error('Session secrets are not configured.');
   }
+  if (legacyWorkerSecret && String(legacyWorkerSecret).length < 32) {
+    throw new Error('Legacy worker secret must be at least 32 characters.');
+  }
+  if (legacyTutor && (!legacyTutor.login || !legacyTutor.password || !legacyTutor.version)) {
+    throw new Error('Incomplete legacy educator credentials.');
+  }
   const loadParent = async (phone10) => {
     const rows=await sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
-      const [authProfiles]=await tx`SELECT generation_id
+      const [authProfiles]=await tx`SELECT generation_id,created_at
         FROM parent_auth_profiles WHERE phone10 = ${phone10}`;
       const [profiles]=await tx`SELECT phone10, admission_id FROM parent_profiles
         WHERE phone10 = ${phone10}`;
@@ -80,14 +89,25 @@ export function createSessionService({sql,secret,login,password,tutorVersion,now
     return rows?.auth && rows?.profile ? rows.auth : null;
   };
   const verifyWorker = async token => {
-    const claims=verifyCompatibleWorkerSession(token,secret,now());
+    const claims=verifyCompatibleWorkerSession(token,secret,now()) ||
+      (legacyWorkerSecret ? verifyCompatibleWorkerSession(token,legacyWorkerSecret,now()) : null);
     if (!claims) return null;
     if (claims.role === 'parent') {
       const profile = await loadParent(claims.phone10);
       if (!profile) return null;
-      // A token without an explicit generation cannot prove it belongs to
-      // the current admission. Legacy clients must authenticate again.
-      if (!claims.authGeneration || claims.authGeneration !== profile.generation_id) return null;
+      if (claims.authGeneration) {
+        if (claims.authGeneration !== profile.generation_id) return null;
+      } else {
+        // Match the legacy D1 verifier only for a signed, time-bounded parent
+        // token from before auth generations were introduced. A recreated
+        // profile with a newer created_at must not inherit a prior session.
+        // All newly issued NEXT sessions include the generation explicitly.
+        const createdAt=Number(profile.created_at);
+        const issuedAt=Number(claims.exp)-30*ONE_DAY;
+        if (!Number.isFinite(createdAt) || createdAt < 0 ||
+            !Number.isFinite(issuedAt) ||
+            (createdAt > 0 && createdAt > issuedAt)) return null;
+      }
     }
     return claims;
   };
@@ -105,7 +125,10 @@ export function createSessionService({sql,secret,login,password,tutorVersion,now
     const expiry=now()+5*365*ONE_DAY;
     return {token:signCompatibleWorkerSession({role:'educator',phone10:'',exp:expiry},secret),expiresAt:expiry};
   };
-  const verifyTutor = token => verifyCompatibleTutorSession(token,login,password,tutorVersion);
+  const verifyTutor = token =>
+    verifyCompatibleTutorSession(token,login,password,tutorVersion) ||
+    Boolean(legacyTutor && verifyCompatibleTutorSession(
+      token,legacyTutor.login,legacyTutor.password,legacyTutor.version));
   const loginTutor = (enteredLogin,enteredPassword) => {
     if (!secureEqual(enteredLogin,login) || !secureEqual(enteredPassword,password)) {
       return {ok:false,message:'Неверный логин или пароль.'};

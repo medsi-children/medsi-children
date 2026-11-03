@@ -1,0 +1,29 @@
+name: Verify isolated YDB migration branch
+
+on:
+  push:
+    branches:
+      - feature/ydb-unified-cutover
+    paths:
+      - services/ydb-next/**
+      - .github/workflows/verify-ydb-parallel.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    # This workflow deliberately has no production environments, deployments
+    # or access to Timeweb, Cloudflare, Apps Script, or YDB credentials.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: services/ydb-next
+      - run: npm run check
+        working-directory: services/ydb-next

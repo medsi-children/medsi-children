@@ -143,6 +143,9 @@ test('stand exposes safe connection failure status and never uses legacy gateway
     connect:async()=>{throw new Error('YDB NEXT connection timed out.');}
   });
   try{
+    if(!started.server.listening){
+      await new Promise(resolve=>started.server.once('listening',resolve));
+    }
     await started.initialize;
     const base='http://127.0.0.1:'+started.server.address().port;
     const health=await fetch(base+'/__health');
@@ -159,6 +162,9 @@ test('stand exposes safe connection failure status and never uses legacy gateway
 test('missing test-only secrets are reported on the health endpoint without opening data routes',async()=>{
   const started=await startIsolatedStand({...env,PORT:'0',NEXT_SESSION_SECRET:'short'});
   try{
+    if(!started.server.listening){
+      await new Promise(resolve=>started.server.once('listening',resolve));
+    }
     await started.initialize;
     const base='http://127.0.0.1:'+started.server.address().port;
     const response=await fetch(base+'/__health');

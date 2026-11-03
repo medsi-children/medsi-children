@@ -1,5 +1,11 @@
 'use strict';
 
+if (process.env.MEDSI_S3_HYBRID_STAND === '1') {
+  // The test branch must never reach legacy proxies or live patient services.
+  // Timeweb PM2 launches this file directly, regardless of npm start.
+  require('./services/s3-hybrid/stand-smoke.cjs').startSmokeStand();
+} else {
+
 require('./lib/session-preload');
 const crypto = require('crypto');
 const express = require('express');
@@ -474,3 +480,5 @@ app.use((_req, res) => res.status(404).end());
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Medsi Timeweb gateway listening on ${PORT}`);
 });
+
+}

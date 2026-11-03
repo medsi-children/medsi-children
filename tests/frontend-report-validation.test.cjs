@@ -171,6 +171,16 @@ test('report form keeps invalid text and shows success only after queue receipt'
   assert.equal(context.document.body.dataset.screen, 'report-morning');
   assert.equal(queued.length, 0);
 
+  // An emoji-prefixed staff note followed by a true child section must
+  // be blocked locally, even if there is no "Для врачей" heading.
+  const duplicated = '📌Лена: Синтетический комментарий.\n\nЛена: Основной блок.';
+  element('text').value = duplicated;
+  await element('btnSend').handlers.click();
+  assert.equal(queued.length, 0);
+  assert.equal(element('text').value, duplicated);
+  assert.match(element('reportError').textContent, /два блока с именем «Лена»/);
+  assert.equal(element('reportError').classList.contains('report-validation-warning'), true);
+
   const valid = 'Лена — Основной текст.';
   element('text').value = valid;
   const sending = element('btnSend').handlers.click();

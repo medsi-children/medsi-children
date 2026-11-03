@@ -6,7 +6,7 @@
   "main": "server.js",
   "scripts": {
     "start": "node -r ./lib/session-preload.js server.js",
-    "verify:server": "node --check server.js && node --check lib/session-preload.js",
+    "verify:server": "node --check server.js && node --check lib/session-preload.js && node --test tests/s3-hybrid-stand.test.cjs",
     "verify:source-control": "node scripts/verify-source-control.mjs",
     "verify:chat": "node --test tests/chat-send-retry.test.cjs tests/parent-chat-send-retry.test.cjs tests/parent-assistant-offer.test.cjs tests/educator-message-delete.test.cjs",
     "verify:bot": "node scripts/verify-smart-bot.mjs && node --check parents/bot-chat-runtime.js",

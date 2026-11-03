@@ -42,6 +42,11 @@
 | `NEXT_TUTOR_VERSION` | `ydb-stand-v1` |
 | `PARENT_PASSKEY_RP_ID` | Relying party ID текущего **HTTPS-домена** стенда |
 | `PARENT_PASSKEY_ORIGIN` | `https://` + этот же домен |
+| `S3_BUCKET` | Имя приватного бакета Timeweb S3 |
+| `S3_ACCESS_KEY` | Ключ доступа S3, только в секретах стенда |
+| `S3_SECRET_KEY` | Секрет S3, только в секретах стенда |
+| `S3_ENDPOINT` | `https://s3.twcstorage.ru`, если используется стандартный endpoint |
+| `S3_REGION` | `ru-1` при стандартной конфигурации Timeweb |
 | `VAPID_PUBLIC_KEY` | Открытый VAPID-ключ push |
 | `VAPID_PRIVATE_KEY` | Секретный VAPID-ключ push |
 | `VAPID_SUBJECT` | Контактный mailto: для push |

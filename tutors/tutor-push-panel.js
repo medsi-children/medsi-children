@@ -1,6 +1,6 @@
 (function(){
-  const APP_BASE_URL='https://script.google.com/macros/s/AKfycbzRKRjjI7NoHx8rD5ifEdrcexGuYlMEB453sOC2UTZDeBaybZiNPIY0vDTMkmeHhebVpA/exec';
-  const PUSH_SERVICE_URL='https://medsi-push-worker.medsi-children.workers.dev';
+  const APP_BASE_URL='';
+  const PUSH_SERVICE_URL=window.location.origin+'/push';
   let pushReady=false,pushLoading=false;
 
   function authed(){

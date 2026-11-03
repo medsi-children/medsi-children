@@ -57,5 +57,17 @@ export function createReportSubmissionService(sql) {
     });
     return {ok:true,...result,validation:plan.validation};
   }
-  return {submit,planningSnapshot};
+  async function status(submissionId) {
+    const id=String(submissionId||'');
+    if(!/^[A-Za-z0-9_-]{8,128}$/.test(id))throw new Error('Invalid submission identifier.');
+    return sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
+      const [[row]]=await tx`SELECT submission_id,kind,publication_id,revision
+        FROM report_submissions WHERE submission_id=${id}`;
+      return row
+        ? {status:'completed',result:{ok:true,publicationId:row.publication_id,
+            revision:Number(row.revision||0)}}
+        : {status:'not_found'};
+    });
+  }
+  return {submit,status,planningSnapshot};
 }

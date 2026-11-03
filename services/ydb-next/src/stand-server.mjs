@@ -16,6 +16,7 @@ import {createParentPasskeyService} from './parent-passkeys.mjs';
 import {createParentAccessService} from './parent-access.mjs';
 import {createParentRegistrationService} from './parent-registration.mjs';
 import {createParentDeletionService} from './parent-deletion.mjs';
+import {createMediaService} from './media-service.mjs';
 import {createNextLabRouter} from './api-router.mjs';
 import {createLegacyBridge} from './legacy-bridge.mjs';
 
@@ -62,9 +63,11 @@ export function createNextServices({sql,env=process.env}) {
     :Object.fromEntries(['authenticationOptions','authenticationVerify','hasPasskey',
        'registrationOptions','registrationVerify'].map(method=>[method,
       async()=>{throw new Error('Passkeys unavailable until origin and RP ID are configured.');}]));
+  const media=createMediaService({sql,sessions,secret:env.NEXT_SESSION_SECRET,
+    storage:require('../../../lib/s3-storage.js')});
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,
-    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth};
+    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,media};
 }
 
 function handler(fn) {
@@ -106,7 +109,10 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     if(payload?.action!=='api')throw new Error('Invalid legacy action.');
     return {ok:true,result:await legacy(payload.method,payload.args||[])};
   }));
-  app.use('/lab',createNextLabRouter(services));
+  if(!services.media?.grantCookie||!services.media?.upload||!services.media?.open){
+    throw new Error('Protected media backend must be present before standing up the app.');
+  }
+  app.use('/lab',services.media.grantCookie,createNextLabRouter(services));
 
   // Web Push is authorized at this same origin. The legacy push worker is
   // deliberately never contacted in isolated stand mode.
@@ -140,11 +146,11 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     return services.push.unsubscribe({...auth,endpoint:data.endpoint});
   }));
   app.use('/push',push);
-  // Never expose S3 objects before authorization and ownership-aware media
-  // routing is implemented. Prevent accidental unauthenticated media access.
-  app.all(['/chat-upload','/media/*path'],(_req,res)=>res.status(503).json({
-    ok:false,code:'MEDIA_NOT_READY',message:'Вложения пока отключены на тестовом стенде.'
-  }));
+  // Media is private: chat headers authorize upload; short-lived HttpOnly
+  // cookie + active chat-message ownership authorizes browser image loading.
+  app.post('/chat-upload',handler((req,res)=>services.media.upload(req,res)));
+  app.get('/media/s3/:key',handler((req,res)=>services.media.open(req,res)));
+  app.all('/media/*path',(_req,res)=>res.status(404).end());
   app.all(['/lab/bot-log','/__bot-log-view'],(_req,res)=>res.status(410).json({ok:false}));
 
   // Replace the hard-coded old VAPID public key at runtime. Never send a

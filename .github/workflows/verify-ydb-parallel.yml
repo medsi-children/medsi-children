@@ -12,6 +12,7 @@ on:
       - 'parents/push-gateway.js'
       - 'notify-client.js'
       - 'package.json'
+      - 'server.js'
       - '.github/workflows/verify-ydb-parallel.yml'
   workflow_dispatch:
 

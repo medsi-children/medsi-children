@@ -71,7 +71,7 @@ export function createSessionService({sql,secret,login,password,tutorVersion,now
   }
   const loadParent = async (phone10) => {
     const rows=await sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
-      const [authProfiles]=await tx`SELECT generation_id, created_at
+      const [authProfiles]=await tx`SELECT generation_id
         FROM parent_auth_profiles WHERE phone10 = ${phone10}`;
       const [profiles]=await tx`SELECT phone10, admission_id FROM parent_profiles
         WHERE phone10 = ${phone10}`;
@@ -85,13 +85,9 @@ export function createSessionService({sql,secret,login,password,tutorVersion,now
     if (claims.role === 'parent') {
       const profile = await loadParent(claims.phone10);
       if (!profile) return null;
-      if (claims.authGeneration) {
-        if (claims.authGeneration !== profile.generation_id) return null;
-      } else {
-        // Preserve Cloudflare's legacy token issuance protection.
-        const createdAt=Number(profile.created_at || 0);
-        if (createdAt > 0 && createdAt > Number(claims.exp) - 30*ONE_DAY) return null;
-      }
+      // A token without an explicit generation cannot prove it belongs to
+      // the current admission. Legacy clients must authenticate again.
+      if (!claims.authGeneration || claims.authGeneration !== profile.generation_id) return null;
     }
     return claims;
   };

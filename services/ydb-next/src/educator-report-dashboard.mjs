@@ -9,18 +9,23 @@ export function assembleEducatorReports({ profiles, children, admissions, curren
   if (profiles.length > 300 || current.length > 2000 || children.length > 300) {
     throw new Error('Unexpectedly large educator roster.');
   }
-  const active = new Set(admissions.filter(row => row.status === 'active').map(row => row.admission_id));
+  const active = new Map(admissions.filter(row => row.status === 'active')
+    .map(row => [String(row.admission_id), String(row.child_id || '')]));
   const childMap = new Map(children.map(c => [c.child_id, c]));
   const currentByPhone = new Map();
   for (const report of current) {
     if (!PHONE_RE.test(String(report.phone10 || '')) || !KINDS.includes(report.kind)) continue;
-    const existing = currentByPhone.get(report.phone10) || blankReports();
-    existing[report.kind] = String(report.text || '');
-    currentByPhone.set(report.phone10, existing);
+    const entries = currentByPhone.get(report.phone10) || [];
+    entries.push(report);
+    currentByPhone.set(report.phone10, entries);
   }
   const childCards = new Map();
   for (const profile of profiles) {
-    if (!PHONE_RE.test(String(profile.phone10 || '')) || !active.has(profile.admission_id)) continue;
+    if (!PHONE_RE.test(String(profile.phone10 || '')) || !active.has(String(profile.admission_id))) continue;
+    // Only the current admission may appear on the educator's report card.
+    if (active.get(String(profile.admission_id)) !== String(profile.child_id)) {
+      throw new Error('Active admission-child mismatch.');
+    }
     const child = childMap.get(profile.child_id);
     if (!child) throw new Error('Active parent references a missing child.');
     const id = String(profile.admission_id);
@@ -40,9 +45,16 @@ export function assembleEducatorReports({ profiles, children, admissions, curren
       phone: '8' + profile.phone10
     };
     card.parents.push(parent);
+    const reports = blankReports();
+    for (const report of currentByPhone.get(profile.phone10) || []) {
+      // Historical records and records without an admission identity fail
+      // closed. Re-admission cannot show a previous child's clinical report.
+      if (String(report.admission_id || '') === String(profile.admission_id)) {
+        reports[report.kind] = String(report.text || '');
+      }
+    }
     card.parentViews.push({
-      phone: parent.phone, parentName: parent.parentName,
-      reports: currentByPhone.get(profile.phone10) || blankReports()
+      phone: parent.phone, parentName: parent.parentName, reports
     });
   }
 
@@ -83,8 +95,8 @@ export function createEducatorReportsDashboardStore(sql) {
         const sets = await Promise.all([
           tx`SELECT phone10, parent_name, relationship, child_id, admission_id FROM parent_profiles`,
           tx`SELECT child_id, registered_first_name, surname FROM children`,
-          tx`SELECT admission_id, status FROM admissions`,
-          tx`SELECT phone10, kind, text FROM parent_current_reports`,
+          tx`SELECT admission_id, child_id, status FROM admissions`,
+          tx`SELECT phone10, kind, text, admission_id FROM parent_current_reports`,
           tx`SELECT kind, publication_id FROM report_publication_head`
         ]);
         const [profiles, children, admissions, current, heads] = sets.map(result => result[0] || []);

@@ -63,6 +63,9 @@ jobs:
             node --check "$file" || exit 1
           done
         working-directory: services/ydb-next
-      - name: Full isolated YDB verification
-        run: npm run check
+      - name: Final composite syntax verification
+        run: npm run check:syntax
+        working-directory: services/ydb-next
+      - name: Final complete YDB test suite
+        run: npm test
         working-directory: services/ydb-next

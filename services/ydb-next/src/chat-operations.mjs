@@ -90,7 +90,10 @@ export function createChatOperations(sql) {
       if (beforeKey) {
         const [[marker]]=await tx`SELECT message_key,created_at FROM chat_messages
           WHERE phone10=${phone10} AND message_key=${beforeKey}`;
-        boundary=marker||null;
+        // An unknown or foreign cursor must not silently restart pagination
+        // from the newest messages and create duplicate bubbles in the UI.
+        if(!marker)throw new Error('Invalid or expired chat cursor.');
+        boundary=marker;
       }
       let rows;
       if (boundary) {

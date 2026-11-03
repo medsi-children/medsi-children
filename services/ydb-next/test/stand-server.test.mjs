@@ -11,7 +11,7 @@ function fakeServices(){
       loginTutor:()=>({ok:false}),renewTutor:()=>({ok:false})},
     chatStore:{},chatOperations:{},reportReader:{},reports:{},
     dashboard:{},nameVariants:{},passkeys:{},
-    parentRegistration:{register:async()=>({ok:true,status:'PENDING'})},
+    parentRegistration:{register:async()=>({ok:true,status:'COMPLETED',parentSession:'dummy'})},
     parentAccess:{request:async()=>({ok:true,status:'PENDING'})},
     parentDeletion:{enqueue:async()=>({ok:true})},
     push:{},dbHealth:async()=>{},
@@ -36,7 +36,7 @@ test('stand keeps public entry limited, requires educator auth and closes media 
     response=await fetch(base+'/lab/parent-registration',{method:'POST',
       headers:{'content-type':'application/json'},body:'{}'});
     assert.equal(response.status,200);
-    assert.equal((await response.json()).status,'PENDING');
+    assert.equal((await response.json()).status,'COMPLETED');
 
     response=await fetch(base+'/lab/parent-delete',{method:'POST',
       headers:{'content-type':'application/json'},body:'{}'});

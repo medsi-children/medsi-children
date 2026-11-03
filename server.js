@@ -5,11 +5,20 @@
 // launch the legacy Apps Script/Cloudflare gateway or touch patient data.
 // Only this feature branch contains the boot switch; production is unchanged.
 if (process.env.MEDSI_NEXT_STAND === '1') {
-  import('./services/ydb-next/src/stand-entry.mjs').catch(() => {
-    // No secret, source data, or connection details in deployment logs.
-    console.error('MEDSI_NEXT_STAND_START_FAILED: isolated runtime unavailable.');
-    process.exitCode = 1;
-  });
+  // Timeweb scans for an open port before it considers a container ready.
+  // Load no external dependencies until the isolated diagnostic socket exists.
+  const {startStandBootstrap} = require('./services/ydb-next/src/stand-bootstrap.cjs');
+  const bootstrap = startStandBootstrap();
+  import('./services/ydb-next/src/stand-server.mjs')
+    .then(({startIsolatedStand}) => startIsolatedStand(process.env,{
+      externalServer:bootstrap.server,
+      installHandler:bootstrap.activate
+    }))
+    .catch(() => {
+      // Missing dependencies are reported without leaking environment values
+      // or YDB metadata. The diagnostic listener remains operational.
+      bootstrap.fail();
+    });
 } else {
 require('./lib/session-preload');
 const crypto = require('crypto');

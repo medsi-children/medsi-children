@@ -27,6 +27,10 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
   async function register(payload) {
     const {phone10,attemptId,parentName,childName}=validated(payload);
     return write(async tx=>{
+      const [deletions]=await tx`SELECT status FROM parent_deletion_queue WHERE phone10=${phone10}`;
+      if(deletions.some(row=>['pending','retry','processing','failed'].includes(row.status))){
+        return {ok:false,code:'DELETION_PENDING',message:'Профиль ещё удаляется. Попробуйте позже.'};
+      }
       const [[existing]]=await tx`SELECT phone10 FROM parent_profiles WHERE phone10=${phone10}`;
       const [[attempt]]=await tx`SELECT phone10,parent_name,child_name,status,created_at
         FROM parent_registration_attempts WHERE attempt_id=${attemptId}`;

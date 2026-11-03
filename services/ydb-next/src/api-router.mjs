@@ -51,8 +51,8 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(auth?.preview){res.status(403).json({ok:false,message:'Предварительный просмотр только для чтения.'});return true}
     return false;
   };
-  // Public entry points create pending requests only; staff must verify a
-  // real adult in person before approving access to medical information.
+  // Preserve the current parent-facing registration and login contract.
+  // There are no new educator approval screens or manual admission selectors.
   const publicRequests=new Map();
   const publicLimit=(req,res,next)=>{
     const now=Date.now(),key=String(req.ip||req.socket?.remoteAddress||'unknown');
@@ -72,28 +72,8 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
 
   router.post('/parent-registration',run(req=>parentRegistration.register(req.body||{})));
   router.get('/parent-registration/status',run(req=>parentRegistration.status(req.query||{})));
-  router.get('/parent-registration/pending',run(async(req,res)=>{
-    if(!await educator(req,res))return;
-    return parentRegistration.listPending();
-  }));
-  router.get('/parent-registration/candidates',run(async(req,res)=>{
-    if(!await educator(req,res))return;
-    return parentRegistration.candidates();
-  }));
-  router.post('/parent-registration/decision',run(async(req,res)=>{
-    const auth=await educator(req,res);if(!auth)return;
-    return parentRegistration.decide({...req.body,approvedBy:'educator'});
-  }));
   router.post('/parent-auth/request',run(req=>parentAccess.request(req.body||{})));
   router.post('/parent-auth/status',run(req=>parentAccess.status(req.body||{})));
-  router.get('/parent-access/requests',run(async(req,res)=>{
-    if(!await educator(req,res))return;
-    return parentAccess.listPending();
-  }));
-  router.post('/parent-access/decision',run(async(req,res)=>{
-    if(!await educator(req,res))return;
-    return parentAccess.decide(req.body||{});
-  }));
   router.post('/parent-delete',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return parentDeletion.enqueue(req.body||{});

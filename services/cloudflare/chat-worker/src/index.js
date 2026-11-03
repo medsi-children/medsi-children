@@ -1545,6 +1545,14 @@ async function enqueueReportSubmission(request, env, auth, ctx) {
   `).bind(submissionId, reportType, reportText, now, now).run();
   const saved = await env.CHAT_DB.prepare('SELECT report_type, report_text, status FROM report_submission_queue WHERE submission_id = ?').bind(submissionId).first();
   if (!saved || saved.report_type !== reportType || saved.report_text !== reportText) return json({ ok: false, message: 'Этот идентификатор уже использован для другого отчёта.' }, 409);
+  // Never send an accepted receipt for an already terminally failed attempt.
+  // A corrected report must use a new submission ID; the original remains
+  // available for the educator failure notice and support diagnosis.
+  if (saved.status === 'failed') return json({
+    ok: false, code: 'REPORT_PREVIOUSLY_FAILED',
+    message: 'Эта попытка обработки отчёта завершилась ошибкой. Проверьте текст или свяжитесь с Денисом.',
+    submissionId, status: 'failed'
+  }, 409);
   if (ctx) ctx.waitUntil(drainReportQueue(env));
   return json({ ok: true, accepted: true, submissionId, status: saved.status });
 }
@@ -1557,6 +1565,27 @@ async function getReportSubmissionQueueStatus(env, auth, submissionId) {
   let result = null;
   try { result = row.result_json ? JSON.parse(row.result_json) : null; } catch (_) {}
   return json({ ok: true, status: row.status, submissionId: id, attempts: Number(row.attempts || 0), message: row.last_error || '', result, updatedAt: Number(row.updated_at || 0) });
+}
+
+async function listRecentReportFailures(env, auth) {
+  if (auth.role !== 'educator') return json({ ok: false, message: 'Forbidden' }, 403);
+  const since = Date.now() - 14 * 24 * 60 * 60 * 1000;
+  // Metadata only: never return report text, submission IDs or error messages
+  // (Apps Script validation errors may contain children's names).
+  const rows = await env.CHAT_DB.prepare(`
+    SELECT report_type, created_at, updated_at FROM report_submission_queue
+    WHERE status = 'failed' AND created_at >= ?
+      AND report_type IN ('morning', 'evening', 'psychology')
+    ORDER BY created_at DESC LIMIT 30
+  `).bind(since).all();
+  return json({
+    ok: true,
+    failures: (rows.results || []).map(row => ({
+      kind: String(row.report_type),
+      createdAt: Number(row.created_at),
+      failedAt: Number(row.updated_at)
+    }))
+  });
 }
 
 async function drainReportQueue(env) {
@@ -1605,13 +1634,17 @@ async function drainReportQueue(env) {
       }
       if (!response.ok || !result || result.ok !== true || result.processing ||
           (result.submissionId && result.submissionId !== row.submission_id)) {
-        throw new Error(result && result.message || `Apps Script did not confirm report save (HTTP ${response.status})`);
+        const failure = new Error(result && result.message || `Apps Script did not confirm report save (HTTP ${response.status})`);
+        // A verified format error will never succeed on an identical retry.
+        // Mark it terminal immediately instead of retrying eight times.
+        failure.permanent = !!(response.ok && result && result.code === 'REPORT_FORMAT_ERROR');
+        throw failure;
       }
       await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status='completed', result_json=?, last_error='', updated_at=? WHERE submission_id=?`).bind(JSON.stringify(result), Date.now(), row.submission_id).run();
       results.push({ submissionId: row.submission_id, status: 'completed' });
     } catch (error) {
       const attempts = Number(row.attempts || 0) + 1;
-      const next = attempts >= 8 ? 'failed' : 'retry';
+      const next = (error && error.permanent) || attempts >= 8 ? 'failed' : 'retry';
       await env.CHAT_DB.prepare(`UPDATE report_submission_queue SET status=?, last_error=?, updated_at=? WHERE submission_id=?`).bind(next, String(error && error.message || error).slice(0, 500), Date.now(), row.submission_id).run();
       results.push({ submissionId: row.submission_id, status: next });
       break;
@@ -2297,6 +2330,9 @@ export default {
     }
     if (request.method === 'GET' && url.pathname === '/lab/report-submit/status') {
       return getReportSubmissionQueueStatus(env, auth, url.searchParams.get('submissionId'));
+    }
+    if (request.method === 'GET' && url.pathname === '/lab/report-failures') {
+      return listRecentReportFailures(env, auth);
     }
     if (request.method === 'POST' && url.pathname === '/lab/parent-delete') {
       return enqueueParentDeletion(request, env, auth, ctx);

@@ -54,8 +54,12 @@ var MedsiReportValidation = (function() {
   }
 
   function childHeader(line, lineNumber) {
-    // Read the label only; the child body is not normalized or rewritten.
-    const withoutRoom = removeRoomPrefix(line);
+    // WhatsApp and notes often prefix a header with an emoji (e.g. "📌Имя:").
+    // Ignore only leading decorations for validation; never change report body.
+    // Check both sides of a possible room number ("📌 501: 📌Имя:").
+    const withoutDecorations = String(line || '').trim().replace(/^[^\p{L}\p{N}]+/u, '').trimStart();
+    const withoutRoom = removeRoomPrefix(withoutDecorations)
+      .replace(/^[^\p{L}\p{N}]+/u, '').trimStart();
     // Only an explicit colon or dash starts a block. Bare name mentions are prose.
     const match = /^([А-ЯЁ][а-яё]+)(?:[ \t]+([А-ЯЁ](?:[а-яё]+)?\.?))?[ \t]*[:\-–—]/iu.exec(withoutRoom);
     if (!match || serviceNames.has(key(match[1]))) return null;
@@ -134,7 +138,8 @@ var MedsiReportValidation = (function() {
         if (differentForms) {
           message = `Встречаются разные формы имени: ${labels}. Добавьте различающие инициалы или фамилии, чтобы избежать неоднозначного распределения.`;
         } else if (reason === 'duplicate_name') {
-          message = `Имя «${items[0].name}» повторяется в нескольких блоках без инициала. Уберите дублирование или добавьте инициалы.`;
+          const lineNumbers = items.map(item => item.line).join(' и ');
+          message = `В отчёте найдено два блока с именем «${items[0].name}» (строки ${lineNumbers}). Проверьте, не попал ли в отчёт общий комментарий для врачей. Уберите повторяющийся блок перед отправкой. Если это разные дети, уточните инициалы или фамилии.`;
         } else {
           message = `В отчёте есть ${labels}. Уточните инициал или фамилию у «${bare[0].name}», указанного без инициала.`;
         }
@@ -145,7 +150,7 @@ var MedsiReportValidation = (function() {
         for (let j = i + 1; j < items.length; j++) {
           if (!items[i].suffix.startsWith(items[j].suffix) && !items[j].suffix.startsWith(items[i].suffix)) continue;
           issues.push({reason:'duplicate_header', lines:[items[i].line, items[j].line],
-            message:`Блоки «${items[i].label}» и «${items[j].label}» не различаются по инициалу или фамилии. Уберите повтор либо уточните фамилии.`});
+            message:`В отчёте найдены два блока «${items[i].label}» и «${items[j].label}» (строки ${items[i].line} и ${items[j].line}). Проверьте, не попал ли общий комментарий для врачей. Уберите повтор либо уточните фамилии, если это разные дети.`});
           return;
         }
       }

@@ -1,7 +1,7 @@
 import {createHash, timingSafeEqual} from 'node:crypto';
 import {Uint64} from '@ydbjs/value/primitive';
 
-const PHONE=/^\\d{10}$/;
+const PHONE=/^\d{10}$/;
 const REQUEST=/^auth_[A-Za-z0-9_-]{10,120}$/;
 const SECRET=/^[A-Za-z0-9_-]{35,150}$/;
 const TTL=24*60*60*1000;
@@ -13,7 +13,7 @@ function same(a,b) {
   return left.length===right.length && timingSafeEqual(left,right);
 }
 function validate({phone,requestId,requestSecret}) {
-  const phone10=String(phone||'').replace(/\\D/g,'').slice(-10);
+  const phone10=String(phone||'').replace(/\D/g,'').slice(-10);
   if(!PHONE.test(phone10))throw new Error('Invalid recovery phone.');
   if(!REQUEST.test(String(requestId||''))||!SECRET.test(String(requestSecret||'')))throw new Error('Invalid recovery request.');
   return {phone10,id:String(requestId),secretHash:hash(String(requestSecret))};

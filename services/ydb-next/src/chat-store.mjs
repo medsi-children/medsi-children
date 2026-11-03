@@ -46,16 +46,16 @@ export function createChatStore(sql) {
       const zero = new Uint64(0n);
       const isParent = side === 'parent';
       return sql.begin({ isolation: 'serializableReadWrite', idempotent: true }, async tx => {
-        const [seen] = await tx`SELECT message_key, payload_hash
+        const [[seen]] = await tx`SELECT message_key, payload_hash
           FROM chat_message_dedup WHERE phone10 = ${phone10} AND client_message_id = ${clientMessageId}`;
         if (seen) {
           if (seen.payload_hash !== payloadHash) throw new Error('Message identifier reused for different content.');
           return { status: 'duplicate', messageKey: seen.message_key, phone10 };
         }
-        const [profile] = await tx`SELECT phone10 FROM parent_profiles WHERE phone10 = ${phone10}`;
+        const [[profile]] = await tx`SELECT phone10 FROM parent_profiles WHERE phone10 = ${phone10}`;
         if (!profile) throw new Error('Chat is closed: parent profile is inactive.');
         if (replyToKey) {
-          const [target] = await tx`SELECT message_key FROM chat_messages
+          const [[target]] = await tx`SELECT message_key FROM chat_messages
             WHERE phone10 = ${phone10} AND message_key = ${replyToKey} AND status = ${'active'}`;
           if (!target) throw new Error('Reply target is absent or belongs to another chat.');
         }

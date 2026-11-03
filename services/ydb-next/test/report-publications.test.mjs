@@ -52,12 +52,12 @@ function fakeDb(profiles) {
       const tx = async (strings, ...values) => {
         const source = strings.join(' ? ').replace(/\s+/g, ' ').trim();
         if (source.includes('FROM report_submissions')) return snapshot.submissions.has(values[0])
-          ? [snapshot.submissions.get(values[0])] : [];
-        if (source.includes('FROM parent_profiles')) return snapshot.profiles;
+          ? [[snapshot.submissions.get(values[0])]] : [[]];
+        if (source.includes('FROM parent_profiles')) return [snapshot.profiles];
         if (source.includes('FROM report_publication_head')) return snapshot.heads.has(values[0])
-          ? [snapshot.heads.get(values[0])] : [];
+          ? [[snapshot.heads.get(values[0])]] : [[]];
         if (source.includes('FROM parent_current_reports')) return snapshot.current.has(values[0] + '/' + values[1])
-          ? [snapshot.current.get(values[0] + '/' + values[1])] : [];
+          ? [[snapshot.current.get(values[0] + '/' + values[1])]] : [[]];
         const table = source.match(/^UPSERT INTO ([a-z_]+)/)?.[1];
         assert.ok(table, 'unexpected YQL operation ' + source);
         writes.push(table);
@@ -92,7 +92,7 @@ function fakeDb(profiles) {
             break;
           default: throw new Error('Unexpected YDB table: ' + table);
         }
-        return [];
+        return [[]];
       };
       const result = await fn(tx);
       Object.assign(state, snapshot);

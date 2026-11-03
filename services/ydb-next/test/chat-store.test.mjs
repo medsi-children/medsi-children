@@ -9,13 +9,14 @@ const payload = (more={}) => ({
 });
 
 function fakeSql(activePhones = ['9000000001']) {
-  const state = { messages: new Map(), dedup: new Map(), push: new Map() };
+  const state = { messages: new Map(), dedup: new Map(), push: new Map(), threads: new Map() };
   const sql = { async begin(options, callback) {
     assert.equal(options.isolation, 'serializableReadWrite');
     const draft = {
       messages: new Map(state.messages),
       dedup: new Map(state.dedup),
-      push: new Map(state.push)
+      push: new Map(state.push),
+      threads: new Map(state.threads)
     };
     const tx = async (strings, ...params) => {
       const q = strings.join(' ? ').replace(/\s+/g, ' ').trim();
@@ -25,6 +26,10 @@ function fakeSql(activePhones = ['9000000001']) {
       }
       if (q.includes('FROM parent_profiles')) {
         return activePhones.includes(params[0]) ? [[{ phone10: params[0] }]] : [[]];
+      }
+      if (q.includes('FROM chat_thread_state')) {
+        const row=draft.threads.get(params[0]);
+        return row ? [[row]] : [[]];
       }
       if (q.includes('FROM chat_messages')) {
         const row = draft.messages.get(params[0]+'/'+params[1]);
@@ -37,6 +42,8 @@ function fakeSql(activePhones = ['9000000001']) {
         });
       } else if (kind === 'chat_message_dedup') {
         draft.dedup.set(params[0]+'/'+params[1], { message_key: params[2], payload_hash: params[3] });
+      } else if (kind === 'chat_thread_state') {
+        draft.threads.set(params[0], {last_message_key:params[1],last_at:Number(params[5].value||0),educator_has_unread:params[6],parent_has_unread:params[7]});
       } else if (kind === 'push_outbox') {
         draft.push.set(params[0], JSON.parse(params[3]));
       } else throw new Error('Unexpected query: '+q);

@@ -4,8 +4,8 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants}) {
-  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants];
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys}) {
+  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
   router.use(express.json({limit:'1mb'}));
@@ -51,6 +51,32 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(auth?.preview){res.status(403).json({ok:false,message:'Предварительный просмотр только для чтения.'});return true}
     return false;
   };
+  router.post('/parent-passkeys/authentication/options',run(async()=>{
+    return passkeys.authenticationOptions();
+  }));
+  router.post('/parent-passkeys/authentication/verify',run(async(req)=>{
+    return passkeys.authenticationVerify(req.body||{});
+  }));
+  router.post('/parent-passkeys/status',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    return passkeys.hasPasskey(auth.phone10);
+  }));
+  router.post('/parent-passkeys/registration/options',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    return passkeys.registrationOptions(auth.phone10);
+  }));
+  router.post('/parent-passkeys/registration/verify',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    return passkeys.registrationVerify(auth.phone10,req.body||{});
+  }));
+  router.post('/parent-session/renew',run(async(req,res)=>{
+    const auth=await readParent(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    const session=await sessions.issueParent(auth.phone10);
+    return {ok:true,parentSession:session.token,expiresAt:session.expiresAt};
+  }));
   router.get('/admin/reports/dashboard',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return dashboard.readForEducator();

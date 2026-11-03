@@ -1,9 +1,12 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
-import {prepareLegacyPushCapture,importLegacyPushCapture} from '../src/push-continuity.mjs';
+import {createECDH,createHash} from 'node:crypto';
+import {prepareLegacyPushCapture,importLegacyPushCapture,verifyVapidKeyPair} from '../src/push-continuity.mjs';
 
-const vapid='old-public-vapid-test-only';
+const ecdh=createECDH('prime256v1');
+ecdh.setPrivateKey(Buffer.alloc(32,1));
+const vapid=ecdh.getPublicKey().toString('base64url');
+const vapidPrivate=ecdh.getPrivateKey().toString('base64url');
 const endpoint=i=>'https://push.invalid.example/subscription/'+i;
 function entry(i,{role='parent',enabled=true,phone10='9000000001'}={}) {
   const url=endpoint(i);
@@ -15,7 +18,8 @@ function entry(i,{role='parent',enabled=true,phone10='9000000001'}={}) {
   return {key:'sub:'+key,value:JSON.stringify(value)};
 }
 const args=(entries)=>({
-  sourceVapidPublicKey:vapid,targetVapidPublicKey:vapid,expectedCount:entries.length
+  sourceVapidPublicKey:vapid,targetVapidPublicKey:vapid,
+  targetVapidPrivateKey:vapidPrivate,expectedCount:entries.length
 });
 function fakeSql(existing=false) {
   const saved=[];
@@ -77,4 +81,11 @@ test('offline import requires write fence, opt-in, and an empty destination',asy
   assert.equal(saved.length,2);
   assert.equal(saved[0][4],true);
   assert.equal(saved[1][4],false);
+});
+
+test('VAPID private signing key must derive the same public key as the legacy subscription',()=>{
+  assert.equal(verifyVapidKeyPair(vapid,vapidPrivate),true);
+  const other=createECDH('prime256v1');
+  other.setPrivateKey(Buffer.alloc(32,2));
+  assert.equal(verifyVapidKeyPair(vapid,other.getPrivateKey().toString('base64url')),false);
 });

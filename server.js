@@ -1,5 +1,16 @@
 'use strict';
 
+// Timeweb Node.js App Platform starts server.js via PM2 by default, even
+// when package.json defines npm start. A NEXT stand must never accidentally
+// launch the legacy Apps Script/Cloudflare gateway or touch patient data.
+// Only this feature branch contains the boot switch; production is unchanged.
+if (process.env.MEDSI_NEXT_STAND === '1') {
+  import('./services/ydb-next/src/stand-entry.mjs').catch(() => {
+    // No secret, source data, or connection details in deployment logs.
+    console.error('MEDSI_NEXT_STAND_START_FAILED: isolated runtime unavailable.');
+    process.exitCode = 1;
+  });
+} else {
 require('./lib/session-preload');
 const crypto = require('crypto');
 const express = require('express');
@@ -474,3 +485,4 @@ app.use((_req, res) => res.status(404).end());
 app.listen(PORT, '0.0.0.0', () => {
   console.log(`Medsi Timeweb gateway listening on ${PORT}`);
 });
+}

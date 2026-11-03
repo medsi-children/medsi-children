@@ -1,4 +1,4 @@
-import {createHash,timingSafeEqual} from 'node:crypto';
+import {createECDH,createHash,timingSafeEqual} from 'node:crypto';
 import {Uint64} from '@ydbjs/value/primitive';
 
 // Offline, operator-controlled import of a FROZEN legacy Cloudflare KV capture.
@@ -11,6 +11,17 @@ const sha=s=>createHash('sha256').update(s,'utf8').digest('hex');
 function keyMatches(a,b) {
   const left=Buffer.from(String(a)),right=Buffer.from(String(b));
   return left.length===right.length&&timingSafeEqual(left,right);
+}
+export function verifyVapidKeyPair(publicKey,privateKey) {
+  try {
+    const pub=Buffer.from(String(publicKey||''),'base64url');
+    const priv=Buffer.from(String(privateKey||''),'base64url');
+    if(pub.length!==65||pub[0]!==4||priv.length!==32)return false;
+    const ecdh=createECDH('prime256v1');
+    ecdh.setPrivateKey(priv);
+    const actual=ecdh.getPublicKey();
+    return actual.length===pub.length&&timingSafeEqual(actual,pub);
+  } catch (_) {return false;}
 }
 export function prepareLegacyPushCapture(entries,{sourceVapidPublicKey,
   targetVapidPublicKey,expectedCount}={}) {
@@ -71,13 +82,16 @@ export function prepareLegacyPushCapture(entries,{sourceVapidPublicKey,
 }
 
 export async function importLegacyPushCapture(sql,rows,{
-  sourceVapidPublicKey,targetVapidPublicKey,expectedCount,
+  sourceVapidPublicKey,targetVapidPublicKey,targetVapidPrivateKey,expectedCount,
   freezeConfirmed=false,explicitImport=false
 }={}) {
   const prepared=prepareLegacyPushCapture(rows,{
     sourceVapidPublicKey,targetVapidPublicKey,expectedCount});
   if(!freezeConfirmed||!explicitImport||!sql?.begin) {
     throw new Error('Push import requires a frozen capture and explicit operator approval.');
+  }
+  if(!verifyVapidKeyPair(targetVapidPublicKey,targetVapidPrivateKey)) {
+    throw new Error('Push import blocked: VAPID key pair cannot decrypt old subscriptions.');
   }
   // Single serializable transaction; destination must be empty to avoid
   // overwriting a fresh user opt-out or an in-flight browser re-subscription.

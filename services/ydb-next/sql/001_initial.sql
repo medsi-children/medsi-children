@@ -109,7 +109,14 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   read_by_educator Bool,
   INDEX chat_messages_by_time GLOBAL ON (phone10, created_at),
   INDEX chat_messages_by_key GLOBAL ON (message_key),
+  INDEX chat_messages_by_file GLOBAL ON (file_id),
   PRIMARY KEY (phone10, message_key)
+);
+CREATE TABLE IF NOT EXISTS chat_media (
+  file_id Utf8 NOT NULL,
+  phone10 Utf8,
+  uploaded_at Uint64,
+  PRIMARY KEY (file_id)
 );
 CREATE TABLE IF NOT EXISTS chat_thread_state (
   phone10 Utf8 NOT NULL,

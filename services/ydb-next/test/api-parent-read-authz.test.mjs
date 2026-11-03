@@ -17,9 +17,10 @@ async function fixture() {
   };
   const services={
     sessions,
-    chatStore:{},
+    chatStore:{send:async()=>{calls.push({op:'send'});return {status:'created',messageKey:'synthetic-message'}}},
     chatOperations:{markRead:async(role,phone)=>{calls.push({role,phone});return {ok:true}}},
-    reportReader:{},reports:{},dashboard:{},nameVariants:{},passkeys:{},
+    reportReader:{markRead:async()=>{calls.push({op:'report-read'});return {ok:true}}},
+    reports:{},dashboard:{},nameVariants:{},passkeys:{},
     parentRegistration:{},parentAccess:{},parentDeletion:{},push:{}
   };
   const app=express();
@@ -34,7 +35,7 @@ async function fixture() {
     return {status:response.status,body:await response.json()};
   }
   const close=()=>new Promise((resolve,reject)=>server.close(err=>err?reject(err):resolve()));
-  return {calls,markRead,close};
+  return {calls,base,markRead,close};
 }
 
 test('only parent can acknowledge their own chat messages',async()=>{
@@ -56,5 +57,30 @@ test('staff, other parent, preview and anonymous users cannot mark parent messag
       assert.equal(result.body.ok,false);
     }
     assert.equal(f.calls.length,0);
+  }finally{await f.close();}
+});
+
+test('preview and foreign parent cannot send messages or mark reports read',async()=>{
+  const f=await fixture();
+  async function attempt(token,path,body) {
+    const response=await fetch(f.base+'/lab/'+path,{
+      method:'POST',headers:{
+        'content-type':'application/json','X-Medsi-Chat-Session':token
+      },body:JSON.stringify(body)
+    });
+    return {status:response.status,body:await response.json()};
+  }
+  try {
+    const msg={phone:'9000000001',side:'parent',type:'text',
+      text:'synthetic-only',clientMessageId:'synthetic-0001'};
+    for(const token of ['preview','parent-b']) {
+      const result=await attempt(token,'messages',msg);
+      assert.equal(result.status,403,token);
+      assert.equal(result.body.ok,false);
+    }
+    const report=await attempt('preview','report-read',{kind:'morning',version:'synthetic-v1'});
+    assert.equal(report.status,403);
+    assert.equal(report.body.ok,false);
+    assert.deepEqual(f.calls,[]);
   }finally{await f.close();}
 });

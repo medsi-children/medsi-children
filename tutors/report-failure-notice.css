@@ -1,0 +1,46 @@
+/* Status of failed report processing: visible only when confirmed by Cloudflare. */
+#screenChoose .tutor-report-failures{
+  display:flex;
+  align-items:flex-start;
+  gap:11px;
+  margin:14px 4px 6px;
+  padding:14px 15px;
+  border-radius:17px;
+  border:1px solid rgba(224,116,52,.29);
+  background:linear-gradient(145deg,#fffaf5,#fff0e6);
+  box-shadow:0 7px 20px rgba(123,79,35,.08);
+  color:#803e24;
+}
+#screenChoose .tutor-report-failures-icon{
+  flex:0 0 auto;
+  font-size:1.25rem;
+  line-height:1.4;
+}
+#screenChoose .tutor-report-failures-content{
+  min-width:0;
+  font-size:.87rem;
+  line-height:1.45;
+}
+#screenChoose .tutor-report-failures-content strong{
+  display:block;
+  margin-bottom:5px;
+  font-size:.95rem;
+  line-height:1.3;
+  font-weight:800;
+}
+#screenChoose .tutor-report-failures-content p{
+  margin:0;
+}
+#screenChoose .tutor-report-failures-content p+p{
+  margin-top:8px;
+}
+@media(max-width:560px){
+  #screenChoose .tutor-report-failures{
+    margin:12px 8px 6px;
+    padding:12px 13px;
+    gap:9px;
+  }
+  #screenChoose .tutor-report-failures-content{
+    font-size:.81rem;
+  }
+}

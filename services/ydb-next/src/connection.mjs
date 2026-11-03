@@ -22,7 +22,11 @@ export function readConnectionConfig(env = process.env) {
       !/^-----BEGIN PRIVATE KEY-----/.test(String(serviceAccount.private_key || ''))) {
     throw new Error('YDB service account JSON lacks required authorized-key fields.');
   }
-  return { connectionString, serviceAccount };
+  return { connectionString, serviceAccount: {
+    id: serviceAccount.service_account_id,
+    keyId: serviceAccount.id,
+    privateKey: serviceAccount.private_key
+  } };
 }
 
 export async function connectYdbNext(env = process.env) {

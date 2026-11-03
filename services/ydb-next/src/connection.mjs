@@ -42,16 +42,34 @@ export async function connectYdbNext(env = process.env) {
   const driver = new Driver(config.connectionString, {
     credentialsProvider: new ServiceAccountCredentialsProvider(config.serviceAccount)
   });
+  let readyTimer;
   try {
-    await driver.ready();
+    // A stalled SDK handshake must not hang the Timeweb rollout forever.
+    // The bootstrap HTTP listener remains available for safe diagnostics.
+    await Promise.race([
+      driver.ready(),
+      new Promise((_,reject)=>{
+        readyTimer=setTimeout(()=>reject(new Error('YDB readiness deadline exceeded')),20000);
+      })
+    ]);
     const rawSql=query(driver);
     const sql=config.tableScope
       ?withTableScope(rawSql,config.tableScope,{stand:env.MEDSI_NEXT_STAND==='1'})
       :rawSql;
     return { sql, driver };
   } catch (error) {
-    // Never print the connection string, the credential object or YDB payloads.
-    if (typeof driver.destroy === 'function') await driver.destroy().catch(() => {});
-    throw new Error('YDB NEXT connection failed.', { cause: error });
+    // Never print the connection string, credential object or patient data.
+    if (typeof driver.destroy === 'function') {
+      await Promise.race([
+        driver.destroy().catch(()=>{}),
+        new Promise(resolve=>setTimeout(resolve,3000))
+      ]);
+    }
+    if(error?.message==='YDB readiness deadline exceeded'){
+      throw new Error('YDB NEXT connection timed out.');
+    }
+    throw new Error('YDB NEXT connection failed.');
+  } finally{
+    if(readyTimer)clearTimeout(readyTimer);
   }
 }

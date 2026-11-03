@@ -105,7 +105,8 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
     try {
       const rows=await read(async tx=>{
         const [messages]=await tx`SELECT file_id FROM chat_messages WHERE phone10=${phone10}`;
-        return messages;
+        const [uploads]=await tx`SELECT file_id FROM chat_media WHERE phone10=${phone10}`;
+        return [...messages,...uploads];
       });
       const keys=[...new Set(rows.map(r=>String(r.file_id||'')).filter(Boolean))];
       if(keys.length>20000)throw new Error('Media cleanup batch too large.');
@@ -119,7 +120,7 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
           throw new Error('Unrecognized S3 object identifier.');
         }
         const shared=await read(async tx=>{
-          const [references]=await tx`SELECT phone10 FROM chat_messages WHERE file_id=${media}`;
+          const [references]=await tx`SELECT phone10 FROM chat_messages VIEW chat_messages_by_file WHERE file_id=${media}`;
           return references.some(r=>r.phone10!==phone10);
         });
         if(!shared)await removeMedia(key);
@@ -133,7 +134,7 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
         const [[auth]]=await tx`SELECT user_handle FROM parent_auth_profiles WHERE phone10=${phone10}`;
         if(auth?.user_handle)await tx`DELETE FROM parent_passkeys WHERE user_handle=${auth.user_handle}`;
         for(const table of ['chat_messages','chat_message_dedup','chat_thread_state','chat_pins',
-          'chat_sessions','parent_auth_profiles','parent_auth_challenges','parent_registration_attempts',
+          'chat_sessions','chat_media','parent_auth_profiles','parent_auth_challenges','parent_registration_attempts',
           'parent_access_requests','push_subscriptions','push_outbox',
           'parent_current_reports','parent_report_history']) {
           // Identifier is statically allowlisted, only the phone is parameterized.

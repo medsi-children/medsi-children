@@ -44,7 +44,7 @@ test('stand handoff reuses the same prebound PM2 port without a second listen',a
   let destroyed=0;
   const fakeServices={
     dbHealth:async()=>{},sessions:{verifyWorker:async()=>null,verifyTutor:()=>false},
-    chatOperations:{},reportReader:{},reports:{},dashboard:{},nameVariants:{},
+    chatStore:{},chatOperations:{},reportReader:{},reports:{},dashboard:{},nameVariants:{},
     push:{pendingEvents:async()=>[],deliverEvent:async()=>{}},
     parentRegistration:{},parentAccess:{},parentDeletion:{},passkeys:{},
     media:{grantCookie:(_req,_res,next)=>next(),upload:async(_req,res)=>res.status(503).end(),

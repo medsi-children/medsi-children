@@ -10,6 +10,7 @@ test('legacy chat wire shape keeps replies, media, reactions and read flags', ()
   });
   assert.equal(m.messageKey,'msg-001');
   assert.equal(m.fileId,'s3:test');
+  assert.equal(m.mediaUrl,'/media/s3/test');
   assert.equal(m.reply.messageKey,'msg-000');
   assert.equal(m.readByEducator,false);
   assert.equal(m.reaction,'👍');
@@ -62,4 +63,15 @@ test('unsupported chat filters and invalid user roles are rejected',async()=>{
   await assert.rejects(()=>ops.markRead('visitor','9000000001'),/Unknown role/);
   await assert.rejects(()=>ops.markRead('parent','9000000001',true),/Parent cannot/);
   await assert.rejects(()=>ops.pin('9000000001','unknown'),/Invalid pin/);
+});
+
+test('parent-entered child name survives while clinical roster has not been matched',async()=>{
+  const {data,sql}=sqlFixture();
+  data.profiles=[{phone10:'9000000001',parent_name:'Мама',child_name:'Вася Пробный',
+    child_id:'',relationship:'Мама'}];
+  const ops=createChatOperations(sql);
+  const parents=await ops.listParents();
+  assert.equal(parents.parents[0].childName,'Вася Пробный');
+  const chats=await ops.listChats();
+  assert.equal(chats.chats[0].childName,'Вася Пробный');
 });

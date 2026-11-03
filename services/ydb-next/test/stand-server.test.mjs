@@ -38,7 +38,7 @@ test('stand keeps public entry limited, requires educator auth and closes media 
 
     response=await fetch(base+'/lab/parent-delete',{method:'POST',
       headers:{'content-type':'application/json'},body:'{}'});
-    assert.equal(response.status,403);
+    assert.equal(response.status,401);
 
     response=await fetch(base+'/media/s3/secret-file');
     assert.equal(response.status,503);

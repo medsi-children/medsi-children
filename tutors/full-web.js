@@ -18,6 +18,8 @@
   let authRetryTimer=null;
   let reportAttempt=null;
   let deletionStatusTimer=null;
+  let reportFailuresPromise=null;
+  let lastReportFailuresCheck=0;
 
   function safeGet(key){try{return localStorage.getItem(key)||''}catch(_){return''}}
   function safeSet(key,val){try{localStorage.setItem(key,val)}catch(_){}}
@@ -161,7 +163,51 @@
     document.body.dataset.screen=name==='screenForm'?'report-'+($('btnSend').dataset.type||''):name;
     $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';animateScreen($(name));window.scrollTo(0,0)
   }
-  function showMenu(){if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();refreshDeletionJobs();scheduleD1Warm()}
+  function showMenu(){if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();refreshDeletionJobs();scheduleD1Warm();refreshReportFailures()}
+
+  // The alert is driven by terminal server state, never by an unconfirmed
+  // browser request. Do not show raw Apps Script errors: they can contain names.
+  function reportFailureDate(timestamp){
+    const date=new Date(Number(timestamp));
+    if(!Number.isFinite(date.getTime()))return '';
+    return new Intl.DateTimeFormat('ru-RU',{day:'numeric',month:'long',timeZone:'Europe/Moscow'}).format(date);
+  }
+  function renderReportFailures(failures){
+    const panel=$('tutorReportFailures'),body=$('tutorReportFailuresText');
+    if(!panel||!body)return;
+    const unique=new Map();
+    (failures||[]).forEach(item=>{
+      const kind=String(item&&item.kind||'');
+      if(!['morning','evening','psychology'].includes(kind))return;
+      const day=reportFailureDate(item.createdAt);
+      if(day&&!unique.has(kind+':'+day))unique.set(kind+':'+day,{kind,day});
+    });
+    body.replaceChildren();
+    for(const item of Array.from(unique.values()).slice(0,4)){
+      const p=document.createElement('p');
+      const name=item.kind==='morning'?'утренний отчёт':item.kind==='evening'?'вечерний отчёт':'отчёт по групповой терапии';
+      p.textContent='Не удалось обработать '+name+' от '+item.day+'. Возможно, родители его не получили. Пожалуйста, свяжитесь с Денисом 🙏';
+      body.appendChild(p);
+    }
+    panel.classList.toggle('hidden',unique.size===0);
+  }
+  async function refreshReportFailures(force=false){
+    if(!tutorToken||!window.MedsiOverlayTransport||typeof MedsiOverlayTransport.reportFailures!=='function')return;
+    if(reportFailuresPromise)return reportFailuresPromise;
+    if(!force&&Date.now()-lastReportFailuresCheck<60000)return;
+    reportFailuresPromise=(async()=>{
+      try{
+        const session=await ensureD1Fresh();
+        const response=await MedsiOverlayTransport.reportFailures(session);
+        if(!response||!Array.isArray(response.failures))return;
+        lastReportFailuresCheck=Date.now();
+        renderReportFailures(response.failures);
+      }catch(_){
+        // Keep an already visible warning during temporary network failures.
+      }
+    })().finally(()=>{reportFailuresPromise=null});
+    return reportFailuresPromise;
+  }
   function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Групповая терапия','Вставьте отчёт по групповой терапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function submitReportPayload(type,text,submissionId) {
     if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
@@ -174,6 +220,7 @@
     // A receipt confirms durable server storage. Apps Script runs independently
     // through the Worker and its scheduled retries after the browser closes.
     const queued=await MedsiOverlayTransport.reportSubmit(session,{reportType:type,text,submissionId});
+    if(queued&&queued.status==='failed')throw new Error('При обработке отчёта произошла ошибка. Обратитесь к Денису.');
     if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
     return {accepted:true,submissionId};
   }
@@ -188,7 +235,7 @@
     catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message)}
     finally{btn.disabled=false;btn.textContent='Отправить'}
   }
-  function showReportSent(){$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт сохранён. Можно закрыть приложение.')}
+  function showReportSent(){$('doneText').textContent='Отчёт принят в обработку.';setScreen('screenDone','Готово','Отчёт получен сервером. Можно закрыть приложение. Если возникнет ошибка, предупреждение появится в главном меню.')}
   function showReportError(text){const el=$('reportError');el.textContent=text;el.classList.remove('hidden')}
 
   async function prewarmParents(){
@@ -368,5 +415,15 @@
       MedsiSmartBotWidget.navigate(actions[kind]);
     }
   });
+  if(typeof document.addEventListener==='function'){
+    document.addEventListener('visibilitychange',()=>{
+      if(!document.hidden&&document.body.dataset.screen==='screenChoose')refreshReportFailures(true);
+    });
+  }
+  if(typeof window.addEventListener==='function'){
+    window.addEventListener('focus',()=>{
+      if(document.body.dataset.screen==='screenChoose')refreshReportFailures(true);
+    });
+  }
   window.medsiForgetCachedChatToken=()=>{safeRemove(D1_KEY);d1Session=null;return true};window.medsiLogoutTutor=()=>{clearAuth();location.reload()};window.medsiTutorBootReady=true;verifySaved();
 })();

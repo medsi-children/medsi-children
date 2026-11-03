@@ -3923,6 +3923,11 @@ function canonicalizeRawChildReport_(textRaw, optionsRaw) {
   candidates.forEach(function(item, index) {
     const end = index + 1 < candidates.length ? candidates[index + 1].start : text.length;
     const rawBody = text.slice(item.bodyStart, end);
+    // A staff-only section is never part of a child's paragraph. Preserve
+    // its separate heading when a caller invokes canonicalization directly;
+    // normal web/manual report entry rejects it before distribution.
+    const serviceMarker = /(?:^|\n)\s*[^\p{L}\p{N}\n]*(?:для[ \t]+врач(?:ей|а)|врачам|общ(?:ий|ие)[ \t]+комментар(?:ий|ии))(?=[^\p{L}]|$)/iu;
+    if (serviceMarker.test(rawBody)) return;
     const flatBody = normalizeReportBlockBody_(rawBody);
     if (rawBody !== flatBody) {
       replacements.push({start:item.bodyStart, end:end, text:flatBody});

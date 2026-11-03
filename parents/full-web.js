@@ -2,9 +2,9 @@
   if(window.MedsiParentApp)return;
   window.MedsiParentApp={};
   const APP_BASE_URL='/__session/apps-script';
-  const CHAT_WORKER_URL=window.location.origin;
+  const CHAT_WORKER_URL=(window.location&&window.location.origin)||'';
   const PUSH_APP_URL='';
-  const PUSH_SERVICE_URL=window.location.origin+'/push';
+  const PUSH_SERVICE_URL=((window.location&&window.location.origin)||'')+'/push';
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
   const $=id=>document.getElementById(id);
   const reportCache={},reportPending={},reportReadPending={};

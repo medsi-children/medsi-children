@@ -181,6 +181,9 @@ CREATE TABLE IF NOT EXISTS parent_registration_attempts (
   parent_name Utf8,
   child_name Utf8,
   status Utf8,
+  child_id Utf8,
+  admission_id Utf8,
+  approved_by Utf8,
   created_at Uint64,
   updated_at Uint64,
   PRIMARY KEY (attempt_id)
@@ -190,8 +193,10 @@ CREATE TABLE IF NOT EXISTS parent_access_requests (
   phone10 Utf8,
   request_secret_hash Utf8,
   status Utf8,
+  decision Utf8,
   created_at Uint64,
   updated_at Uint64,
+  expires_at Uint64,
   PRIMARY KEY (request_id)
 );
 CREATE TABLE IF NOT EXISTS push_subscriptions (

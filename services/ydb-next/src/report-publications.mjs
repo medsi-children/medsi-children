@@ -76,7 +76,7 @@ export function createReportPublicationStore(sql) {
       // Serializable transaction includes roster validation, idempotency, raw source,
       // parent reports, history and push outbox. No external push inside transaction.
       return sql.begin({ isolation: 'serializableReadWrite', idempotent: true }, async tx => {
-        const [oldSubmission] = await tx`
+        const [[oldSubmission]] = await tx`
           SELECT kind, payload_hash, publication_id, revision
           FROM report_submissions WHERE submission_id = ${submissionId}`;
         if (oldSubmission) {
@@ -91,7 +91,7 @@ export function createReportPublicationStore(sql) {
 
         // Match the ENTIRE active parent roster. If anyone registers, changes admission
         // or is discharged while distribution runs, abort instead of misrouting text.
-        const activeProfiles = await tx`
+        const [activeProfiles] = await tx`
           SELECT phone10, admission_id FROM parent_profiles`;
         const expected = new Map(recipients.map(row => [row.phone10, row.admissionId]));
         if (activeProfiles.length !== expected.size ||
@@ -99,7 +99,7 @@ export function createReportPublicationStore(sql) {
           throw new Error('Parent roster changed during report preparation; retry distribution.');
         }
 
-        const [head] = await tx`
+        const [[head]] = await tx`
           SELECT publication_id, revision, submitted_at
           FROM report_publication_head WHERE kind = ${kind}`;
         if (head && submittedAt <= Number(head.submitted_at)) {
@@ -125,7 +125,7 @@ export function createReportPublicationStore(sql) {
           const admissionId = row.admissionId;
           const text = row.text;
           const version = safeTextVersion(kind, admissionId, text);
-          const [prior] = await tx`
+          const [[prior]] = await tx`
             SELECT admission_id, version, read_version, text
             FROM parent_current_reports WHERE phone10 = ${phone10} AND kind = ${kind}`;
           const unchanged = prior && prior.version === version && prior.admission_id === admissionId;

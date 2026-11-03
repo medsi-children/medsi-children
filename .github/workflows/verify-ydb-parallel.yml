@@ -37,6 +37,17 @@ jobs:
         continue-on-error: true
         run: node --test test/legacy-bridge.test.mjs
         working-directory: services/ydb-next
+      - name: Syntax of newly introduced modules
+        continue-on-error: true
+        run: |
+          for file in src/parent-access.mjs src/parent-registration.mjs src/legacy-bridge.mjs src/stand-server.mjs src/stand-entry.mjs src/schema-cli.mjs; do
+            node --check "$file" || exit 1
+          done
+        working-directory: services/ydb-next
+      - name: All YDB unit tests
+        continue-on-error: true
+        run: npm test
+        working-directory: services/ydb-next
       - name: Full isolated YDB verification
         run: npm run check
         working-directory: services/ydb-next

@@ -157,6 +157,7 @@ CREATE TABLE IF NOT EXISTS parent_auth_profiles (
   phone10 Utf8 NOT NULL,
   user_handle Utf8,
   generation_id Utf8,
+  created_at Uint64,
   PRIMARY KEY (phone10)
 );
 CREATE TABLE IF NOT EXISTS parent_passkeys (

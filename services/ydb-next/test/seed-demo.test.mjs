@@ -10,7 +10,7 @@ function fake({occupied=false}={}) {
       const q=parts.join('?').replace(/\s+/g,' ');
       if(q.includes('SELECT') && q.includes('LIMIT 1')){
         selects++;
-        return [occupied?[[{id:'existing-real-data'}]]:[[]]];
+        return occupied?[[{id:'existing-real-data'}]]:[[]];
       }
       if(q.includes('UPSERT INTO')){
         writes.push({q,args});

@@ -52,6 +52,14 @@ export function createLegacyBridge({sessions,reportReader,chatOperations,reportS
         return {ok:true,phone:'8'+phone,parentName:profile.parentName,
           childName:profile.childName,parentSession:session.token,d1Session:{ok:true,...session}};
       }
+      case 'mirrorCloudflareParentRegistration':{
+        const phone=digits(args[0]);
+        if(!PHONE.test(phone))throw new Error('Invalid phone.');
+        await verifyParent(phone,args[2]);
+        // Registration is already persisted in YDB. There is no longer an
+        // outbox to Google Sheets, contacts sync, or Cloudflare mirror.
+        return {ok:true,synced:true,source:'ydb'};
+      }
       case 'markEducatorMessagesAsRead':{
         const phone=digits(args[0]);await verifyParent(phone,args[1]);
         return chatOperations.markRead('parent',phone);

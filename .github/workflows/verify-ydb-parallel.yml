@@ -48,6 +48,21 @@ jobs:
         continue-on-error: true
         run: npm test
         working-directory: services/ydb-next
+      - name: API router syntax
+        continue-on-error: true
+        run: node --check src/api-router.mjs
+        working-directory: services/ydb-next
+      - name: Educator settings syntax
+        continue-on-error: true
+        run: node --check ../../tutors/next-settings.js
+        working-directory: services/ydb-next
+      - name: All pre-existing module syntax
+        continue-on-error: true
+        run: |
+          for file in src/connection.mjs src/report-publications.mjs src/report-engine.mjs src/report-reader.mjs src/report-submission-service.mjs src/chat-store.mjs src/chat-operations.mjs src/session-auth.mjs src/educator-report-dashboard.mjs src/name-variants-store.mjs src/push-service.mjs src/parent-passkeys.mjs; do
+            node --check "$file" || exit 1
+          done
+        working-directory: services/ydb-next
       - name: Full isolated YDB verification
         run: npm run check
         working-directory: services/ydb-next

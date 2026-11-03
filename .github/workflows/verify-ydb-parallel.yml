@@ -25,5 +25,18 @@ jobs:
           node-version: 22
       - run: npm install --ignore-scripts --no-audit --no-fund
         working-directory: services/ydb-next
-      - run: npm run check
+      - name: Parent access unit tests
+        continue-on-error: true
+        run: node --test test/parent-access.test.mjs
+        working-directory: services/ydb-next
+      - name: Parent registration unit tests
+        continue-on-error: true
+        run: node --test test/parent-registration.test.mjs
+        working-directory: services/ydb-next
+      - name: Legacy bridge unit tests
+        continue-on-error: true
+        run: node --test test/legacy-bridge.test.mjs
+        working-directory: services/ydb-next
+      - name: Full isolated YDB verification
+        run: npm run check
         working-directory: services/ydb-next

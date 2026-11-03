@@ -18,7 +18,8 @@ export async function applyTestSchema({sql,source}) {
   const statements=splitSchemaStatements(source);
   for(const statement of statements) {
     // Statements are reviewed static repository SQL, never interpolated input.
-    await sql([statement]);
+    const fragments=Object.assign([statement],{raw:[statement]});
+    await sql(fragments);
   }
   return statements.length;
 }

@@ -14,7 +14,7 @@ function fakeServices(){
     parentRegistration:{register:async()=>({ok:true,status:'PENDING'})},
     parentAccess:{request:async()=>({ok:true,status:'PENDING'})},
     parentDeletion:{enqueue:async()=>({ok:true})},
-    push:{}
+    push:{},dbHealth:async()=>{}
   };
 }
 test('stand refuses to start without explicit isolated mode and tutor credentials',()=>{

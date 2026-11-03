@@ -194,7 +194,7 @@ test('YDB connection requires explicit opt-in, encrypted Russian endpoint and va
   assert.throws(() => readConnectionConfig({ MEDSI_NEXT_YDB_ENABLED: '1', YDB_CONNECTION_STRING: 'grpc:\/\/localhost:2136/local' }), /encrypted/);
   assert.throws(() => readConnectionConfig({
     MEDSI_NEXT_YDB_ENABLED: '1',
-    YDB_CONNECTION_STRING: 'grpcs://ydb.serverless.yandexcloud.net:2135/ru-central1/test',
+    YDB_CONNECTION_STRING: 'grpcs://ydb.serverless.yandexcloud.net:2135/?database=/ru-central1/test',
     YDB_SERVICE_ACCOUNT_JSON: '{}'
   }), /lacks/);
 });

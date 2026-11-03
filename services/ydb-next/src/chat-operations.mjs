@@ -13,7 +13,8 @@ function messageFromRow(row) {
     messageKey: String(row.message_key), phone:row.phone10, side:row.side,
     type:row.type || 'text', text:row.text || '', timestamp:Number(row.created_at || 0),
     readByParent:Boolean(row.read_by_parent), readByEducator:Boolean(row.read_by_educator),
-    fileId, mediaUrl:fileId.startsWith('kv:')?'/media/'+encodeURIComponent(fileId.slice(3)):'',
+    fileId, mediaUrl:fileId.startsWith('s3:')?'/media/s3/'+encodeURIComponent(fileId.slice(3)):
+      fileId.startsWith('kv:')?'/media/'+encodeURIComponent(fileId.slice(3)):'',
     reaction:row.reaction || '', reply:row.reply_to_key?{messageKey:row.reply_to_key}:null,
     status:row.status || 'active'
   };
@@ -28,7 +29,7 @@ export function createChatOperations(sql) {
   async function listParents() {
     return read(async tx => {
       const [[profiles],[children]] = await Promise.all([
-        tx`SELECT phone10, parent_name, child_id, relationship FROM parent_profiles`,
+        tx`SELECT phone10, parent_name, child_id, child_name, relationship FROM parent_profiles`,
         tx`SELECT child_id, registered_first_name, surname FROM children`
       ]);
       const childrenMap=new Map(children.map(c=>[c.child_id,c]));
@@ -37,7 +38,7 @@ export function createChatOperations(sql) {
         return {
           phone:p.phone10,
           parentName:p.parent_name || '',
-          childName:[child.registered_first_name || '',child.surname || ''].filter(Boolean).join(' '),
+          childName:[child.registered_first_name || '',child.surname || ''].filter(Boolean).join(' ')||p.child_name||'',
           relationship:p.relationship || 'Родитель'
         };
       }).sort((a,b)=>a.childName.localeCompare(b.childName,'ru'))};
@@ -49,7 +50,7 @@ export function createChatOperations(sql) {
       const [states,pins,profiles,children] = (await Promise.all([
         tx`SELECT phone10, last_side, last_type, last_text, last_at, educator_has_unread FROM chat_thread_state`,
         tx`SELECT phone10, bucket FROM chat_pins`,
-        tx`SELECT phone10, parent_name, child_id, relationship FROM parent_profiles`,
+        tx`SELECT phone10, parent_name, child_id, child_name, relationship FROM parent_profiles`,
         tx`SELECT child_id, registered_first_name, surname FROM children`
       ])).map(set=>set[0]||[]);
       const pinMap=new Map(pins.map(row=>[row.phone10,row.bucket]));
@@ -63,7 +64,7 @@ export function createChatOperations(sql) {
         const hasUnread=Boolean(state.educator_has_unread);
         return {
           phone:state.phone10,parentName:profile.parent_name || '',
-          childName:[child.registered_first_name,child.surname].filter(Boolean).join(' '),
+          childName:[child.registered_first_name,child.surname].filter(Boolean).join(' ')||profile.child_name||'',
           relationship:profile.relationship||'Родитель',lastSide:state.last_side,
           lastType:state.last_type || 'text', lastText:state.last_text || '',
           hasUnread,pinnedBucket,_lastAt:Number(state.last_at || 0)
@@ -81,7 +82,7 @@ export function createChatOperations(sql) {
     const beforeKey=String(beforeRaw||'');
     const limit=Math.max(1,Math.min(150,Number(limitRaw)||50));
     return read(async tx => {
-      const [[profile]] = await tx`SELECT phone10,parent_name,child_id,relationship
+      const [[profile]] = await tx`SELECT phone10,parent_name,child_id,child_name,relationship
         FROM parent_profiles WHERE phone10=${phone10}`;
       if (!profile) throw new Error('Контакт уже удалён.');
       const [[child]] = await tx`SELECT registered_first_name,surname FROM children WHERE child_id=${profile.child_id}`;

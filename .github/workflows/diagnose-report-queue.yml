@@ -50,7 +50,10 @@ jobs:
           const totals={};
           for(const r of rows){const k=r.report_type+'/'+r.status;totals[k]=(totals[k]||0)+1;}
           console.log('SCANNED_LAST',rows.length,'GROUPS',JSON.stringify(totals));
+          const allowedTokens=new Set(["ошибка","не","удалось","отправить","сохранить","обработать","обработке","обработка","отчёт","отчета","отчёта","отчеты","отчёты","некорректный","в","формат","после","повтор","приложение","apps","script","did","not","confirm","report","save","http","unexpected","token","service","timed","out","timeout","exceeded","execution","time","this","is","too","many","requests","access","denied","denied","google","sheets","sheet","spreadsheet","spreadsheetapp","limits","service","invoked","too","many","times","server","internal","error","authorized","unauthorized","lock","document","cells","column","row","getrange","getvalue","setvalue","script","function","could","not","be","found","check","more","please","try","again","report","queue","validation","failed","loading","document","open","by","id","temporary","unavailable","finished","response","200","400","401","403","404","429","500","502","503","504"]);
+          function maskedError(error){return String(error||'').split(/\s+/).map(token=>{const word=token.toLowerCase().replace(/[^a-zа-яё]/g,'');return allowedTokens.has(word)?word:'[redacted]';}).join(' ').slice(0,700)}
           for(const r of rows){
+            if(r.status==='failed')console.log('FAILED_ERROR_MASKED',maskedError(r.last_error));
             const category=errorCategory(r.last_error);
             console.log(JSON.stringify({
               kind:r.report_type,status:r.status,attempts:Number(r.attempts),

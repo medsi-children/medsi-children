@@ -59,6 +59,10 @@ export function createChatStore(sql) {
             WHERE phone10 = ${phone10} AND message_key = ${replyToKey} AND status = ${'active'}`;
           if (!target) throw new Error('Reply target is absent or belongs to another chat.');
         }
+        const [[thread]] = await tx`SELECT last_at, educator_has_unread, parent_has_unread
+          FROM chat_thread_state WHERE phone10 = ${phone10}`;
+        const lastAt = Number(thread?.last_at || 0);
+        if (timestamp < lastAt) throw new Error('Chat clock moved backwards; retry with current time.');
         const messageKey = `${timestamp}-${side}-${randomUUID()}`;
         const readParent = isParent;
         const readEducator = !isParent;
@@ -72,6 +76,14 @@ export function createChatStore(sql) {
         await tx`UPSERT INTO chat_message_dedup
           (phone10, client_message_id, message_key, payload_hash, created_at)
           VALUES (${phone10}, ${clientMessageId}, ${messageKey}, ${payloadHash}, ${now})`;
+
+        const educatorUnread = Boolean(thread?.educator_has_unread) || isParent;
+        const parentUnread = Boolean(thread?.parent_has_unread) || !isParent;
+        await tx`UPSERT INTO chat_thread_state
+          (phone10, last_message_key, last_side, last_type, last_text, last_at,
+           educator_has_unread, parent_has_unread)
+          VALUES (${phone10}, ${messageKey}, ${side}, ${type}, ${text}, ${now},
+                  ${educatorUnread}, ${parentUnread})`;
 
         const eventId = 'chat_' + digest(phone10 + '\u0000' + clientMessageId);
         const role = isParent ? 'educator' : 'parent';

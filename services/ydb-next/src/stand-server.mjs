@@ -62,8 +62,9 @@ export function createNextServices({sql,env=process.env}) {
     :Object.fromEntries(['authenticationOptions','authenticationVerify','hasPasskey',
        'registrationOptions','registrationVerify'].map(method=>[method,
       async()=>{throw new Error('Passkeys unavailable until origin and RP ID are configured.');}]));
+  const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,
-    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys};
+    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth};
 }
 
 function handler(fn) {
@@ -88,7 +89,11 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     res.setHeader('referrer-policy','no-referrer');
     next();
   });
-  app.get('/__health',(_req,res)=>res.json({ok:true,service:'medsi-ydb-next',mode:'isolated'}));
+  app.get('/__health',handler(async()=>{
+    if(typeof services.dbHealth!=='function')throw new Error('YDB health probe unavailable.');
+    await services.dbHealth();
+    return {ok:true,service:'medsi-ydb-next',mode:'isolated',database:'reachable'};
+  }));
 
   const legacy=createLegacyBridge({
     sessions:services.sessions,reportReader:services.reportReader,

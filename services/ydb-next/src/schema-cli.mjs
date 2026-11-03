@@ -2,7 +2,6 @@
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {connectYdbNext} from './connection.mjs';
-import {unsafe} from '@ydbjs/query';
 
 export function splitSchemaStatements(source) {
   const cleaned=String(source||'').split('\n')
@@ -19,7 +18,7 @@ export async function applyTestSchema({sql,source}) {
   const statements=splitSchemaStatements(source);
   for(const statement of statements) {
     // Statements are reviewed static repository SQL, never interpolated input.
-    await sql`${unsafe(statement)}`;
+    await sql`${sql.unsafe(statement)}`;
   }
   return statements.length;
 }

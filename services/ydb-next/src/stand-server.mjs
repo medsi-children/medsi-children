@@ -196,38 +196,120 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
   return app;
 }
 
-export async function startIsolatedStand(env=process.env) {
-  requireEnv(env);
-  const {sql,driver}=await connectYdbNext(env);
-  const services=createNextServices({sql,env});
-  const app=createNextStandApp(services,{env});
-  const port=Number(env.PORT||3000);
-  const server=app.listen(port,'0.0.0.0',()=>{
-    console.log('Medsi YDB isolated stand listening');
+// This is a stand-only bootstrap listener. Timeweb scans for an open port
+// while YDB credentials/connectivity are being checked, so the port must
+// open before any network I/O. All data routes fail closed until NEXT is ready.
+export async function startIsolatedStand(env=process.env,{
+  connect=connectYdbNext,
+  makeServices=createNextServices,
+  makeApp=createNextStandApp
+}={}) {
+  if(env.MEDSI_NEXT_STAND!=='1') {
+    throw new Error('Isolated YDB stand mode must be explicitly enabled.');
+  }
+  const state={phase:'connecting',code:'YDB_CONNECT_PENDING'};
+  let backend=null,driver=null,ticker=null,stopped=false,working=false;
+  const app=express();
+  app.disable('x-powered-by');
+  app.use((_req,res,next)=>{
+    res.setHeader('cache-control','no-store');
+    res.setHeader('x-content-type-options','nosniff');
+    res.setHeader('referrer-policy','no-referrer');
+    next();
   });
-  let working=false;
-  const ticker=setInterval(async()=>{
-    if(working)return;
-    working=true;
-    try{
-      const ids=await services.push.pendingEvents(20);
-      for(const id of ids)await services.push.deliverEvent(id);
-      if(env.MEDSI_NEXT_DELETION_ENABLED==='1'){
-        const cleanup=await services.parentDeletion.processNext();
-        if(cleanup.ok===false)console.warn('NEXT_PARENT_DELETION_RETRY_REQUIRED');
-      }
-    }catch(_){
-      // A failed notification cannot stop reports or chat.
-      console.warn('NEXT_PUSH_DISPATCH_UNAVAILABLE');
-    }finally{working=false;}
-  },30000);
-  ticker.unref();
+  app.get('/__health',(req,res)=>{
+    if(backend)return backend(req,res);
+    return res.status(503).json({
+      ok:false,service:'medsi-ydb-next',mode:'isolated',
+      database:'unavailable',phase:state.phase,code:state.code
+    });
+  });
+  app.use((req,res,next)=>{
+    if(backend)return backend(req,res,next);
+    // The platform probes HTTP / while discovering a newly created stand.
+    // A safe 200 placeholder signals a live Node.js process; /__health
+    // continues to return a truthful 503 until YDB and services are ready.
+    if(req.method==='GET' && (req.path==='/'||req.path==='/index.html')) {
+      return res.status(200).type('text/plain; charset=utf-8')
+        .send('Medsi NEXT test stand online. YDB status: '+state.code);
+    }
+    return res.status(503).json({
+      ok:false,code:'NEXT_STAND_NOT_READY',phase:state.phase
+    });
+  });
+  const port=Number(env.PORT??3000);
+  const server=app.listen(port,'0.0.0.0',()=>{
+    console.log('MEDSI_NEXT_STAND_HTTP_LISTENING');
+  });
   const shutdown=async()=>{
-    clearInterval(ticker);
+    stopped=true;
+    if(ticker)clearInterval(ticker);
     await new Promise(resolve=>server.close(resolve));
-    if(typeof driver.destroy==='function')await driver.destroy().catch(()=>{});
+    if(typeof driver?.destroy==='function')await driver.destroy().catch(()=>{});
   };
   process.once('SIGTERM',()=>{void shutdown().then(()=>process.exit(0));});
   process.once('SIGINT',()=>{void shutdown().then(()=>process.exit(0));});
-  return {app,server,services,shutdown};
+
+  const initialize=(async()=>{
+    let connection=null;
+    try{
+      requireEnv(env);
+      state.code='YDB_CONNECT_PENDING';
+      connection=await connect(env);
+      if(stopped){
+        if(typeof connection?.driver?.destroy==='function')
+          await connection.driver.destroy().catch(()=>{});
+        return;
+      }
+      driver=connection.driver;
+      state.code='NEXT_SERVICES_PENDING';
+      const services=makeServices({sql:connection.sql,env});
+      const actualApp=makeApp(services,{env});
+      // Backend only becomes visible once its entire security middleware,
+      // sessions, and routes have been constructed successfully.
+      backend=actualApp;
+      state.phase='ready';
+      state.code='READY';
+      console.log('MEDSI_NEXT_STAND_READY');
+      ticker=setInterval(async()=>{
+        if(working||stopped)return;
+        working=true;
+        try{
+          const ids=await services.push.pendingEvents(20);
+          for(const id of ids)await services.push.deliverEvent(id);
+          if(env.MEDSI_NEXT_DELETION_ENABLED==='1'){
+            const cleanup=await services.parentDeletion.processNext();
+            if(cleanup.ok===false)console.warn('NEXT_PARENT_DELETION_RETRY_REQUIRED');
+          }
+        }catch(_){
+          console.warn('NEXT_PUSH_DISPATCH_UNAVAILABLE');
+        }finally{working=false;}
+      },30000);
+      ticker.unref();
+    }catch(error){
+      // No raw errors: they can contain connection strings, service-account
+      // metadata or data from patients. Stable labels are safe for operators.
+      const msg=String(error?.message||'');
+      const code=msg.includes('NEXT stand missing') ||
+        msg.includes('NEXT session secret') ||
+        msg.includes('isolated mode must') ?'STAND_ENV_INVALID'
+        :msg.includes('encrypted Yandex YDB Serverless endpoint')
+        ?'YDB_ENDPOINT_INVALID'
+        :msg.includes('service account JSON')||msg.includes('authorized-key fields')
+        ?'YDB_SERVICE_ACCOUNT_INVALID'
+        :msg.includes('explicit test table scope') ||
+         msg.includes('Unrecognized YDB table scope')
+        ?'YDB_TEST_SCOPE_INVALID'
+        :msg.includes('YDB NEXT is disabled')?'YDB_DISABLED'
+        :msg.includes('YDB NEXT connection failed')?'YDB_CONNECT_FAILED'
+        :'NEXT_STARTUP_FAILED';
+      state.phase='failed';
+      state.code=code;
+      console.error('MEDSI_NEXT_STAND_BOOT_FAILED:',code);
+      if(typeof driver?.destroy==='function')await driver.destroy().catch(()=>{});
+      driver=null;
+    }
+  })();
+  return {app,server,get services(){return backend?true:null;},
+    get status(){return {...state};},initialize,shutdown};
 }

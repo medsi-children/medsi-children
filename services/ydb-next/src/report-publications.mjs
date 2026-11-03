@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { Uint64 } from '@ydbjs/value/primitive';
 
 const ALLOWED_KINDS = new Set(['morning', 'evening', 'psychology']);
 const ID_RE = /^[A-Za-z0-9_-]{8,128}$/;
@@ -109,11 +110,14 @@ export function createReportPublicationStore(sql) {
         const publicationId = randomUUID();
         const revision = Number(head?.revision || 0) + 1;
         if (!Number.isSafeInteger(revision)) throw new Error('Report revision overflow.');
+        const timeParam = new Uint64(BigInt(submittedAt));
+        const revisionParam = new Uint64(BigInt(revision));
+        const zeroParam = new Uint64(0n);
 
         await tx`UPSERT INTO raw_reports
           (publication_id, kind, report_date, raw_text, normalized_text, author_id, submitted_at, revision)
           VALUES (${publicationId}, ${kind}, ${reportDate}, ${rawText}, ${normalizedText},
-                  ${authorId}, ${submittedAt}, ${revision})`;
+                  ${authorId}, ${timeParam}, ${revisionParam})`;
 
         const notifications = [];
         for (const row of recipients) {
@@ -129,14 +133,14 @@ export function createReportPublicationStore(sql) {
 
           await tx`UPSERT INTO parent_current_reports
             (phone10, kind, admission_id, publication_id, revision, text, version, read_version, updated_at)
-            VALUES (${phone10}, ${kind}, ${admissionId}, ${publicationId}, ${revision},
-                    ${text}, ${version}, ${readVersion}, ${submittedAt})`;
+            VALUES (${phone10}, ${kind}, ${admissionId}, ${publicationId}, ${revisionParam},
+                    ${text}, ${version}, ${readVersion}, ${timeParam})`;
 
           if (text.trim()) {
             await tx`UPSERT INTO parent_report_history
               (phone10, kind, report_date, admission_id, publication_id, revision, text, captured_at)
               VALUES (${phone10}, ${kind}, ${reportDate}, ${admissionId},
-                      ${publicationId}, ${revision}, ${text}, ${submittedAt})`;
+                      ${publicationId}, ${revisionParam}, ${text}, ${timeParam})`;
           }
           if (!unchanged && text.trim() && kind !== 'psychology') {
             const eventId = 'report_' + sha(publicationId + ':' + phone10);
@@ -148,7 +152,7 @@ export function createReportPublicationStore(sql) {
             await tx`UPSERT INTO push_outbox
               (event_id, role, phone10, notification_json, status, attempts, next_attempt_at, created_at)
               VALUES (${eventId}, ${'parent'}, ${phone10}, ${notificationJson},
-                      ${'pending'}, ${0}, ${submittedAt}, ${submittedAt})`;
+                      ${'pending'}, ${zeroParam}, ${timeParam}, ${timeParam})`;
             notifications.push(phone10);
           }
         }
@@ -156,10 +160,10 @@ export function createReportPublicationStore(sql) {
         await tx`UPSERT INTO report_submissions
           (submission_id, kind, payload_hash, publication_id, submitted_at, revision)
           VALUES (${submissionId}, ${kind}, ${payloadHash}, ${publicationId},
-                  ${submittedAt}, ${revision})`;
+                  ${timeParam}, ${revisionParam})`;
         await tx`UPSERT INTO report_publication_head
           (kind, publication_id, revision, submitted_at)
-          VALUES (${kind}, ${publicationId}, ${revision}, ${submittedAt})`;
+          VALUES (${kind}, ${publicationId}, ${revisionParam}, ${timeParam})`;
 
         return {
           status: 'published', submissionId, publicationId, revision,

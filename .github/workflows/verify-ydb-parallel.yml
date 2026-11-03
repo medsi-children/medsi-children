@@ -5,4 +5,52 @@ on:
     branches:
       - feature/ydb-unified-cutover
     paths:
-      - services/ydb-next
+      - 'services/ydb-next/**'
+      - 'tutors/**'
+      - 'tutors.html'
+      - 'parents/full-web.js'
+      - 'parents/push-gateway.js'
+      - 'notify-client.js'
+      - 'package.json'
+      - '.github/workflows/verify-ydb-parallel.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ydb_next:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --ignore-scripts --no-audit --no-fund
+        working-directory: services/ydb-next
+      - name: Verify NEXT source syntax
+        run: npm run check:syntax
+        working-directory: services/ydb-next
+      - name: Verify tutor and parent changes
+        run: |
+          node --check tutors/next-settings.js
+          node --check tutors/tutor-push-panel.js
+          node --check tutors/push-auth.js
+          node --check parents/full-web.js
+          node --check notify-client.js
+      - name: All isolated YDB tests
+        run: npm test
+        working-directory: services/ydb-next
+  legacy_regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install existing gateway dependencies
+        run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Run existing app regression tests
+        run: npm run verify

@@ -1,5 +1,6 @@
 import {Uint64} from '@ydbjs/value/primitive';
 import {randomBytes} from 'node:crypto';
+import {pathToFileURL} from 'node:url';
 import {connectYdbNext} from './connection.mjs';
 
 // Fictional parents and children only. NEVER seed a production or populated DB.
@@ -52,7 +53,7 @@ export async function seedSyntheticRoster({sql,now=()=>Date.now()}) {
     return {children:DEMO_CHILDREN.length,parents:DEMO_PARENTS.length};
   });
 }
-if(process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href) {
+if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   if(process.env.MEDSI_NEXT_STAND!=='1'||process.env.MEDSI_NEXT_SEED_DEMO!=='YES'){
     console.error('Synthetic YDB data seeding requires isolated stand plus explicit YES confirmation.');
     process.exitCode=2;

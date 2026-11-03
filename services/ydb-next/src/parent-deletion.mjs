@@ -1,9 +1,9 @@
 import {Uint64} from '@ydbjs/value/primitive';
 
-const PHONE=/^\\d{10}$/;
+const PHONE=/^\d{10}$/;
 const OP=/^del_[A-Za-z0-9_-]{12,125}$/;
 const num=n=>new Uint64(BigInt(n));
-const phoneOf=p=>String(p||'').replace(/\\D/g,'').slice(-10);
+const phoneOf=p=>String(p||'').replace(/\D/g,'').slice(-10);
 const MAX_ATTEMPTS=6;
 const LEASE_MS=10*60*1000;
 

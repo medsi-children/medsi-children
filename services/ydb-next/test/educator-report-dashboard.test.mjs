@@ -13,12 +13,12 @@ const dataset = () => ({
     {child_id:'child_2',registered_first_name:'Таисия',surname:'Учебная'}
   ],
   admissions: [
-    {admission_id:'admission_1',status:'active'}, {admission_id:'admission_2',status:'closed'}
+    {admission_id:'admission_1',child_id:'child_1',status:'active'}, {admission_id:'admission_2',child_id:'child_2',status:'closed'}
   ],
   current:[
-    {phone10:'9000000001',kind:'morning',text:'Екатерина: учебный отчёт'},
-    {phone10:'9000000002',kind:'morning',text:'Екатерина: учебный отчёт'},
-    {phone10:'9000000003',kind:'morning',text:'Таисия: старый отчёт'}
+    {phone10:'9000000001',kind:'morning',admission_id:'admission_1',text:'Екатерина: учебный отчёт'},
+    {phone10:'9000000002',kind:'morning',admission_id:'admission_1',text:'Екатерина: учебный отчёт'},
+    {phone10:'9000000003',kind:'morning',admission_id:'admission_2',text:'Таисия: старый отчёт'}
   ],
   heads:[{kind:'morning',publication_id:'pub_1'}],
   rawByPublication:new Map([['pub_1',{kind:'morning',report_date:'2026-11-03',raw_text:'Катя Т: исходный текст',normalized_text:'Катя Т. — исходный текст'}]])
@@ -37,15 +37,15 @@ test('dashboard groups two parents under child and never exposes discharged admi
 test('dashboard refuses corrupted cross-child admission association',()=>{
   const data=dataset();
   data.profiles[1].child_id='child_2';
-  assert.throws(()=>assembleEducatorReports(data),/identity conflict/);
+  assert.throws(()=>assembleEducatorReports(data),/(identity conflict|admission-child mismatch)/);
 });
 test('dashboard queries active reports as one snapshot using YDB result set conventions',async()=>{
   const data=dataset();
   const expected={
     'SELECT phone10, parent_name, relationship, child_id, admission_id FROM parent_profiles':data.profiles,
     'SELECT child_id, registered_first_name, surname FROM children':data.children,
-    'SELECT admission_id, status FROM admissions':data.admissions,
-    'SELECT phone10, kind, text FROM parent_current_reports':data.current,
+    'SELECT admission_id, child_id, status FROM admissions':data.admissions,
+    'SELECT phone10, kind, text, admission_id FROM parent_current_reports':data.current,
     'SELECT kind, publication_id FROM report_publication_head':data.heads
   };
   const calls=[];
@@ -83,4 +83,26 @@ test('HTTP endpoint never leaks reports to unauthenticated parent or parent prev
   }
   const ok=res(); await handler({method:'GET',auth:{role:'educator'}},ok);
   assert.equal(ok.statusCode,200);assert.equal(ok.headers['cache-control'],'no-store');assert.equal(reads,1);
+});
+
+test('new admission never receives stale current reports from prior stay',()=>{
+  const data=dataset();
+  data.current[0]={phone10:'9000000001',kind:'morning',
+    admission_id:'admission_old',text:'СЕКРЕТ ПРЕДЫДУЩЕЙ ГОСПИТАЛИЗАЦИИ'};
+  data.current.push({phone10:'9000000001',kind:'evening',
+    admission_id:'',text:'НЕПРИВЯЗАННЫЙ СТАРЫЙ ОТЧЁТ'});
+  const result=assembleEducatorReports(data);
+  const first=result.children[0].parentViews.find(view=>view.phone==='89000000001');
+  const second=result.children[0].parentViews.find(view=>view.phone==='89000000002');
+  assert.equal(first.reports.morning,'');
+  assert.equal(first.reports.evening,'');
+  assert.equal(second.reports.morning,'Екатерина: учебный отчёт');
+  assert.equal(JSON.stringify(result).includes('ПРЕДЫДУЩЕЙ ГОСПИТАЛИЗАЦИИ'),false);
+  assert.equal(JSON.stringify(result).includes('НЕПРИВЯЗАННЫЙ СТАРЫЙ'),false);
+});
+
+test('active admission cannot be associated with the wrong child',()=>{
+  const data=dataset();
+  data.profiles[0].child_id='child_2';
+  assert.throws(()=>assembleEducatorReports(data),/admission-child mismatch/);
 });

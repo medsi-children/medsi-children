@@ -1,14 +1,14 @@
 import {randomBytes} from 'node:crypto';
 import {Uint64} from '@ydbjs/value/primitive';
 
-const PHONE=/^\\d{10}$/;
+const PHONE=/^\d{10}$/;
 const ATTEMPT=/^reg_[A-Za-z0-9_-]{12,125}$/;
 const TTL=24*60*60*1000;
 const numeric=n=>new Uint64(BigInt(n));
-const normalized=v=>String(v||'').trim().replace(/\\s+/g,' ').toLocaleLowerCase('ru');
-const name=v=>String(v||'').trim().replace(/\\s+/g,' ').slice(0,160);
+const normalized=v=>String(v||'').trim().replace(/\s+/g,' ').toLocaleLowerCase('ru');
+const name=v=>String(v||'').trim().replace(/\s+/g,' ').slice(0,160);
 function validated(payload) {
-  const phone10=String(payload?.phone||'').replace(/\\D/g,'').slice(-10);
+  const phone10=String(payload?.phone||'').replace(/\D/g,'').slice(-10);
   const attemptId=String(payload?.attemptId||'');
   const parentName=name(payload?.parentName),childName=name(payload?.childName);
   if(!PHONE.test(phone10)||!ATTEMPT.test(attemptId)||!parentName||!childName){
@@ -52,7 +52,7 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
     });
   }
   async function status({phone,attemptId}) {
-    const phone10=String(phone||'').replace(/\\D/g,'').slice(-10);
+    const phone10=String(phone||'').replace(/\D/g,'').slice(-10);
     if(!PHONE.test(phone10)||!ATTEMPT.test(String(attemptId||'')))return {ok:true,status:'NOT_FOUND'};
     const row=await read(async tx=>{
       const [[a]]=await tx`SELECT attempt_id,phone10,parent_name,child_name,status,created_at,updated_at

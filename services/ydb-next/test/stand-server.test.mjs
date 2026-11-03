@@ -46,3 +46,41 @@ test('stand keeps public entry limited, requires educator auth and closes media 
     assert.equal(response.status,404);
   }finally{await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
 });
+
+test('legacy browser request envelope remains compatible for tutor login and rejects old writes',async()=>{
+  const services=fakeServices();
+  services.sessions.verifyTutor=token=>token==='valid-tutor';
+  services.sessions.loginTutor=(login,password)=>login==='staff'&&password==='synthetic-pass'
+    ?{ok:true,token:'valid-tutor'}:{ok:false,message:'Bad credentials'};
+  services.sessions.issueEducator=()=>({token:'fake-educator-session',expiresAt:Date.now()+300000});
+  services.chatOperations.listParents=async()=>({ok:true,parents:[]});
+  const app=createNextStandApp(services,{env});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const base='http://127.0.0.1:'+server.address().port;
+  async function call(method,args){
+    const response=await fetch(base+'/__session/apps-script',{
+      method:'POST',
+      headers:{'content-type':'text/plain;charset=UTF-8'},
+      body:JSON.stringify({action:'api',method,args})
+    });
+    return {status:response.status,body:await response.json()};
+  }
+  try{
+    const login=await call('verifyTutorAccess',['staff','synthetic-pass']);
+    assert.equal(login.status,200);
+    assert.equal(login.body.ok,true);
+    assert.equal(login.body.result.token,'valid-tutor');
+
+    const parents=await call('listAvailableParentsForChat',['valid-tutor']);
+    assert.equal(parents.status,200);
+    assert.deepEqual(parents.body.result,{ok:true,parents:[]});
+
+    const rejected=await call('deleteReportChildByPhone',['89990000001','valid-tutor']);
+    assert.equal(rejected.status,400);
+    assert.equal(rejected.body.ok,false);
+    assert.equal(Object.hasOwn(rejected.body,'result'),false);
+  }finally{
+    await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));
+  }
+});

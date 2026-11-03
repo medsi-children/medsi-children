@@ -7,7 +7,7 @@
     "node": ">=20.19.0"
   },
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test --test-concurrency=1 test/*.test.mjs",
     "check": "npm run check:syntax && npm test",
     "start:stand": "node src/stand-entry.mjs",
     "schema:test": "node src/schema-cli.mjs",

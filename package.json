@@ -19,7 +19,8 @@
     "verify:recovery": "node --test tests/parent-recovery.test.cjs",
     "verify:auth": "node --test tests/parent-passkeys.test.cjs tests/parent-passkey-offer.test.cjs",
     "postinstall": "npm --prefix services/ydb-next install --ignore-scripts --no-audit --no-fund",
-    "verify:ydb-next": "npm --prefix services/ydb-next run check"
+    "verify:ydb-next": "npm --prefix services/ydb-next run check",
+    "build": "npm --prefix services/ydb-next install --ignore-scripts --no-audit --no-fund"
   },
   "engines": {
     "node": ">=20"

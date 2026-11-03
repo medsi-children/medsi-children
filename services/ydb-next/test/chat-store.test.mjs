@@ -21,14 +21,14 @@ function fakeSql(activePhones = ['9000000001']) {
       const q = strings.join(' ? ').replace(/\s+/g, ' ').trim();
       if (q.includes('FROM chat_message_dedup')) {
         const row = draft.dedup.get(params[0]+'/'+params[1]);
-        return row ? [row] : [];
+        return row ? [[row]] : [[]];
       }
       if (q.includes('FROM parent_profiles')) {
-        return activePhones.includes(params[0]) ? [{ phone10: params[0] }] : [];
+        return activePhones.includes(params[0]) ? [[{ phone10: params[0] }]] : [[]];
       }
       if (q.includes('FROM chat_messages')) {
         const row = draft.messages.get(params[0]+'/'+params[1]);
-        return row && row.status === params[2] ? [{ message_key: row.message_key }] : [];
+        return row && row.status === params[2] ? [[{ message_key: row.message_key }]] : [[]];
       }
       const kind = q.match(/^UPSERT INTO ([a-z_]+)/)?.[1];
       if (kind === 'chat_messages') {
@@ -40,7 +40,7 @@ function fakeSql(activePhones = ['9000000001']) {
       } else if (kind === 'push_outbox') {
         draft.push.set(params[0], JSON.parse(params[3]));
       } else throw new Error('Unexpected query: '+q);
-      return [];
+      return [[]];
     };
     const result = await callback(tx);
     Object.assign(state, draft);

@@ -80,17 +80,18 @@ export function createEducatorReportsDashboardStore(sql) {
   return {
     async readForEducator() {
       return sql.begin({ isolation: 'snapshotReadOnly', idempotent: true }, async tx => {
-        const [profiles, children, admissions, current, heads] = await Promise.all([
+        const sets = await Promise.all([
           tx`SELECT phone10, parent_name, relationship, child_id, admission_id FROM parent_profiles`,
           tx`SELECT child_id, registered_first_name, surname FROM children`,
           tx`SELECT admission_id, status FROM admissions`,
           tx`SELECT phone10, kind, text FROM parent_current_reports`,
           tx`SELECT kind, publication_id FROM report_publication_head`
         ]);
+        const [profiles, children, admissions, current, heads] = sets.map(result => result[0] || []);
         const rawByPublication = new Map();
         for (const head of heads) {
           if (!KINDS.includes(head.kind) || !head.publication_id) continue;
-          const [publication] = await tx`
+          const [[publication]] = await tx`
             SELECT publication_id, kind, report_date, raw_text, normalized_text
             FROM raw_reports WHERE publication_id = ${head.publication_id}`;
           if (publication) rawByPublication.set(head.publication_id, publication);

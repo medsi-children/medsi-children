@@ -72,13 +72,13 @@ export function createReportReader(sql) {
   async function profile(phoneRaw){
     const phone=activePhone(phoneRaw);
     return read(async tx=>{
-      const [[row]]=await tx`SELECT phone10,parent_name,child_id
+      const [[row]]=await tx`SELECT phone10,parent_name,child_name,child_id
         FROM parent_profiles WHERE phone10=${phone}`;
       if(!row)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
       const [[child]]=await tx`SELECT registered_first_name,surname
         FROM children WHERE child_id=${row.child_id}`;
       return {ok:true,phone,parentName:row.parent_name||'',
-        childName:[child?.registered_first_name,child?.surname].filter(Boolean).join(' ')};
+        childName:row.child_name||[child?.registered_first_name,child?.surname].filter(Boolean).join(' ')};
     });
   }
   return {current,history,unread,markRead,profile};

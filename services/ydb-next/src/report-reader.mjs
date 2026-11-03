@@ -33,8 +33,7 @@ export function createReportReader(sql) {
       const order={morning:0,psychology:1,evening:2};
       return {ok:true,reports:rows
         .filter(r=>same(r.admission_id,profile.admission_id))
-        .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date))+
-          0 || (order[a.kind]??9)-(order[b.kind]??9))
+        .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date)) || (order[a.kind]??9)-(order[b.kind]??9))
         .slice(0,180).map(r=>({
           kind:r.kind,reportDate:r.report_date,text:r.text||'',capturedAt:timestamp(r.captured_at)
         }))};
@@ -78,7 +77,7 @@ export function createReportReader(sql) {
       if(!row)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
       const [[child]]=await tx`SELECT registered_first_name,surname
         FROM children WHERE child_id=${row.child_id}`;
-      return {ok:true,phone,row:undefined,parentName:row.parent_name||'',
+      return {ok:true,phone,parentName:row.parent_name||'',
         childName:[child?.registered_first_name,child?.surname].filter(Boolean).join(' ')};
     });
   }

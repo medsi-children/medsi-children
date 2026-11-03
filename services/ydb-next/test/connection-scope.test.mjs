@@ -21,8 +21,8 @@ test('test stands cannot operate in database root or live YDB table scope',()=>{
 });
 
 test('Yandex downloaded authorized key notice is stripped before handing PEM to SDK',()=>{
-  const notice='PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <synthetic-key>\\n';
-  const pem='-----BEGIN PRIVATE KEY-----\\nSYNTHETIC-FAKE-KEY\\n-----END PRIVATE KEY-----\\n';
+  const notice='PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <synthetic-key>\n';
+  const pem='-----BEGIN PRIVATE KEY-----\nSYNTHETIC-FAKE-KEY\n-----END PRIVATE KEY-----\n';
   const sample={id:'synthetic-key',service_account_id:'synthetic-service',
     private_key:notice+pem};
   const scoped={...env,MEDSI_NEXT_YDB_TABLE_SCOPE:'medsi_next_test',
@@ -38,13 +38,13 @@ test('Yandex downloaded authorized key notice is stripped before handing PEM to 
 });
 
 test('unknown notices, incorrect key IDs and invalid JSON fail closed',()=>{
-  const pem='-----BEGIN PRIVATE KEY-----\\nSYNTHETIC-FAKE-KEY';
+  const pem='-----BEGIN PRIVATE KEY-----\nSYNTHETIC-FAKE-KEY';
   const sample={id:'synthetic-key',service_account_id:'synthetic-service',
-    private_key:'PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <other-key>\\n'+pem};
+    private_key:'PLEASE DO NOT REMOVE THIS LINE! Yandex.Cloud SA Key ID <other-key>\n'+pem};
   const scoped={...env,MEDSI_NEXT_YDB_TABLE_SCOPE:'medsi_next_test'};
   assert.throws(()=>readConnectionConfig({...scoped,
     YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(sample)}),/authorized-key fields/);
-  sample.private_key='SURPRISE HEADER\\n'+pem;
+  sample.private_key='SURPRISE HEADER\n'+pem;
   assert.throws(()=>readConnectionConfig({...scoped,
     YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(sample)}),/authorized-key fields/);
   assert.throws(()=>readConnectionConfig({...scoped,

@@ -1,7 +1,7 @@
 // Compatibility responses for the existing mobile interfaces.
 // No Google Apps Script, Cloudflare or other upstream is contacted.
-const digits=value=>String(value||'').replace(/\\D/g,'').slice(-10);
-const PHONE=/^\\d{10}$/;
+const digits=value=>String(value||'').replace(/\D/g,'').slice(-10);
+const PHONE=/^\d{10}$/;
 
 export function createLegacyBridge({sessions,reportReader,chatOperations,reportSubmission,
   parentRegistration,parentAccess}) {

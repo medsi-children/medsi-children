@@ -7,6 +7,7 @@ function fakeDatabase({active=true}={}) {
   let attempt=null,profile=null,auth=null;
   const sql={begin:async(_,fn)=>fn(async(strings,...values)=>{
     const query=strings.join('?').replace(/\\s+/g,' ').trim();
+    if(query.startsWith('SELECT')&&query.includes('FROM parent_deletion_queue'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_profiles'))return [profile?[profile]:[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_registration_attempts'))return [attempt?[attempt]:[]];
     if(query.startsWith('SELECT')&&query.includes('FROM children'))return [[{child_id:'child-1',registered_first_name:'Лена',surname:'Тестовая'}]];

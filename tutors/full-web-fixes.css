@@ -145,3 +145,17 @@
 
 /* Anchor the gear to the scene, outside the animated menu section. */
 body:not([data-screen="screenChoose"]) .tutor-settings-open{display:none}
+
+/* Actionable validation warning shown before a report reaches the server. */
+#screenForm #reportError.report-validation-warning{
+  margin-top:12px;
+  border:1.5px solid rgba(226,148,58,.48);
+  border-radius:15px;
+  padding:14px 16px;
+  background:linear-gradient(145deg,#fffaf1,#fff0da);
+  color:#80451b;
+  box-shadow:0 6px 18px rgba(119,80,29,.09);
+  font-weight:650;
+  line-height:1.5;
+  white-space:pre-line;
+}

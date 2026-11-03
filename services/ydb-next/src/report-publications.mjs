@@ -72,6 +72,15 @@ export function createReportPublicationStore(sql) {
         kind, submissionId, authorId, submittedAt, rawText, normalizedText,
         recipients, reportDate, payloadHash
       } = payload;
+      const ownerReads = input?.ownerReads || {};
+      const ownerWrites = input?.ownerWrites || {};
+      const ownershipKeys = Object.keys(ownerWrites);
+      if (ownershipKeys.length > 1000 || ownershipKeys.some(key =>
+        !/^RAW_REPORT_OWNER_(morning|evening)_[A-Za-z0-9_-]{12,}$/.test(key) ||
+        !Object.prototype.hasOwnProperty.call(ownerReads, key) ||
+        typeof ownerWrites[key] !== 'string' || ownerWrites[key].length > 30000)) {
+        throw new Error('Invalid report ownership transfer.');
+      }
 
       // Serializable transaction includes roster validation, idempotency, raw source,
       // parent reports, history and push outbox. No external push inside transaction.
@@ -105,6 +114,16 @@ export function createReportPublicationStore(sql) {
         if (head && submittedAt <= Number(head.submitted_at)) {
           // Superseded reports do not write raw/current/history or queue push.
           return { status: 'superseded', submissionId };
+        }
+
+        // Ownership must still refer to the same admission as when the report was parsed.
+        // A concurrent edit fails the transaction instead of silently reassigning text.
+        for (const key of ownershipKeys) {
+          const [[saved]] = await tx`SELECT record_json FROM report_ownership
+            WHERE owner_key = ${key}`;
+          if (String(saved?.record_json || '') !== String(ownerReads[key] || '')) {
+            throw new Error('Report ownership changed during publication; retry with a fresh roster.');
+          }
         }
 
         const publicationId = randomUUID();
@@ -155,6 +174,12 @@ export function createReportPublicationStore(sql) {
                       ${'pending'}, ${zeroParam}, ${timeParam}, ${timeParam})`;
             notifications.push(phone10);
           }
+        }
+
+        for (const key of ownershipKeys) {
+          await tx`UPSERT INTO report_ownership
+            (owner_key, record_json, updated_at)
+            VALUES (${key}, ${ownerWrites[key]}, ${timeParam})`;
         }
 
         await tx`UPSERT INTO report_submissions

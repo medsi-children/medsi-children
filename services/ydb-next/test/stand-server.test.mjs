@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNextStandApp,readLegacyAuthConfig} from '../src/stand-server.mjs';
+import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand} from '../src/stand-server.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
   NEXT_TUTOR_LOGIN:'staff',NEXT_TUTOR_PASSWORD:'long-fake-test-password',
@@ -100,4 +100,69 @@ test('legacy continuity cannot activate accidentally or with partial signing cre
   });
   assert.equal(result.legacyWorkerSecret.length,64);
   assert.equal(result.legacyTutor.version,'old-version');
+});
+
+test('Timeweb can scan HTTP port before a slow YDB connection, while data routes fail closed',async()=>{
+  let release;
+  let destroyed=0;
+  const started=await startIsolatedStand({...env,PORT:'0'},{
+    connect:()=>new Promise(resolve=>{release=resolve;}),
+    makeServices:()=>fakeServices(),
+    makeApp:(services,options)=>createNextStandApp(services,options)
+  });
+  if(!started.server.listening){
+    await new Promise(resolve=>started.server.once('listening',resolve));
+  }
+  const base='http://127.0.0.1:'+started.server.address().port;
+  try {
+    const health=await fetch(base+'/__health');
+    assert.equal(health.status,503);
+    const body=await health.json();
+    assert.equal(body.code,'YDB_CONNECT_PENDING');
+    const placeholder=await fetch(base+'/');
+    assert.equal(placeholder.status,200);
+    assert.match(await placeholder.text(),/test stand online/);
+    const blocked=await fetch(base+'/lab/parent-registration',{method:'POST',
+      headers:{'content-type':'application/json'},body:'{}'});
+    assert.equal(blocked.status,503);
+    assert.equal((await blocked.json()).code,'NEXT_STAND_NOT_READY');
+    release({sql:{},driver:{destroy:async()=>{destroyed++;}}});
+    await started.initialize;
+    const ready=await fetch(base+'/__health');
+    assert.equal(ready.status,200);
+    assert.equal((await ready.json()).database,'reachable');
+    assert.equal(started.status.code,'READY');
+  }finally{
+    await started.shutdown();
+    assert.equal(destroyed,1);
+  }
+});
+
+test('stand exposes safe connection failure status and never uses legacy gateway',async()=>{
+  const started=await startIsolatedStand({...env,PORT:'0'},{
+    connect:async()=>{throw new Error('YDB NEXT connection timed out.');}
+  });
+  try{
+    await started.initialize;
+    const base='http://127.0.0.1:'+started.server.address().port;
+    const health=await fetch(base+'/__health');
+    assert.equal(health.status,503);
+    assert.deepEqual(await health.json(),{
+      ok:false,service:'medsi-ydb-next',mode:'isolated',database:'unavailable',
+      phase:'failed',code:'YDB_CONNECT_TIMEOUT'
+    });
+    const blocked=await fetch(base+'/tutors');
+    assert.equal(blocked.status,503);
+  }finally{await started.shutdown();}
+});
+
+test('missing test-only secrets are reported on the health endpoint without opening data routes',async()=>{
+  const started=await startIsolatedStand({...env,PORT:'0',NEXT_SESSION_SECRET:'short'});
+  try{
+    await started.initialize;
+    const base='http://127.0.0.1:'+started.server.address().port;
+    const response=await fetch(base+'/__health');
+    assert.equal(response.status,503);
+    assert.equal((await response.json()).code,'STAND_ENV_INVALID');
+  }finally{await started.shutdown();}
 });

@@ -75,6 +75,19 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
         parentName:r.parent_name,childName:r.child_name,createdAt:Number(r.created_at)}))};
     });
   }
+  async function candidates() {
+    return read(async tx=>{
+      const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
+      const [admissions]=await tx`SELECT admission_id,child_id,status FROM admissions`;
+      const childrenMap=new Map(children.map(c=>[c.child_id,c]));
+      return {ok:true,children:admissions.filter(a=>a.status==='active').map(a=>{
+        const child=childrenMap.get(a.child_id);
+        if(!child)throw new Error('Missing child for active admission.');
+        return {childId:a.child_id,admissionId:a.admission_id,
+          childName:[child.registered_first_name,child.surname].filter(Boolean).join(' ')};
+      }).sort((a,b)=>a.childName.localeCompare(b.childName,'ru'))};
+    });
+  }
   async function decide({attemptId,decision,childId,admissionId,approvedBy='educator'}) {
     const id=String(attemptId||''),action=String(decision||'').toUpperCase();
     if(!ATTEMPT.test(id)||!['APPROVE','DENY'].includes(action))throw new Error('Invalid registration decision.');
@@ -118,5 +131,5 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
       return {ok:true,status:'COMPLETED'};
     });
   }
-  return {register,status,listPending,decide};
+  return {register,status,listPending,candidates,decide};
 }

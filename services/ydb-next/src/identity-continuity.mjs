@@ -78,11 +78,11 @@ export async function importLegacyIdentityCapture(sql,capture,{
   }
   // Already imported or newly created sessions/passkeys may never be replaced.
   await sql.begin({isolation:'serializableReadWrite',idempotent:false},async tx=>{
-    const [[auth],[keys]] = await Promise.all([
+    const [[authRows],[keyRows]] = await Promise.all([
       tx`SELECT phone10 FROM parent_auth_profiles LIMIT 1`,
       tx`SELECT credential_id FROM parent_passkeys LIMIT 1`
     ]);
-    if(auth||keys)throw new Error('Identity destination must be empty.');
+    if(authRows?.length||keyRows?.length)throw new Error('Identity destination must be empty.');
     const [parents]=await tx`SELECT phone10 FROM parent_profiles`;
     const phones=new Set(parents.map(row=>String(row.phone10||'')));
     if(phones.size!==prepared.profiles.length||

@@ -101,7 +101,10 @@ export function createReportPublicationStore(sql) {
         // Match the ENTIRE active parent roster. If anyone registers, changes admission
         // or is discharged while distribution runs, abort instead of misrouting text.
         const [activeProfiles] = await tx`
-          SELECT phone10, admission_id FROM parent_profiles`;
+          SELECT p.phone10, p.admission_id
+          FROM parent_profiles AS p
+          INNER JOIN admissions AS a ON p.admission_id = a.admission_id
+          WHERE a.status = ${'active'} AND p.child_id = a.child_id`;
         const expected = new Map(recipients.map(row => [row.phone10, row.admissionId]));
         if (activeProfiles.length !== expected.size ||
             activeProfiles.some(row => expected.get(row.phone10) !== row.admission_id)) {

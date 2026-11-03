@@ -211,7 +211,7 @@ test('queue failure never falls back to Apps Script or returns a success receipt
 test('manual retry reuses an uncertain submission id and preserves form text', async () => {
   const source=fs.readFileSync(path.join(__dirname,'../tutors/full-web.js'),'utf8');
   const send=source.slice(source.indexOf('  async function sendReport('),source.indexOf('  function showReportSent('));
-  const elements={btnSend:{dataset:{type:'morning'},disabled:false},text:{value:'Лена — Основной текст.'},reportError:{classList:{add(){}}}};
+  const elements={btnSend:{dataset:{type:'morning'},disabled:false},text:{value:'Лена — Основной текст.'},reportError:{classList:{add(){},remove(){},toggle(){}}}};
   const ids=[];let errors=0,successes=0,nextId=0;
   const context={$:id=>elements[id],reportAttempt:null,reportSubmissionId:()=>`report_synthetic_${++nextId}`,
     submitReportPayload:async(_kind,_text,id)=>{ids.push(id);if(ids.length===1)throw Object.assign(new Error('Network failed'),{code:'NETWORK'});},

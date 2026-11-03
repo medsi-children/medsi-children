@@ -242,7 +242,10 @@
       type: PUSH_MESSAGE_TYPE,
       action: 'delete',
       reason: reason || 'user_disabled',
-      endpoint: subscription.endpoint || ''
+      endpoint: subscription.endpoint || '',
+      role: state.identity&&state.identity.role||'',
+      phone: state.identity&&state.identity.phone||'',
+      parentSession: state.identity&&state.identity.parentSession||''
     };
 
     if (state.frame && state.frame.contentWindow) {
@@ -276,7 +279,10 @@
     if (state.pushServiceUrl && message.action === 'delete') {
       pushRequest = sendPushRequest(state.pushServiceUrl + '/unsubscribe', {
         endpoint: message.endpoint,
-        reason: message.reason
+        reason: message.reason,
+        role: message.role,
+        phone: message.phone,
+        parentSession: message.parentSession
       });
     }
 

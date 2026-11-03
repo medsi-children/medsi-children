@@ -211,9 +211,6 @@
           if(status==='PROCESSING'){
             processingCount++;
             if(processingCount>=3){phase='register';processingCount=0;pendingText.textContent='Завершаем сохранение данных…'}
-          }else if(status==='PENDING'){
-            notFoundCount=0;
-            pendingText.textContent='Заявка сохранена. Для завершения регистрации попросите воспитателя подтвердить доступ в параметрах Медси Бота.';
           }else if(status==='NOT_FOUND'){
             notFoundCount++;
             if(notFoundCount>=3){phase='register';notFoundCount=0;pendingText.textContent='Проверяем регистрацию ещё раз…'}

@@ -108,7 +108,19 @@ CREATE TABLE IF NOT EXISTS chat_messages (
   read_by_parent Bool,
   read_by_educator Bool,
   INDEX chat_messages_by_time GLOBAL ON (phone10, created_at),
+  INDEX chat_messages_by_key GLOBAL ON (message_key),
   PRIMARY KEY (phone10, message_key)
+);
+CREATE TABLE IF NOT EXISTS chat_thread_state (
+  phone10 Utf8 NOT NULL,
+  last_message_key Utf8,
+  last_side Utf8,
+  last_type Utf8,
+  last_text Utf8,
+  last_at Uint64,
+  educator_has_unread Bool,
+  parent_has_unread Bool,
+  PRIMARY KEY (phone10)
 );
 CREATE TABLE IF NOT EXISTS chat_message_dedup (
   phone10 Utf8 NOT NULL,

@@ -76,6 +76,10 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(!await educator(req,res))return;
     return parentRegistration.listPending();
   }));
+  router.get('/parent-registration/candidates',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentRegistration.candidates();
+  }));
   router.post('/parent-registration/decision',run(async(req,res)=>{
     const auth=await educator(req,res);if(!auth)return;
     return parentRegistration.decide({...req.body,approvedBy:'educator'});

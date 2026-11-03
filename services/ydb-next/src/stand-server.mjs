@@ -38,11 +38,31 @@ function requireEnv(env) {
   }
   if(String(env.NEXT_SESSION_SECRET).length<32)throw new Error('NEXT session secret must be at least 32 characters.');
 }
+// Disabled by default; enable only after clinical identity and push capture audit.
+// A partial config is unsafe: it would silently log out some existing devices.
+export function readLegacyAuthConfig(env) {
+  if(env.MEDSI_NEXT_LEGACY_AUTH_ENABLED!=='1')return {};
+  const fields=[
+    'NEXT_LEGACY_D1_SESSION_SECRET','NEXT_LEGACY_TUTOR_LOGIN',
+    'NEXT_LEGACY_TUTOR_PASSWORD','NEXT_LEGACY_TUTOR_VERSION'
+  ];
+  if(fields.some(field=>!String(env[field]||'').trim()) ||
+     String(env.NEXT_LEGACY_D1_SESSION_SECRET).length<32) {
+    throw new Error('Incomplete legacy identity migration credentials.');
+  }
+  return {
+    legacyWorkerSecret:env.NEXT_LEGACY_D1_SESSION_SECRET,
+    legacyTutor:{login:env.NEXT_LEGACY_TUTOR_LOGIN,
+      password:env.NEXT_LEGACY_TUTOR_PASSWORD,
+      version:env.NEXT_LEGACY_TUTOR_VERSION}
+  };
+}
 export function createNextServices({sql,env=process.env}) {
   requireEnv(env);
   const sessions=createSessionService({
     sql,secret:env.NEXT_SESSION_SECRET,login:env.NEXT_TUTOR_LOGIN,
-    password:env.NEXT_TUTOR_PASSWORD,tutorVersion:env.NEXT_TUTOR_VERSION
+    password:env.NEXT_TUTOR_PASSWORD,tutorVersion:env.NEXT_TUTOR_VERSION,
+    ...readLegacyAuthConfig(env)
   });
   const reportReader=createReportReader(sql),reports=createReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);

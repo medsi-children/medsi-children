@@ -36,14 +36,15 @@ function fakeDb(profiles) {
     current: new Map(),
     raw: new Map(),
     history: new Map(),
-    push: new Map()
+    push: new Map(),
+    ownership: new Map()
   };
   const writes = [];
   const clone = () => ({
     ...state,
     submissions: new Map(state.submissions), heads: new Map(state.heads),
     current: new Map(state.current), raw: new Map(state.raw),
-    history: new Map(state.history), push: new Map(state.push)
+    history: new Map(state.history), push: new Map(state.push), ownership: new Map(state.ownership)
   });
   const sql = {
     async begin(options, fn) {
@@ -58,10 +59,15 @@ function fakeDb(profiles) {
           ? [[snapshot.heads.get(values[0])]] : [[]];
         if (source.includes('FROM parent_current_reports')) return snapshot.current.has(values[0] + '/' + values[1])
           ? [[snapshot.current.get(values[0] + '/' + values[1])]] : [[]];
+        if (source.includes('FROM report_ownership')) return snapshot.ownership.has(values[0])
+          ? [[{record_json:snapshot.ownership.get(values[0])}]] : [[]];
         const table = source.match(/^UPSERT INTO ([a-z_]+)/)?.[1];
         assert.ok(table, 'unexpected YQL operation ' + source);
         writes.push(table);
         switch (table) {
+          case 'report_ownership':
+            snapshot.ownership.set(values[0], values[1]);
+            break;
           case 'raw_reports':
             snapshot.raw.set(values[0], { kind: values[1], raw_text: values[3], normalized_text: values[4] });
             break;
@@ -191,4 +197,24 @@ test('YDB connection requires explicit opt-in, encrypted Russian endpoint and va
     YDB_CONNECTION_STRING: 'grpcs://ydb.serverless.yandexcloud.net:2135/ru-central1/test',
     YDB_SERVICE_ACCOUNT_JSON: '{}'
   }), /lacks/);
+});
+
+test('ownership records are fenced and committed atomically with a publication', async () => {
+  const {sql,state}=fakeDb([
+    { phone10: '9000000001', admission_id: 'admission_001' },
+    { phone10: '9000000002', admission_id: 'admission_002' }
+  ]);
+  const store=createReportPublicationStore(sql);
+  const key='RAW_REPORT_OWNER_morning_'+'a'.repeat(24);
+  const ownerReads={[key]:''};
+  const ownerWrites={[key]:JSON.stringify({identity:'synthetic',childAdmissionId:'admission_001'})};
+  const result=await store.publishPrepared(sample({ownerReads,ownerWrites}));
+  assert.equal(result.status,'published');
+  assert.equal(state.ownership.get(key),ownerWrites[key]);
+  await assert.rejects(() => store.publishPrepared(sample({
+    submissionId:'submission_test_other', submittedAt: now - 40000,
+    ownerReads:{[key]:''},
+    ownerWrites:{[key]:'another-owner'}
+  })), /ownership changed/);
+  assert.equal(state.ownership.get(key),ownerWrites[key]);
 });

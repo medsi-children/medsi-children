@@ -175,6 +175,20 @@ CREATE TABLE IF NOT EXISTS parent_auth_challenges (
   consumed_at Uint64,
   PRIMARY KEY (challenge_id)
 );
+CREATE TABLE IF NOT EXISTS parent_deletion_queue (
+  operation_id Utf8 NOT NULL,
+  phone10 Utf8,
+  parent_name Utf8,
+  child_id Utf8,
+  admission_id Utf8,
+  profile_generation Utf8,
+  status Utf8,
+  attempts Uint64,
+  last_error Utf8,
+  created_at Uint64,
+  updated_at Uint64,
+  PRIMARY KEY (operation_id)
+);
 CREATE TABLE IF NOT EXISTS parent_registration_attempts (
   attempt_id Utf8 NOT NULL,
   phone10 Utf8,

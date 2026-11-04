@@ -5,6 +5,7 @@ const MAX_COOKIE_AGE=20*60*1000;
 const PHONE=/^\d{10}$/;
 const UPLOAD_ID=/^[A-Za-z0-9][A-Za-z0-9._-]{7,127}$/;
 const KEY=/^(?:chat\/[a-f0-9]{64}\.[a-z0-9]{2,5}|chat\/[A-Za-z0-9._-]{8,180}|[a-f0-9-]{36}\.[a-z0-9]{2,5})$/;
+export const isChatMediaKey=key=>typeof key==='string'&&KEY.test(key);
 const COOKIE='medsi_media_session';
 const sha=(v)=>createHash('sha256').update(v).digest('hex');
 const uint=(n)=>BigInt(n);
@@ -107,7 +108,7 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
   async function open(req,res) {
     const claims=parseClaims(cookieValue(req.headers.cookie),secret,now());
     const key=String(req.params.key||'');
-    if(!claims||!KEY.test(key)||!storage.configured)return res.status(404).end();
+    if(!claims||!isChatMediaKey(key)||!storage.configured)return res.status(404).end();
     const fileId='s3:'+key;
     const allowed=await read(async tx=>{
       const [messages]=await tx`SELECT phone10,status FROM chat_messages

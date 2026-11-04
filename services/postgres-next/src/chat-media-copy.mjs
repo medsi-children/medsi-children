@@ -1,6 +1,7 @@
 import {createHash,createHmac} from 'node:crypto';
 import storageDefinitions from '../../../lib/s3-storage.js';
 import {captureD1ChatMessageManifest,inventoryD1ChatMedia} from './d1-chat-capture.mjs';
+import {isChatMediaKey} from '../app/media-service.mjs';
 import {generateManifest} from '../app/migration-audit.mjs';
 
 const MAX_BYTES=100*1024*1024;
@@ -27,8 +28,11 @@ export async function copyD1ChatMedia(messages,{readSource,destination,hmacKey,e
       if(!media)throw new Error();
       const digest=createHash('sha256').update(body).digest('hex');
       const id=createHmac('sha256',hmacKey).update(JSON.stringify([object.phone10,object.fileId])).digest('hex');
-      const key='chat/'+id+media.extension;
+      const alreadyInS3=object.source==='s3';
+      const key=alreadyInS3 ? object.fileId.slice(3) : 'chat/'+id+media.extension;
+      if(!isChatMediaKey(key))throw new Error();
       if(!await destination.hasObject(key)){
+        if(alreadyInS3)throw new Error();
         try{
           await destination.putBuffer(key,body,mime,{ifAbsent:true});
         }catch(error){
@@ -57,7 +61,9 @@ export function prepareChatMediaImport(messages,mapping){
   const bySource=new Map(),byTarget=new Set();
   for(const entry of mapping){
     if(!entry || typeof entry.sourceFileId!=='string' || bySource.has(entry.sourceFileId) ||
-       !/^s3:chat\/[a-f0-9]{64}\.[a-z0-9]{2,5}$/.test(entry.fileId) || byTarget.has(entry.fileId) ||
+       typeof entry.fileId!=='string' || !entry.fileId.startsWith('s3:') ||
+       !isChatMediaKey(entry.fileId.slice(3)) || byTarget.has(entry.fileId) ||
+       (entry.sourceFileId.startsWith('s3:') && entry.sourceFileId!==entry.fileId) ||
        !/^[a-f0-9]{64}$/.test(entry.sha256) || !Number.isSafeInteger(entry.bytes) ||
        entry.bytes<1 || entry.bytes>MAX_BYTES){
       throw new Error('Invalid chat attachment mapping.');

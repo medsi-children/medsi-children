@@ -46,3 +46,22 @@ test('attachment copy verifies bytes and reuses an intact object without overwri
   assert.equal(writes,1);
   await assert.rejects(copyD1ChatMedia([{...row,file_id:''}],options),/unresolved/);
 });
+
+test('existing Timeweb S3 object keeps its original reference and is never written',async()=>{
+  const fileId='s3:chat/legacy-picture.png';
+  const source=[{...row,file_id:fileId}];
+  const sha256=createHash('sha256').update(bytes).digest('hex');
+  const destination={
+    configured:true,
+    hasObject:async key=>key===fileId.slice(3),
+    putBuffer:async()=>assert.fail('Existing Timeweb objects must never be uploaded'),
+    sha256Object:async()=>sha256
+  };
+  const options={destination,hmacKey:key,explicitCopy:true,
+    readSource:async()=>({body:bytes,contentType:'image/png'})};
+  const mapping=await copyD1ChatMedia(source,options);
+  assert.equal(mapping[0].fileId,fileId);
+  assert.equal(prepareChatMediaImport(source,mapping).messages[0].file_id,fileId);
+  await assert.rejects(copyD1ChatMedia(source,{...options,
+    destination:{...destination,hasObject:async()=>false}}),/verification failed/);
+});

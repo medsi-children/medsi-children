@@ -1,3 +1,5 @@
+import {generateManifest} from './migration-audit.mjs';
+
 
 // Offline identity capture for migration under a frozen D1 write-fence.
 // Inputs must come from an authorized encrypted export, never a public upload,
@@ -103,4 +105,19 @@ export async function importLegacyIdentityCapture(sql,capture,{
     }
   });
   return {authProfiles:prepared.profiles.length,passkeys:prepared.keys.length};
+}
+
+export function captureLegacyIdentityManifests(capture,options,hmacKey){
+  const {profiles,keys}=prepareLegacyIdentityCapture(capture,options);
+  return [
+    generateManifest('parent_auth_profiles',profiles.map(row=>({
+      phone10:row.phone10,user_handle:row.userHandle,generation_id:row.generationId,
+      created_at:String(row.createdAt)
+    })),hmacKey),
+    generateManifest('parent_passkeys',keys.map(row=>({
+      credential_id:row.credentialId,user_handle:row.userHandle,public_key:row.publicKey,
+      counter:String(row.counter),transports_json:row.transportsJson,device_type:row.deviceType,
+      backed_up:row.backedUp,created_at:String(row.createdAt),revoked_at:String(row.revokedAt)
+    })),hmacKey)
+  ];
 }

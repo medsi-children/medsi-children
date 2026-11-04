@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {copyD1ChatMedia,prepareChatMediaImport} from '../src/chat-media-copy.mjs';
+import {copyD1ChatMedia,prepareChatMediaImport,createSameBucketSourceReader} from '../src/chat-media-copy.mjs';
 
 const row={phone10:'9000000001',message_key:'synthetic-message',client_message_id:'',
   side:'parent',type:'image',text:'',file_id:'kv:synthetic-image',reply_to_key:'',
@@ -64,4 +64,14 @@ test('existing Timeweb S3 object keeps its original reference and is never writt
   assert.equal(prepareChatMediaImport(source,mapping).messages[0].file_id,fileId);
   await assert.rejects(copyD1ChatMedia(source,{...options,
     destination:{...destination,hasObject:async()=>false}}),/verification failed/);
+});
+
+test('same-bucket reader rejects legacy sources and stops reading beyond its byte limit',async()=>{
+  const reader=createSameBucketSourceReader({configured:true,getObject:async()=>({
+    Body:(async function*(){yield Buffer.from('synthetic');yield Buffer.from(' file');})(),
+    ContentType:'image/png'
+  })});
+  assert.equal((await reader('s3','s3:chat/legacy-picture.png',20)).body.toString(),'synthetic file');
+  await assert.rejects(reader('s3','s3:chat/legacy-picture.png',10),/limit/);
+  await assert.rejects(reader('kv','kv:legacy-picture',20),/cannot be read/);
 });

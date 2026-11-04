@@ -1,4 +1,5 @@
 import {createECDH,createHash,timingSafeEqual} from 'node:crypto';
+import {generateManifest} from './migration-audit.mjs';
 
 // Offline, operator-controlled import of a FROZEN legacy Cloudflare KV capture.
 // Never log or expose the capture: it contains Web Push endpoint and encryption
@@ -106,4 +107,12 @@ export async function importLegacyPushCapture(sql,rows,{
   });
   return {imported:prepared.length,enabled:prepared.filter(x=>x.enabled).length,
     disabled:prepared.filter(x=>!x.enabled).length};
+}
+
+export function captureLegacyPushManifest(entries,options,hmacKey){
+  return generateManifest('push_subscriptions',prepareLegacyPushCapture(entries,options).map(row=>({
+    subscription_id:row.subscriptionId,role:row.role,phone10:row.phone10,
+    subscription_json:row.subscriptionJson,enabled:row.enabled,disabled_reason:null,
+    updated_at:String(row.updatedAt)
+  })),hmacKey);
 }

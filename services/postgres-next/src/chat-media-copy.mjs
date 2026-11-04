@@ -128,3 +128,30 @@ export async function importChatMediaOwnership(sql,messages,mapping,
     return {count:stored.length,alreadyImported:existing.length>0};
   });
 }
+
+// Source adapter for existing objects in the very same destination bucket.
+// Uses the existing private S3 credentials and bounds the read while streaming.
+export function createSameBucketSourceReader(storage){
+  return async(source,fileId,maxBytes)=>{
+    if(source!=='s3'||!storage?.configured||!fileId.startsWith('s3:')||
+       !isChatMediaKey(fileId.slice(3))||!Number.isSafeInteger(maxBytes)||maxBytes<1||maxBytes>MAX_BYTES){
+      throw new Error('Existing S3 attachment cannot be read.');
+    }
+    const object=await storage.getObject(fileId.slice(3));
+    const body=object.Body;
+    if(!body||typeof body[Symbol.asyncIterator]!=='function')throw new Error('S3 object body unavailable.');
+    const chunks=[];
+    let size=0;
+    try{
+      for await(const chunk of body){
+        size+=chunk.length;
+        if(size>maxBytes)throw new Error('S3 attachment exceeds the migration limit.');
+        chunks.push(chunk);
+      }
+    }catch(error){
+      body.destroy?.();
+      throw error;
+    }
+    return {body:Buffer.concat(chunks,size),contentType:object.ContentType};
+  };
+}

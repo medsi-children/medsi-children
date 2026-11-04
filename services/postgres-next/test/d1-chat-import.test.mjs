@@ -1,5 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createECDH,createHash} from 'node:crypto';
+import {captureLegacyIdentityManifests,importLegacyIdentityCapture} from '../app/identity-continuity.mjs';
+import {captureLegacyPushManifest,importLegacyPushCapture} from '../app/push-continuity.mjs';
 import {connectPostgresNext} from '../src/connection.mjs';
 import {captureRosterManifests,importRosterCapture} from '../src/roster-capture.mjs';
 import {captureD1ReportManifests,importD1Reports} from '../src/d1-report-capture.mjs';
@@ -8,7 +11,7 @@ import {installSchema} from '../src/schema-cli.mjs';
 import {prepareChatMediaImport,importChatMediaOwnership} from '../src/chat-media-copy.mjs';
 import {captureD1ParentProfileManifest,importD1ParentProfiles} from '../src/d1-profile-capture.mjs';
 import {generateManifest,signManifestEnvelope} from '../app/migration-audit.mjs';
-import {evaluateMigrationGate} from '../app/migration-gate.mjs';
+import {evaluateSingleWindowMigration} from '../app/migration-gate.mjs';
 import {capturePostgresManifests} from '../src/postgres-manifests.mjs';
 import {captureDrainedOperationalManifests,DRAIN_STREAMS} from '../src/operational-drain.mjs';
 import {captureD1ChatMessageManifest,importD1ChatMessages,
@@ -93,16 +96,36 @@ test('synthetic migration baseline is repeatable and verifies all 26 signed stre
       await assert.rejects(importD1ChatMessages(connection.sql,changed,{...options,
         expectedManifest:captureD1ChatMessageManifest(changed,hmacKey)}),/differ from the baseline/);
       const drained=Object.fromEntries(DRAIN_STREAMS.map(stream=>[stream,[]]));
-      const emptyIdentity=['parent_auth_profiles','parent_passkeys','push_subscriptions']
-        .map(stream=>generateManifest(stream,[],hmacKey));
+      const userHandle='a'.repeat(64);
+      const identity={
+        authProfiles:[{phone10:profiles[0].phone10,user_handle:userHandle,
+          generation_id:'b'.repeat(32),created_at:1700000000000}],
+        passkeys:[{credential_id:'fictional_passkey_1234',user_handle:userHandle,
+          public_key_base64url:Buffer.alloc(64,5).toString('base64url'),counter:1,
+          transports:['internal'],device_type:'synthetic',backed_up:1,created_at:1700000000000}]
+      };
+      const identityOptions={...options,expectedProfiles:1,expectedPasskeys:1};
+      await importLegacyIdentityCapture(connection.sql,identity,identityOptions);
+      const vapid=createECDH('prime256v1');
+      vapid.generateKeys();
+      const publicKey=vapid.getPublicKey().toString('base64url');
+      const endpoint='https://push.example.invalid/synthetic';
+      const subscription={key:'sub:'+createHash('sha256').update(endpoint).digest('hex'),
+        value:{role:'parent',phone10:profiles[0].phone10,enabled:false,
+          updatedAt:'2025-11-05T00:00:00Z',subscription:{endpoint,keys:{auth:'synthetic',p256dh:'synthetic'}}}};
+      const pushOptions={...options,sourceVapidPublicKey:publicKey,targetVapidPublicKey:publicKey,
+        targetVapidPrivateKey:vapid.getPrivateKey().toString('base64url'),expectedCount:1};
+      await importLegacyPushCapture(connection.sql,[subscription],pushOptions);
+      const identityManifests=[...captureLegacyIdentityManifests(identity,identityOptions,hmacKey),
+        captureLegacyPushManifest([subscription],pushOptions,hmacKey)];
       const objectManifest=generateManifest('s3_objects',plan.s3Objects,hmacKey);
       const sourceManifests=[...rosterOptions.expectedManifests,profileOptions.expectedManifest,
         ...reportOptions.expectedManifests,...baselineOptions.expectedManifests,
         options.expectedManifest,mediaOptions.expectedManifest,...relatedOptions.expectedManifests,
-        ...captureDrainedOperationalManifests(drained,hmacKey),...emptyIdentity,objectManifest];
+        ...captureDrainedOperationalManifests(drained,hmacKey),...identityManifests,objectManifest];
       const destinationManifests=[...await capturePostgresManifests(connection.sql,hmacKey),objectManifest];
       const sign=manifests=>signManifestEnvelope('synthetic-frozen-capture-01',manifests,hmacKey);
-      const evaluate=(src,dst)=>evaluateMigrationGate(sign(src),sign(dst),{hmacKey});
+      const evaluate=(src,dst)=>evaluateSingleWindowMigration(sign(src),sign(dst),sign(sourceManifests),{hmacKey});
       const result=evaluate(sourceManifests,destinationManifests);
       assert.equal(result.ready,true);
       assert.equal(result.matched,26);

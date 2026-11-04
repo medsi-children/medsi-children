@@ -3,7 +3,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {connectYdbNext} from './connection.mjs';
+import {connectYdbNext,closeYdbDriver} from './connection.mjs';
 import {createSessionService} from './session-auth.mjs';
 import {createReportReader} from './report-reader.mjs';
 import {createReportSubmissionService} from './report-submission-service.mjs';
@@ -253,7 +253,7 @@ export async function startIsolatedStand(env=process.env,{
     stopped=true;
     if(ticker)clearInterval(ticker);
     await new Promise(resolve=>server.close(resolve));
-    if(typeof driver?.destroy==='function')await driver.destroy().catch(()=>{});
+    await closeYdbDriver(driver);
   };
   process.once('SIGTERM',()=>{void shutdown().then(()=>process.exit(0));});
   process.once('SIGINT',()=>{void shutdown().then(()=>process.exit(0));});
@@ -263,10 +263,18 @@ export async function startIsolatedStand(env=process.env,{
     try{
       requireEnv(env);
       state.code='YDB_CONNECT_PENDING';
-      connection=await connect(env);
+      connection=await connect(env,{
+        onStage:stage=>{
+          // Fixed allowlist: a malformed SDK error must never reach HTTP.
+          if([
+            'YDB_CONFIG_PENDING','YDB_AUTH_PROVIDER_PENDING',
+            'YDB_DRIVER_PENDING','YDB_HANDSHAKE_PENDING',
+            'YDB_QUERY_ADAPTER_PENDING'
+          ].includes(stage))state.code=stage;
+        }
+      });
       if(stopped){
-        if(typeof connection?.driver?.destroy==='function')
-          await connection.driver.destroy().catch(()=>{});
+        await closeYdbDriver(connection?.driver);
         return;
       }
       driver=connection.driver;
@@ -320,6 +328,12 @@ export async function startIsolatedStand(env=process.env,{
         :msg.includes('YDB NEXT configuration validation failed')?'YDB_CONFIG_VALIDATION_FAILED'
         :msg.includes('YDB NEXT credentials provider initialization failed')?'YDB_AUTH_PROVIDER_INIT_FAILED'
         :msg.includes('YDB NEXT driver initialization failed')?'YDB_DRIVER_INIT_FAILED'
+        :msg.includes('YDB NEXT query adapter initialization failed')?'YDB_QUERY_ADAPTER_INIT_FAILED'
+        :failedAt==='YDB_CONFIG_PENDING'?'YDB_CONFIG_VALIDATION_FAILED'
+        :failedAt==='YDB_AUTH_PROVIDER_PENDING'?'YDB_AUTH_PROVIDER_INIT_FAILED'
+        :failedAt==='YDB_DRIVER_PENDING'?'YDB_DRIVER_INIT_FAILED'
+        :failedAt==='YDB_HANDSHAKE_PENDING'?'YDB_CONNECT_FAILED'
+        :failedAt==='YDB_QUERY_ADAPTER_PENDING'?'YDB_QUERY_ADAPTER_INIT_FAILED'
         :failedAt==='YDB_CONNECT_PENDING'?'YDB_CLIENT_INIT_FAILED'
         :failedAt==='NEXT_SERVICES_PENDING'?'NEXT_SERVICES_INIT_FAILED'
         :failedAt==='NEXT_ROUTER_PENDING'?'NEXT_ROUTER_INIT_FAILED'
@@ -327,7 +341,7 @@ export async function startIsolatedStand(env=process.env,{
       state.phase='failed';
       state.code=code;
       console.error('MEDSI_NEXT_STAND_BOOT_FAILED:',code);
-      if(typeof driver?.destroy==='function')await driver.destroy().catch(()=>{});
+      await closeYdbDriver(driver);
       driver=null;
     }
   })();

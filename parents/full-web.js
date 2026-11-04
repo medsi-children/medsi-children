@@ -1,8 +1,8 @@
 (function(){
   if(window.MedsiParentApp)return;
   window.MedsiParentApp={};
-  const APP_BASE_URL='/__session/apps-script';
-  const CHAT_WORKER_URL=(window.location&&window.location.origin)||'';
+  const APP_BASE_URL='/__session/api';
+  const BACKEND_ORIGIN=(window.location&&window.location.origin)||'';
   const PUSH_APP_URL='';
   const PUSH_SERVICE_URL=((window.location&&window.location.origin)||'')+'/push';
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
@@ -23,7 +23,7 @@
       const timer=setTimeout(()=>controller.abort(),method==='registerParent'?60000:readOnly?35000:(ms||15000));
       try{
         const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',keepalive:!!keepalive,signal:controller.signal});
-        const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
+        const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Сервер вернул некорректный ответ.')}
         if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
         clearTimeout(timer);return p.result;
       }catch(e){
@@ -33,13 +33,13 @@
     }
     throw lastError||new Error('TIMEOUT');
   }
-  async function callCloudflare(path,method,payload){
+  async function callBackend(path,method,payload){
     let lastError;
-    for(const base of ['',CHAT_WORKER_URL]){
+    for(const base of ['',BACKEND_ORIGIN]){
       const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),base?12000:10000);
       try{
         const response=await fetch(base+path,{method,headers:method==='GET'?{}:{'content-type':'application/json'},body:method==='GET'?undefined:JSON.stringify(payload||{}),cache:'no-store',signal:controller.signal});
-        let value;try{value=await response.json()}catch(_){throw new Error('Cloudflare вернул некорректный ответ.')}
+        let value;try{value=await response.json()}catch(_){throw new Error('Сервер вернул некорректный ответ.')}
         if(response.ok&&value&&value.ok===true)return value;
         if(response.status===404&&value&&value.code==='NOT_FOUND')return value;
         const error=new Error(value&&value.message||('HTTP '+response.status));
@@ -51,19 +51,19 @@
         if(base||(error&&error.status<500))throw error;
       }finally{clearTimeout(timer)}
     }
-    throw lastError||new Error('Cloudflare временно недоступен.');
+    throw lastError||new Error('Сервер временно недоступен.');
   }
   function b64urlToBytes(value){const raw=atob(String(value||'').replace(/-/g,'+').replace(/_/g,'/')+'='.repeat((4-String(value||'').length%4)%4));return Uint8Array.from(raw,c=>c.charCodeAt(0))}
   function bytesToB64url(value){const bytes=new Uint8Array(value);let raw='';for(let i=0;i<bytes.length;i++)raw+=String.fromCharCode(bytes[i]);return btoa(raw).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/g,'')}
   function webauthnOptions(options,registration){const value={...options,challenge:b64urlToBytes(options.challenge)};if(registration&&value.user)value.user={...value.user,id:b64urlToBytes(value.user.id)};if(value.allowCredentials)value.allowCredentials=value.allowCredentials.map(item=>({...item,id:b64urlToBytes(item.id)}));if(value.excludeCredentials)value.excludeCredentials=value.excludeCredentials.map(item=>({...item,id:b64urlToBytes(item.id)}));return value}
   function webauthnCredentialJSON(credential,registration){const response=credential.response,result={id:credential.id,rawId:bytesToB64url(credential.rawId),type:credential.type,authenticatorAttachment:credential.authenticatorAttachment||null,response:{clientDataJSON:bytesToB64url(response.clientDataJSON)}};if(registration){result.response.attestationObject=bytesToB64url(response.attestationObject);result.response.transports=typeof response.getTransports==='function'?response.getTransports():[]}else{result.response.authenticatorData=bytesToB64url(response.authenticatorData);result.response.signature=bytesToB64url(response.signature);result.response.userHandle=response.userHandle?bytesToB64url(response.userHandle):null}return result}
-  async function callParentPasskey(path,payload){const response=await fetch(CHAT_WORKER_URL+path,{method:'POST',headers:{'content-type':'application/json','x-medsi-chat-session':parentSession},body:JSON.stringify(payload||{}),cache:'no-store'});let result;try{result=await response.json()}catch(_){throw new Error('Cloudflare вернул некорректный ответ.')}if(!response.ok||!result||result.ok!==true){const error=new Error(result&&result.message||'Не удалось выполнить вход.');error.status=response.status;error.code=result&&result.code;throw error}return result}
+  async function callParentPasskey(path,payload){const response=await fetch(BACKEND_ORIGIN+path,{method:'POST',headers:{'content-type':'application/json','x-medsi-chat-session':parentSession},body:JSON.stringify(payload||{}),cache:'no-store'});let result;try{result=await response.json()}catch(_){throw new Error('Сервер вернул некорректный ответ.')}if(!response.ok||!result||result.ok!==true){const error=new Error(result&&result.message||'Не удалось выполнить вход.');error.status=response.status;error.code=result&&result.code;throw error}return result}
   function parentSessionClaims(){try{const payload=String(parentSession||'').split('.')[0],encoded=payload.replace(/-/g,'+').replace(/_/g,'/');return JSON.parse(atob(encoded+'='.repeat((4-encoded.length%4)%4)))}catch(_){return null}}
   function parentSessionNeedsRenewal(){const claims=parentSessionClaims();return !claims||claims.version!=='cf-parent-v2'||Number(claims.exp||0)-Date.now()<30*24*60*60*1000}
   async function renewSavedParentSession(){if(!parentSessionNeedsRenewal())return;const previous=parentSession;try{const result=await Promise.race([callParentPasskey('/lab/parent-session/renew',{}),wait(2500).then(()=>null)]);if(result&&currentPhone&&parentSession===previous&&result.parentSession){parentSession=String(result.parentSession);safeSet(PARENT_SESSION_KEY,parentSession)}}catch(_){/* Keep the saved session; recovery remains available if renewal is unavailable. */}}
   let preparedPasskeyLogin=null;
-  async function preparePasskeyLogin(){const button=$('passkeyLoginBtn');if(!button||!window.PublicKeyCredential||!navigator.credentials){button.disabled=true;button.textContent='Ключ доступа не поддерживается';return}button.disabled=true;button.textContent='Подготавливаем вход…';try{preparedPasskeyLogin=await callCloudflare('/lab/parent-passkeys/authentication/options','POST',{});if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Войти с ключом доступа'}}catch(error){preparedPasskeyLogin=null;if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Попробовать снова';$('passkeyLoginError').textContent='Не удалось подготовить вход. Проверьте связь и попробуйте ещё раз.';$('passkeyLoginError').classList.remove('hidden')}}}
-  async function loginWithPasskey(){const button=$('passkeyLoginBtn'),error=$('passkeyLoginError');error.classList.add('hidden');if(!preparedPasskeyLogin){await preparePasskeyLogin();return}const ready=preparedPasskeyLogin;preparedPasskeyLogin=null;button.disabled=true;button.textContent='Подтвердите вход…';try{const credential=await navigator.credentials.get({publicKey:webauthnOptions(ready.options,false)});if(!credential)throw new Error('Вход отменён.');const result=await callCloudflare('/lab/parent-passkeys/authentication/verify','POST',{challengeId:ready.challengeId,credential:webauthnCredentialJSON(credential,false)});if(!applyBootstrap(result))throw new Error('Не удалось сохранить вход.');safeRemove(REAUTH_KEY);prewarmAll();justRegistered=false;showChoose()}catch(e){if(e&&e.name==='NotAllowedError'){error.textContent='Ключ не найден или вход отменён. Попробуйте ещё раз на устройстве, где он сохранён.'}else error.textContent=String(e&&e.message||'Не удалось выполнить вход.');error.classList.remove('hidden');button.disabled=false;button.textContent='Войти с ключом доступа';preparePasskeyLogin()}}
+  async function preparePasskeyLogin(){const button=$('passkeyLoginBtn');if(!button||!window.PublicKeyCredential||!navigator.credentials){button.disabled=true;button.textContent='Ключ доступа не поддерживается';return}button.disabled=true;button.textContent='Подготавливаем вход…';try{preparedPasskeyLogin=await callBackend('/lab/parent-passkeys/authentication/options','POST',{});if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Войти с ключом доступа'}}catch(error){preparedPasskeyLogin=null;if(document.body.dataset.screen==='screenAuth'){button.disabled=false;button.textContent='Попробовать снова';$('passkeyLoginError').textContent='Не удалось подготовить вход. Проверьте связь и попробуйте ещё раз.';$('passkeyLoginError').classList.remove('hidden')}}}
+  async function loginWithPasskey(){const button=$('passkeyLoginBtn'),error=$('passkeyLoginError');error.classList.add('hidden');if(!preparedPasskeyLogin){await preparePasskeyLogin();return}const ready=preparedPasskeyLogin;preparedPasskeyLogin=null;button.disabled=true;button.textContent='Подтвердите вход…';try{const credential=await navigator.credentials.get({publicKey:webauthnOptions(ready.options,false)});if(!credential)throw new Error('Вход отменён.');const result=await callBackend('/lab/parent-passkeys/authentication/verify','POST',{challengeId:ready.challengeId,credential:webauthnCredentialJSON(credential,false)});if(!applyBootstrap(result))throw new Error('Не удалось сохранить вход.');safeRemove(REAUTH_KEY);prewarmAll();justRegistered=false;showChoose()}catch(e){if(e&&e.name==='NotAllowedError'){error.textContent='Ключ не найден или вход отменён. Попробуйте ещё раз на устройстве, где он сохранён.'}else error.textContent=String(e&&e.message||'Не удалось выполнить вход.');error.classList.remove('hidden');button.disabled=false;button.textContent='Войти с ключом доступа';preparePasskeyLogin()}}
   async function askToSavePasskey(){
     const dialog=$('passkeyOfferDialog'),later=$('passkeyLaterBtn'),save=$('passkeySaveBtn'),error=$('passkeyOfferError');
     if(!dialog||dialog.open)return;
@@ -102,13 +102,13 @@
       };
     });
   }
-  function callCloudflareRegistration(status,data){
+  function callBackendRegistration(status,data){
     const path=status?'/lab/parent-registration/status?phone='+encodeURIComponent(data.phone)+'&attemptId='+encodeURIComponent(data.attemptId):'/lab/parent-registration';
-    return callCloudflare(path,status?'GET':'POST',status?null:{parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId});
+    return callBackend(path,status?'GET':'POST',status?null:{parentName:data.parentName,childName:data.childName,phone:data.phone,attemptId:data.attemptId});
   }
-  function callCloudflareAccess(status,data){
+  function callBackendAccess(status,data){
     const path=status?'/lab/parent-auth/status':'/lab/parent-auth/request';
-    return callCloudflare(path,'POST',{phone:data.phone,requestId:data.requestId,requestSecret:data.requestSecret});
+    return callBackend(path,'POST',{phone:data.phone,requestId:data.requestId,requestSecret:data.requestSecret});
   }
   function isStartLike(id){return id==='screenStart'||id==='screenChoose'}
   function initPush(){if(previewMode||pushReady||!window.MedsiPush)return;pushReady=true;const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));MedsiPush.init({frameId:'__no_parent_iframe__',appEndpointUrl:PUSH_APP_URL,pushServiceUrl:PUSH_SERVICE_URL,identity:validPhone(ph)?{role:'parent',phone:ph}:null})}
@@ -184,7 +184,7 @@
         let res=null;
         if(phase==='register'){
           try{
-            res=await callCloudflareRegistration(false,data);
+            res=await callBackendRegistration(false,data);
           }catch(error){
             if(run!==flowRun)return;
             if(error&&error.code==='DELETION_PENDING'){
@@ -202,7 +202,7 @@
           }
         }
         if(phase==='status'){
-          const statusRes=await callCloudflareRegistration(true,data);
+          const statusRes=await callBackendRegistration(true,data);
           if(run!==flowRun)return;
           if(statusRes&&statusRes.ok&&statusRes.parentSession){await finishRegistration(statusRes,run);return}
           if(statusRes&&statusRes.result&&statusRes.result.parentSession){await finishRegistration(statusRes.result,run);return}
@@ -242,7 +242,7 @@
     const restoreButton=()=>{authButton.disabled=false;authButton.textContent=originalButtonText};
     while(run===flowRun){
       try{
-        let res=await callCloudflareAccess(!shouldCreate,data);
+        let res=await callBackendAccess(!shouldCreate,data);
         if(run!==flowRun)return;
         if(res&&res.code==='NOT_FOUND'&&res.ok===false){
           restoreButton();safeRemove(REAUTH_KEY);$('phoneInputAuth').value=data.phone;showAuth();$('phoneAuthFallback').classList.remove('hidden');

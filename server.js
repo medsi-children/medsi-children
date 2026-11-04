@@ -11,10 +11,18 @@ if (process.env.MEDSI_NEXT_STAND === '1') {
   const {startStandBootstrap} = require('./services/ydb-next/src/stand-bootstrap.cjs');
   const bootstrap = startStandBootstrap();
   import('./services/ydb-next/src/stand-server.mjs')
-    .then(({startIsolatedStand}) => startIsolatedStand(process.env,{
-      externalServer:bootstrap.server,
-      installHandler:bootstrap.activate
-    }))
+    .then(async ({startIsolatedStand}) => {
+      // The PostgreSQL branch reuses the existing NEXT business logic.
+      // Fail closed: PostgreSQL is opt-in; production gateway remains unchanged.
+      const connection = process.env.MEDSI_NEXT_PG_ENABLED === '1'
+        ? await import('./services/postgres-next/src/connection.mjs')
+        : null;
+      return startIsolatedStand(process.env, {
+        ...(connection ? {connect: connection.connectPostgresNext} : {}),
+        externalServer:bootstrap.server,
+        installHandler:bootstrap.activate
+      });
+    })
     .catch(() => {
       // Missing dependencies are reported without leaking environment values
       // or YDB metadata. The diagnostic listener remains operational.

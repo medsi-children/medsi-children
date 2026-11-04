@@ -185,9 +185,9 @@
 
   function mediaUrl(m){
     const id=String(m&&m.fileId||'');if(!id)return'';
-    if(typeof t.mediaUrl==='function')return t.mediaUrl(id,'w1600');
-    if(id.startsWith('kv:')||id.startsWith('r2:'))return t.baseUrl+'/media/'+encodeURIComponent(id.slice(3));
-    return 'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1600';
+    // The shared transport rejects all legacy KV/R2/Drive references until
+    // their S3 migration is explicitly verified. Never call external media.
+    return typeof t.mediaUrl==='function'?t.mediaUrl(id,'w1600'):'';
   }
   function receiptState(m){
     if(!m||String(m.side||'')!=='parent')return[];

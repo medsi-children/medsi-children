@@ -352,7 +352,7 @@ export async function startIsolatedStand(env=process.env,{
           ()=>console.log('MEDSI_NEXT_SCHEMA_READY'),
           async()=>{
             try{
-              const [[rows]]=await connection.sql`
+              const [rows]=await connection.sql`
                 SELECT count(*)::integer AS relation_count
                 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
                 WHERE n.nspname NOT IN ('pg_catalog','information_schema')

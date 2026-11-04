@@ -49,10 +49,14 @@ export function readConnectionConfig(env = process.env) {
     throw new Error('Isolated YDB operations require an explicit test table scope.');
   }
   if(tableScope)validateTableScope(tableScope,{stand:env.MEDSI_NEXT_STAND==='1'});
+  // @ydbjs/auth-yandex-cloud@0.2.0 validates and consumes the ORIGINAL
+  // Yandex authorized-key field names (not the older SDK's id/keyId/privateKey
+  // adapter shape). A transformed object makes the provider throw on startup.
+  // Pass only the three SDK-required keys, with the PEM notice stripped.
   return { connectionString, tableScope, serviceAccount: {
-    id: serviceAccount.service_account_id,
-    keyId: serviceAccount.id,
-    privateKey: normalizedPrivateKey
+    id: serviceAccount.id,
+    service_account_id: serviceAccount.service_account_id,
+    private_key: normalizedPrivateKey
   } };
 }
 

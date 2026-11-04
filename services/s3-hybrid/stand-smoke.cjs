@@ -19,7 +19,7 @@ function startSmokeStand(env=process.env) {
     res.setHeader('referrer-policy', 'no-referrer');
     if (req.method==='GET' && (req.url==='/' || req.url==='/index.html')) {
       res.writeHead(200, {'content-type':'text/plain; charset=utf-8'});
-      res.end('Medsi S3 hybrid test stand online. No patient data connected.');
+      res.end('Medsi S3 hybrid test stand online. No patient data connected. Smoke probe 2026-11-04.');
       return;
     }
     if (req.method==='GET' && req.url?.split('?')[0]==='/__health') {

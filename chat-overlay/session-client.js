@@ -1,27 +1,7 @@
 (function(){
-  if(window.__medsiTimewebSessionClient)return;
+  'use strict';
+  // The new Node.js gateway implements /__session/api on the same origin.
+  // Legacy Apps Script interception is intentionally disabled; do not rewrite
+  // or forward browser fetch requests to external Google endpoints.
   window.__medsiTimewebSessionClient=true;
-
-  const nativeFetch=window.fetch.bind(window);
-  const allowed=new Set(['getD1ChatSession','verifyTutorSession','verifyTutorAccess']);
-
-  window.fetch=function(input,init){
-    try{
-      const url=typeof input==='string'?input:(input&&input.url)||'';
-      const body=init&&typeof init.body==='string'?init.body:'';
-      if(url.includes('script.google.com/macros/s/')&&body){
-        const payload=JSON.parse(body);
-        if(payload&&payload.action==='api'&&allowed.has(String(payload.method||''))){
-          return nativeFetch('/__session/apps-script',{
-            method:'POST',
-            headers:{'content-type':'application/json'},
-            body:JSON.stringify(payload),
-            cache:'no-store',
-            signal:init.signal
-          });
-        }
-      }
-    }catch(_){}
-    return nativeFetch(input,init);
-  };
 })();

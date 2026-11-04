@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+
 // Compatibility responses for the existing mobile interfaces.
 // No Google Apps Script, Cloudflare or other upstream is contacted.
 const digits=value=>String(value||'').replace(/\D/g,'').slice(-10);
@@ -56,9 +58,9 @@ export function createLegacyBridge({sessions,reportReader,chatOperations,reportS
         const phone=digits(args[0]);
         if(!PHONE.test(phone))throw new Error('Invalid phone.');
         await verifyParent(phone,args[2]);
-        // Registration is already persisted in YDB. There is no longer an
+        // Registration is already persisted in the NEXT database. There is no longer an
         // outbox to Google Sheets, contacts sync, or Cloudflare mirror.
-        return {ok:true,synced:true,source:'ydb'};
+        return {ok:true,synced:true,source:'postgres'};
       }
       case 'markEducatorMessagesAsRead':{
         const phone=digits(args[0]);await verifyParent(phone,args[1]);
@@ -80,6 +82,30 @@ export function createLegacyBridge({sessions,reportReader,chatOperations,reportS
       }
       case 'getParentRegistrationStatus':
         return parentRegistration.status({phone:args[0],attemptId:args[1]});
+      case 'appendReport':{
+        // Some previously installed psychology clients use this call after a
+        // transient response failure. Process it locally and idempotently;
+        // never forward clinical text to Google Apps Script.
+        const payload=args[0];
+        verifyTutor(args[1]);
+        if(!payload||typeof payload!=='object'||Array.isArray(payload)) {
+          throw new Error('Invalid report submission.');
+        }
+        const kind=String(payload.reportType||'');
+        const rawText=String(payload.text||'');
+        const submissionId=String(payload.submissionId||'');
+        if(!['morning','evening','psychology'].includes(kind)||
+           !/^[A-Za-z0-9_-]{8,128}$/.test(submissionId)||
+           !rawText.trim()||rawText.length>240000) {
+          throw new Error('Invalid report submission.');
+        }
+        const authorId='educator_'+createHash('sha256')
+          .update(String(args[1])).digest('hex').slice(0,20);
+        const response=await reportSubmission.submit({
+          kind,rawText,submissionId,authorId
+        });
+        return {ok:true,processing:false,status:'completed',result:response};
+      }
       case 'getReportSubmissionStatus':{
         verifyTutor(args[1]);
         return reportSubmission.status(String(args[0]||''));

@@ -68,6 +68,15 @@
     window.fetch=async function(input,init){
       // Only same-origin lab requests receive a refreshed signed session.
       // Old Google Node.js fetch interception is retired.
+      // Block stale frontend modules from contacting the retired service.
+      try{
+        const raw=typeof input==='string'?input:String(input?.url||'');
+        const url=new URL(raw,window.location?.href||'https://medsi.invalid/');
+        if(/^(?:script\.google(?:usercontent)?\.com|drive\.google\.com)$/.test(url.hostname)||
+           /(?:^|\.)workers\.dev$/.test(url.hostname)){
+          return Promise.reject(new Error('LEGACY_UPSTREAM_DISABLED'));
+        }
+      }catch(_){}
       if(!isLabRequest(input))return RAW_FETCH(input,init);
 
       const ph=parentPhone();

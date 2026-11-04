@@ -63,8 +63,10 @@ export function prepareLegacyPushCapture(entries,{sourceVapidPublicKey,
        (role==='educator'&&phone10!=='')){
       throw new Error('Invalid push subscription identity.');
     }
+    const disabledReason=value.disabledReason??'';
     if(typeof value.enabled!=='boolean'||
-       (value.enabled&&value.disabledReason)){
+       (value.enabled&&disabledReason)||
+       (!value.enabled&&!['user_disabled','permission_revoked','subscription_expired'].includes(disabledReason))){
       throw new Error('Ambiguous push opt-in state.');
     }
     const updatedAt=Date.parse(String(value.updatedAt||value.createdAt||''));
@@ -75,7 +77,7 @@ export function prepareLegacyPushCapture(entries,{sourceVapidPublicKey,
       endpoint,expirationTime:value.subscription.expirationTime??null,
       keys:{auth:value.subscription.keys.auth,p256dh:value.subscription.keys.p256dh}
     };
-    prepared.push({subscriptionId:digest,role,phone10,enabled:value.enabled,
+    prepared.push({subscriptionId:digest,role,phone10,enabled:value.enabled,disabledReason,
       updatedAt,subscriptionJson:JSON.stringify(subscription)});
   }
   return prepared;
@@ -100,9 +102,9 @@ export async function importLegacyPushCapture(sql,rows,{
     if(prior.length)throw new Error('Push import destination must be empty.');
     for(const r of prepared) {
       await tx.upsert`INSERT INTO push_subscriptions
-        (subscription_id,role,phone10,subscription_json,enabled,updated_at)
+        (subscription_id,role,phone10,subscription_json,enabled,disabled_reason,updated_at)
         VALUES (${r.subscriptionId},${r.role},${r.phone10},${r.subscriptionJson},
-          ${r.enabled},${BigInt(r.updatedAt)})`;
+          ${r.enabled},${r.disabledReason},${BigInt(r.updatedAt)})`;
     }
   });
   return {imported:prepared.length,enabled:prepared.filter(x=>x.enabled).length,
@@ -112,7 +114,7 @@ export async function importLegacyPushCapture(sql,rows,{
 export function captureLegacyPushManifest(entries,options,hmacKey){
   return generateManifest('push_subscriptions',prepareLegacyPushCapture(entries,options).map(row=>({
     subscription_id:row.subscriptionId,role:row.role,phone10:row.phone10,
-    subscription_json:row.subscriptionJson,enabled:row.enabled,disabled_reason:null,
+    subscription_json:row.subscriptionJson,enabled:row.enabled,disabled_reason:row.disabledReason,
     updated_at:String(row.updatedAt)
   })),hmacKey);
 }

@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Uint64 } from '@ydbjs/value/primitive';
+import { Uint64 } from './uint64-compat.mjs';
 
 const PHONE_RE = /^\d{10}$/;
 const TYPES = new Set(['text', 'image', 'video']);

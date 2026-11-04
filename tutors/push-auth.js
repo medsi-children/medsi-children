@@ -1,32 +1,26 @@
 (function(){
+  'use strict';
   const TUTOR_KEY='medsi_tutor_session_v1';
-  const PUSH_ORIGIN=window.location.origin+'/push';
   const nativeFetch=window.fetch.bind(window);
-
   function tutorToken(){
     try{return String(localStorage.getItem(TUTOR_KEY)||'').trim()}catch(_){return''}
   }
-
   window.fetch=function(input,init){
-    let nextInput=input;
+    // This compatibility shim only attaches the educator token to same-origin
+    // Timeweb push subscription requests. It NEVER redirects to another host.
     try{
-      let url=typeof input==='string'?input:String(input&&input.url||'');
-      if(url.startsWith('https://medsi-push-worker.medsi-children.workers.dev')){
-        const parsed=new URL(url);
-        nextInput='/push'+parsed.pathname+parsed.search;
-        url=String(nextInput);
-      }
-      if(/\/(?:subscribe|unsubscribe)(?:\?|$)/.test(url)&&init&&typeof init.body==='string'){
+      const raw=typeof input==='string'?input:String(input&&input.url||'');
+      const url=new URL(raw,window.location.origin);
+      if(url.origin===window.location.origin &&
+         (url.pathname==='/push/subscribe'||url.pathname==='/push/unsubscribe') &&
+         init&&typeof init.body==='string'){
         const body=JSON.parse(init.body);
-        if(String(body&&body.role||'').toLowerCase()==='educator'){
+        if(String(body?.role||'').toLowerCase()==='educator'){
           const token=tutorToken();
-          if(token){
-            body.tutorToken=token;
-            init={...init,body:JSON.stringify(body)};
-          }
+          if(token)return nativeFetch(input,{...init,body:JSON.stringify({...body,tutorToken:token})});
         }
       }
-    }catch(_){}
-    return nativeFetch(nextInput,init);
+    }catch(_){/* leave original request unmodified */}
+    return nativeFetch(input,init);
   };
 })();

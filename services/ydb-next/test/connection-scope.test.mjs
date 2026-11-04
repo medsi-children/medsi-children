@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readConnectionConfig} from '../src/connection.mjs';
+import {ServiceAccountCredentialsProvider} from '@ydbjs/auth-yandex-cloud';
 
 const env={
   MEDSI_NEXT_YDB_ENABLED:'1',MEDSI_NEXT_STAND:'1',
@@ -28,13 +29,22 @@ test('Yandex downloaded authorized key notice is stripped before handing PEM to 
   const scoped={...env,MEDSI_NEXT_YDB_TABLE_SCOPE:'medsi_next_test',
     YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(sample)};
   const result=readConnectionConfig(scoped);
-  assert.equal(result.serviceAccount.privateKey,pem.trim());
-  assert.equal(result.serviceAccount.keyId,'synthetic-key');
+  assert.deepEqual(result.serviceAccount,{
+    id:'synthetic-key',
+    service_account_id:'synthetic-service',
+    private_key:pem.trim()
+  });
+  // Regression: the exact v0.2.0 SDK constructor used to reject our old
+  // id/keyId/privateKey adapter object in the isolated Timeweb stand.
+  assert.doesNotThrow(()=>new ServiceAccountCredentialsProvider({...result.serviceAccount}));
+  assert.throws(()=>new ServiceAccountCredentialsProvider({
+    id:'synthetic-service',keyId:'synthetic-key',privateKey:pem.trim()
+  }),/missing required fields/);
   assert.equal(result.tableScope,'medsi_next_test');
   // A secret manager may encode a JSON string a second time.
   assert.equal(readConnectionConfig({...scoped,
     YDB_SERVICE_ACCOUNT_JSON:JSON.stringify(scoped.YDB_SERVICE_ACCOUNT_JSON)})
-    .serviceAccount.privateKey,pem.trim());
+    .serviceAccount.private_key,pem.trim());
 });
 
 test('unknown notices, incorrect key IDs and invalid JSON fail closed',()=>{

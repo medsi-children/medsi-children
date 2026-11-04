@@ -32,7 +32,7 @@ function startSmokeStand(env=process.env,{probe=runS3RoundTripProbe}={}) {
     if (req.method==='GET' && req.url?.split('?')[0]==='/__health') {
       res.writeHead(status.stage==='s3-failed'?503:200, {'content-type':'application/json; charset=utf-8'});
       res.end(JSON.stringify({
-        ok:true,service:'medsi-s3-hybrid-smoke',mode:'isolated',
+        ok:status.stage==='runtime-only'||status.stage==='s3-verified',service:'medsi-s3-hybrid-smoke',mode:'isolated',
         stage:status.stage,storage:status.storage,
         ...(status.code?{code:status.code}:{})
       }));
@@ -52,7 +52,13 @@ function startSmokeStand(env=process.env,{probe=runS3RoundTripProbe}={}) {
     Promise.resolve().then(()=>probe(env)).then(result=>{
       status.stage=result?.ok?'s3-verified':'s3-failed';
       status.storage=result?.ok?'verified':'unavailable';
-      status.code=result?.ok?'S3_PROBE_OK':String(result?.code||'S3_PROBE_FAILED');
+      const known=new Set(['S3_PROBE_CONFIG_INVALID','S3_PROBE_NAMESPACE_COLLISION',
+        'S3_PROBE_WRITE_FAILED','S3_PROBE_READ_MISMATCH',
+        'S3_PROBE_IDEMPOTENCY_FAILED','S3_PROBE_CONDITIONAL_UNSUPPORTED',
+        'S3_PROBE_OVERWRITE_UNSAFE','S3_PROBE_LIST_FAILED',
+        'S3_PROBE_DELETE_FAILED','S3_PROBE_IO_FAILED']);
+      status.code=result?.ok?'S3_PROBE_OK':
+        known.has(result?.code)?result.code:'S3_PROBE_FAILED';
       console.log(result?.ok?'MEDSI_S3_PROBE_OK':'MEDSI_S3_PROBE_FAILED');
     }).catch(()=>{
       status.stage='s3-failed';status.storage='unavailable';

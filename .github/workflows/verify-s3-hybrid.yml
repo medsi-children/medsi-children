@@ -19,8 +19,8 @@ jobs:
         with:
           node-version: 22
       - run: npm ci
-      - run: node --check server.js && node --check services/s3-hybrid/object-store.cjs && node --check services/s3-hybrid/chat-store.cjs && node --check services/s3-hybrid/report-store.cjs
-      - run: node --test tests/s3-hybrid-stand.test.cjs tests/s3-hybrid-storage.test.cjs
+      - run: node --check server.js && node --check services/s3-hybrid/object-store.cjs && node --check services/s3-hybrid/chat-store.cjs && node --check services/s3-hybrid/report-store.cjs && node --check services/s3-hybrid/live-probe.cjs
+      - run: node --test tests/s3-hybrid-stand.test.cjs tests/s3-hybrid-storage.test.cjs tests/s3-hybrid-live-probe.test.cjs
 
   legacy_regression:
     runs-on: ubuntu-latest

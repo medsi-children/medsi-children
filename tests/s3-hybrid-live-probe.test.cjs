@@ -60,6 +60,7 @@ test('HTTP availability precedes optional S3 IO and failed health is sanitized',
     assert.equal(health.status,503);
     const body=await health.json();
     assert.equal(body.code,'S3_PROBE_CONDITIONAL_UNSUPPORTED');
+    assert.equal(body.ok,false);
     assert.equal(body.storage,'unavailable');
     assert.equal(JSON.stringify(body).includes('synthetic-secret-key'),false);
   }finally{

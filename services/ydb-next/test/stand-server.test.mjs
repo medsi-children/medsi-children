@@ -209,3 +209,25 @@ test('stand pinpoints service initialization versus protected router failures',a
     }finally{await started.shutdown();}
   }
 });
+
+test('stand separates YDB configuration, auth-provider and driver initialization faults',async()=>{
+  for(const [internalMessage,expected] of [
+    ['YDB NEXT configuration validation failed.','YDB_CONFIG_VALIDATION_FAILED'],
+    ['YDB NEXT credentials provider initialization failed.','YDB_AUTH_PROVIDER_INIT_FAILED'],
+    ['YDB NEXT driver initialization failed.','YDB_DRIVER_INIT_FAILED']
+  ]){
+    const started=await startIsolatedStand({...env,PORT:'0'},{
+      connect:async()=>{throw new Error(internalMessage);}
+    });
+    try{
+      if(!started.server.listening)await new Promise(resolve=>started.server.once('listening',resolve));
+      await started.initialize;
+      const response=await fetch('http://127.0.0.1:'+started.server.address().port+'/__health');
+      assert.equal(response.status,503);
+      const body=await response.json();
+      assert.equal(body.code,expected);
+      assert.equal(body.phase,'failed');
+      assert.equal(JSON.stringify(body).includes(internalMessage),false);
+    }finally{await started.shutdown();}
+  }
+});

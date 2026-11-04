@@ -283,7 +283,7 @@ test('isolated YDB schema probe checks eight tables without loading patient rows
   assert.deepEqual(await checkNextTestSchema(sql),{ok:true});
   assert.equal(queries.length,8);
   for(const {query,values} of queries){
-    assert.match(query,/^SELECT [a-z_]+ FROM [a-z_]+ LIMIT 0$/);
+    assert.match(query,/^SELECT [a-z_0-9]+ FROM [a-z_]+ LIMIT 0$/);
     assert.deepEqual(values,[]);
   }
 });

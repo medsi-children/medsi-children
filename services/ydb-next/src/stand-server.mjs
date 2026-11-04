@@ -272,6 +272,7 @@ export async function startIsolatedStand(env=process.env,{
       driver=connection.driver;
       state.code='NEXT_SERVICES_PENDING';
       const services=makeServices({sql:connection.sql,env});
+      state.code='NEXT_ROUTER_PENDING';
       const actualApp=makeApp(services,{env});
       // Backend only becomes visible once its entire security middleware,
       // sessions, and routes have been constructed successfully.
@@ -298,19 +299,27 @@ export async function startIsolatedStand(env=process.env,{
       // No raw errors: they can contain connection strings, service-account
       // metadata or data from patients. Stable labels are safe for operators.
       const msg=String(error?.message||'');
+      const failedAt=state.code;
       const code=msg.includes('NEXT stand missing') ||
         msg.includes('NEXT session secret') ||
         msg.includes('isolated mode must') ?'STAND_ENV_INVALID'
         :msg.includes('encrypted Yandex YDB Serverless endpoint')
         ?'YDB_ENDPOINT_INVALID'
+        :msg.includes('YDB_SERVICE_ACCOUNT_JSON is missing or invalid')
+        ?'YDB_SERVICE_ACCOUNT_JSON_INVALID'
         :msg.includes('service account JSON')||msg.includes('authorized-key fields')
         ?'YDB_SERVICE_ACCOUNT_INVALID'
+        :msg.includes('Incomplete legacy identity migration credentials')
+        ?'STAND_LEGACY_AUTH_INVALID'
         :msg.includes('explicit test table scope') ||
          msg.includes('Unrecognized YDB table scope')
         ?'YDB_TEST_SCOPE_INVALID'
         :msg.includes('YDB NEXT is disabled')?'YDB_DISABLED'
         :msg.includes('YDB NEXT connection timed out')?'YDB_CONNECT_TIMEOUT'
         :msg.includes('YDB NEXT connection failed')?'YDB_CONNECT_FAILED'
+        :failedAt==='YDB_CONNECT_PENDING'?'YDB_CLIENT_INIT_FAILED'
+        :failedAt==='NEXT_SERVICES_PENDING'?'NEXT_SERVICES_INIT_FAILED'
+        :failedAt==='NEXT_ROUTER_PENDING'?'NEXT_ROUTER_INIT_FAILED'
         :'NEXT_STARTUP_FAILED';
       state.phase='failed';
       state.code=code;

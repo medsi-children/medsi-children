@@ -1,13 +1,6 @@
 (function () {
   const MESSAGE_TYPE = 'medsi:chat-overlay';
 
-  function allowedAppsScriptOrigin(origin) {
-    if (origin === 'null') return true;
-    if (origin === 'https://script.google.com') return true;
-    if (origin === 'https://script.googleusercontent.com') return true;
-    try { return /(^|\.)googleusercontent\.com$/.test(new URL(origin).hostname); }
-    catch (_) { return false; }
-  }
 
   function makeElement(tag, className, text) {
     const el = document.createElement(tag);
@@ -87,7 +80,7 @@
         action: 'refresh-session',
         role: state.role || '',
         phone: state.phone || ''
-      }, '*');
+      }, window.location.origin);
     }
 
     function scheduleSessionRefresh() {
@@ -105,7 +98,7 @@
       state = null;
       clearError();
       body.replaceChildren(status);
-      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: MESSAGE_TYPE, action: 'closed' }, '*');
+      if (frame && frame.contentWindow) frame.contentWindow.postMessage({ type: MESSAGE_TYPE, action: 'closed' }, window.location.origin);
       if (typeof opts.onClose === 'function') opts.onClose();
     }
 
@@ -115,14 +108,14 @@
       title.textContent = state.role === 'educator' ? 'Чат с родителями' : 'Чат с воспитателями';
       subtitle.textContent = [state.parentName, state.childName].filter(Boolean).join(' · ');
       statusTitle.textContent = 'Подключаем чат…';
-      statusText.textContent = 'Загружаем сообщения из Cloudflare D1.';
+      statusText.textContent = 'Загружаем сообщения из Медси Бота.';
       setVisible(true);
       scheduleSessionRefresh();
       if (typeof opts.onOpen === 'function') opts.onOpen(state, api);
     }
 
     function handleMessage(event) {
-      if (!allowedAppsScriptOrigin(event.origin)) return;
+      if (!frame || event.source !== frame.contentWindow || event.origin !== window.location.origin) return;
       const data = event.data || {};
       if (data.type !== MESSAGE_TYPE) return;
 
@@ -149,7 +142,7 @@
         statusTitle.textContent = 'Чат не открылся';
         statusText.textContent = 'Не удалось получить безопасную сессию.';
         setVisible(true);
-        showError(data.message || 'Apps Script не передал безопасную D1-сессию.');
+        showError(data.message || 'Не удалось получить безопасную сессию.');
         return;
       }
       open(data);

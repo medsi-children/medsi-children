@@ -1,4 +1,4 @@
-import { Uint64 } from '@ydbjs/value/primitive';
+import { Uint64 } from './uint64-compat.mjs';
 
 const PHONE = /^\d{10}$/;
 const REACTIONS = new Set(['❤️','👍','👌','🙏','🥰','😁','🔥']);

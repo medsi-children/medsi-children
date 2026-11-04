@@ -37,15 +37,23 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     const data=validateSubscription(subscription);
     const id=sha(data.endpoint);
     return write(async tx=>{
+      const [[prior]]=await tx`SELECT role,phone10,enabled,disabled_reason
+        FROM push_subscriptions WHERE subscription_id=${id}`;
+      if(prior&&(prior.role!==role||prior.phone10!==(role==='parent'?phone10:''))) {
+        throw new Error('Subscription belongs to another account.');
+      }
+      if(prior?.disabled_reason==='subscription_expired') {
+        throw Object.assign(new Error('Subscription must be renewed.'),{code:'PUSH_SUBSCRIPTION_EXPIRED'});
+      }
       const now=nowUint();
       await tx`UPSERT INTO push_subscriptions
-        (subscription_id,role,phone10,subscription_json,enabled,updated_at)
+        (subscription_id,role,phone10,subscription_json,enabled,disabled_reason,updated_at)
         VALUES (${id},${role},${role==='parent'?phone10:''},
-          ${JSON.stringify(data)},${true},${now})`;
+          ${JSON.stringify(data)},${true},${''},${now})`;
       return {ok:true,key:id};
     });
   }
-  async function unsubscribe({endpoint,role,phone10=''}) {
+  async function unsubscribe({endpoint,role,phone10='',reason='user_disabled'}) {
     const id=sha(String(endpoint||''));
     if(!VALID_ROLES.has(role)||(role==='parent'&&!PHONE.test(phone10)))throw new Error('Invalid role or phone.');
     return write(async tx=>{
@@ -54,7 +62,9 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       if(row && (row.role!==role || (role==='parent' && row.phone10!==phone10))) {
         throw new Error('Subscription belongs to another account.');
       }
-      if(row) await tx`UPDATE push_subscriptions SET enabled=${false},updated_at=${nowUint()}
+      if(row) await tx`UPDATE push_subscriptions
+        SET enabled=${false},disabled_reason=${reason==='permission_revoked'?'permission_revoked':'user_disabled'},
+          updated_at=${nowUint()}
         WHERE subscription_id=${id}`;
       return {ok:true};
     });
@@ -93,7 +103,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       }catch(error) {
         if([404,410].includes(Number(error?.statusCode))) {
           await write(async tx=>{await tx`UPDATE push_subscriptions
-            SET enabled=${false},updated_at=${nowUint()}
+            SET enabled=${false},disabled_reason=${'subscription_expired'},updated_at=${nowUint()}
             WHERE subscription_id=${target.subscription_id}`;});
         }else failed++;
       }

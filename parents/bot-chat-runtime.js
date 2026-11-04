@@ -154,7 +154,7 @@
         if (saved && saved.phone === phone10 && saved.session && saved.session.token && Number(saved.session.expiresAt) > Date.now() + 30000) return saved.session;
       } catch (_) { /* ask the existing gateway for a fresh session */ }
     }
-    const response = await fetch('/__session/apps-script', {
+    const response = await fetch('/__session/api', {
       method: 'POST', headers: { 'content-type': 'text/plain;charset=UTF-8' }, cache: 'no-store',
       body: JSON.stringify({ action: 'api', method: 'getD1ChatSession', args: ['parent', phone, auth] })
     });

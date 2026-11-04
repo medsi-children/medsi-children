@@ -10,6 +10,7 @@ import { importLegacyIdentityCapture } from '../../ydb-next/src/identity-continu
 import { importLegacyPushCapture } from '../../ydb-next/src/push-continuity.mjs';
 import { createECDH, createHash } from 'node:crypto';
 import { createNextStandApp, createNextServices } from '../../ydb-next/src/stand-server.mjs';
+import {createPushService} from '../../ydb-next/src/push-service.mjs';
 
 const enabled = process.env.CI === 'true' && process.env.PG_TEST_INSECURE_LOCAL === '1';
 
@@ -258,6 +259,61 @@ test('real PostgreSQL HTTP: complete NEXT UI, protected endpoints and schema hea
     assert.equal(res.status,404,'legacy unauthenticated Worker notify route remains disabled');
   } finally {
     await new Promise(resolve => server.close(resolve));
+    await conn.driver.close();
+  }
+});
+
+test('real PostgreSQL push worker: deliver saved outbox and mark expired endpoint for renewal', {
+  skip: enabled ? false : 'Disposable PostgreSQL CI only.'
+}, async () => {
+  const conn=await connectPostgresNext(process.env);
+  const sent=[];
+  const fakeWebpush={
+    setVapidDetails(){},
+    async sendNotification(subscription,payload){
+      sent.push(subscription.endpoint);
+      const notice=JSON.parse(payload);
+      assert.ok(['chat','report'].includes(notice.type));
+      assert.doesNotMatch(payload,/Фантазийный отчёт|Тестовая|Проверочный/);
+      if(subscription.endpoint.endsWith('/parent-A-endpoint')) {
+        throw Object.assign(new Error('synthetic expired endpoint'),{statusCode:410});
+      }
+    }
+  };
+  try{
+    const {sql}=conn;
+    const push=createPushService({
+      sql,webpushClient:fakeWebpush,
+      env:{VAPID_PUBLIC_KEY:'synthetic-key',VAPID_PRIVATE_KEY:'synthetic-private',
+        VAPID_SUBJECT:'mailto:ci@example.invalid'}
+    });
+    const [events]=await sql([
+      'SELECT event_id FROM push_outbox WHERE phone10='," AND role='parent' AND status='pending'"
+    ],'9000000001');
+    assert.ok(events.length>0);
+    const result=await push.deliverEvent(events[0].event_id);
+    assert.equal(result.ok,true);
+    assert.ok(sent.some(endpoint=>endpoint.endsWith('/parent-A-endpoint')));
+    const id=createHash('sha256')
+      .update('https://push.example.invalid/parent-A-endpoint').digest('hex');
+    const [expired]=await sql([
+      'SELECT enabled,disabled_reason FROM push_subscriptions WHERE subscription_id=', ''
+    ],id);
+    assert.equal(expired[0].enabled,false);
+    assert.equal(expired[0].disabled_reason,'subscription_expired');
+    await assert.rejects(
+      push.subscribe({
+        role:'parent',phone10:'9000000001',
+        subscription:{
+          endpoint:'https://push.example.invalid/parent-A-endpoint',
+          keys:{auth:'synthetic-auth',p256dh:'synthetic-ecdh-key'}
+        }
+      }),
+      error=>error.code==='PUSH_SUBSCRIPTION_EXPIRED'
+    );
+    const [done]=await sql(['SELECT status FROM push_outbox WHERE event_id=', ''],events[0].event_id);
+    assert.equal(done[0].status,'completed');
+  } finally{
     await conn.driver.close();
   }
 });

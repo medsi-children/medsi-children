@@ -3,7 +3,27 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {connectYdbNext,closeYdbDriver} from './connection.mjs';
+// PostgreSQL imports this server with ONLY root npm dependencies installed.
+ // Keep the retired YDB client optional so Timeweb never requires its SDK.
+async function connectYdbNext(env,options) {
+  const legacy=await import('./connection.mjs');
+  return legacy.connectYdbNext(env,options);
+}
+async function closeYdbDriver(driver) {
+  const closer=typeof driver?.close==='function' ? ()=>driver.close()
+    :typeof driver?.destroy==='function' ? ()=>driver.destroy():null;
+  if(!closer)return;
+  let timer;
+  try{
+    await Promise.race([
+      Promise.resolve().then(closer).catch(()=>{}),
+      new Promise(resolve=>{
+        timer=setTimeout(resolve,3000);
+        timer.unref?.();
+      })
+    ]);
+  }finally{if(timer)clearTimeout(timer);}
+}
 import {createSessionService} from './session-auth.mjs';
 import {createReportReader} from './report-reader.mjs';
 import {createReportSubmissionService} from './report-submission-service.mjs';

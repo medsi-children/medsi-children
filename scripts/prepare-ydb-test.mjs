@@ -33,21 +33,30 @@ export function assertStandRuntime(env) {
   }
 }
 
-export async function prepareYdbTest(env=process.env) {
+export async function prepareYdbTest(env=process.env,{onStage=()=>{}}={}) {
+  const mark=stage=>{try{onStage(stage);}catch(_){/* diagnostics are optional */}};
+  mark('CHECKING_TEST_SETTINGS');
   assertStandRuntime(env);
+  if(env.MEDSI_NEXT_PREPARE_YDB_TEST==='YES')assertBootstrapEnabled(env);
+  mark('CONNECTING_TO_YDB');
   const connection=await connectYdbNext(env);
   try {
     if(env.MEDSI_NEXT_PREPARE_YDB_TEST==='YES') {
+      mark('APPLYING_TEST_SCHEMA');
       const schema=await readFile(new URL('../services/ydb-next/sql/001_initial.sql',import.meta.url),'utf8');
       const statements=await applyTestSchema({sql:connection.sql,source:schema});
+      mark('ADDING_SYNTHETIC_FIXTURE');
       const fixture=await seedSyntheticRoster(connection);
+      mark('PREPARATION_COMPLETE');
       return {schemaStatements:statements,...fixture};
     }
+    mark('CHECKING_PREPARATION_MARKER');
     const [markers]=await connection.sql`SELECT status FROM stand_bootstrap_state
       WHERE bootstrap_id=${'synthetic_roster_v1'} LIMIT 1`;
     if(markers.length!==1||markers[0].status!=='complete') {
       throw new Error('One-time YDB test preparation is not complete.');
     }
+    mark('PREPARATION_COMPLETE');
     return {alreadySeeded:true,preparedPreviously:true};
   } finally {
     await closeYdbDriver(connection.driver);
@@ -82,14 +91,15 @@ if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]) {
   // isolated server first; it binds immediately and reports truthful YDB
   // readiness while this parent process prepares the test schema in parallel.
   const server=startServer();
+  let stage='STARTING';
   try {
-    const result=await prepareYdbTest();
+    const result=await prepareYdbTest(process.env,{onStage:value=>{stage=value;}});
     console.log(result.alreadySeeded
       ?'MEDSI_NEXT_TEST_FIXTURE_ALREADY_PRESENT'
       :'MEDSI_NEXT_TEST_FIXTURE_CREATED');
   } catch (_) {
     // Never print YDB SDK errors, secrets, or fixture contents.
-    console.error('MEDSI_NEXT_TEST_PREPARATION_FAILED: verify isolated test settings and YDB access.');
+    console.error('MEDSI_NEXT_TEST_PREPARATION_FAILED stage='+stage);
     server.kill('SIGTERM');
     process.exitCode=1;
   }

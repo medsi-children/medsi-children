@@ -74,18 +74,23 @@ function startServer() {
     process.removeListener('SIGINT',onInt);
     process.exitCode=signal?1:(code??1);
   });
+  return child;
 }
 
 if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]) {
+  // Timeweb scans for an open HTTP port during container startup. Start the
+  // isolated server first; it binds immediately and reports truthful YDB
+  // readiness while this parent process prepares the test schema in parallel.
+  const server=startServer();
   try {
     const result=await prepareYdbTest();
     console.log(result.alreadySeeded
       ?'MEDSI_NEXT_TEST_FIXTURE_ALREADY_PRESENT'
       :'MEDSI_NEXT_TEST_FIXTURE_CREATED');
-    startServer();
   } catch (_) {
     // Never print YDB SDK errors, secrets, or fixture contents.
     console.error('MEDSI_NEXT_TEST_PREPARATION_FAILED: verify isolated test settings and YDB access.');
+    server.kill('SIGTERM');
     process.exitCode=1;
   }
 }

@@ -1,5 +1,5 @@
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 
 const MAX_UPLOAD_BYTES=100*1024*1024;
 const MAX_COOKIE_AGE=20*60*1000;

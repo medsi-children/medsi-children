@@ -70,16 +70,7 @@ jobs:
           docker exec "$PG_CONTAINER" pg_dump -U medsi_ci -Fc medsi_ci |
             docker exec -i "$PG_CONTAINER" pg_restore -U medsi_ci --exit-on-error -d medsi_restore
           PGDATABASE=medsi_restore node services/postgres-next/src/probe-cli.mjs
-          for table in parent_profiles parent_passkeys chat_messages raw_reports push_outbox; do
-            query="SELECT count(*) FROM $table"
-            source=$(docker exec "$PG_CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U medsi_ci -d medsi_ci -c "$query")
-            restored=$(docker exec "$PG_CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U medsi_ci -d medsi_restore -c "$query")
-            printf '%s: source=%s restored=%s\n' "$table" "$source" "$restored"
-            test "$source" = "$restored"
-            if [ "$table" = parent_profiles ] || [ "$table" = raw_reports ]; then
-              test "$source" -gt 0
-            fi
-          done
+          node services/postgres-next/test/verify-restored-backup.mjs
       - name: Existing NEXT report logic and app regressions
         run: |
           npm test --prefix services/postgres-next

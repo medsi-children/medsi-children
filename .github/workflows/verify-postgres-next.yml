@@ -1,0 +1,74 @@
+name: Verify Timeweb PostgreSQL NEXT (isolated)
+
+on:
+  push:
+    branches:
+      - feature/timeweb-postgres-cutover
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  postgres_next:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: medsi_ci
+          POSTGRES_PASSWORD: synthetic_ci_only
+          POSTGRES_DB: medsi_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U medsi_ci -d medsi_ci"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      MEDSI_NEXT_STAND: '1'
+      MEDSI_NEXT_PG_ENABLED: '1'
+      PG_TEST_INSECURE_LOCAL: '1'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGDATABASE: medsi_ci
+      PGUSER: medsi_ci
+      PGPASSWORD: synthetic_ci_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install gateway and pure NEXT services
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm install --ignore-scripts --no-audit --no-fund --prefix services/ydb-next
+      - name: Validate PostgreSQL runtime syntax
+        run: |
+          node --check services/postgres-next/src/connection.mjs
+          node --check services/postgres-next/src/schema-cli.mjs
+          node --check server.js
+          node --check tutors/next-settings.js
+      - name: PostgreSQL adapter and real disposable database
+        run: node --test services/postgres-next/test/adapter.test.mjs services/postgres-next/test/integration.test.mjs
+      - name: Existing NEXT report logic and app regressions
+        run: |
+          npm test --prefix services/ydb-next
+          npm run verify
+
+  safeguard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure production and personal data are not deployed
+        run: |
+          test -f services/postgres-next/sql/001_initial.sql
+          test -f tutors/next-settings.js
+          test -f apps-script/medsi-bot/report-parser.js
+          test -f apps-script/medsi-bot/report-distribution.js
+          ! grep -R "timeweb-next" services/postgres-next/src

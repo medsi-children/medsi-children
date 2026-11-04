@@ -262,3 +262,11 @@ CREATE TABLE IF NOT EXISTS migration_state (
   verified_at Uint64,
   PRIMARY KEY (stream_id)
 );
+-- One-time synthetic fixture marker. Kept separate from patient/business data
+-- so an app restart never inserts a second copy of the demo roster.
+CREATE TABLE IF NOT EXISTS stand_bootstrap_state (
+  bootstrap_id Utf8 NOT NULL,
+  status Utf8 NOT NULL,
+  completed_at Uint64,
+  PRIMARY KEY (bootstrap_id)
+);

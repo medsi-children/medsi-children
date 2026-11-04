@@ -18,12 +18,30 @@ const uint=n=>new Uint64(BigInt(n));
 export async function seedSyntheticRoster({sql,now=()=>Date.now()}) {
   if(!sql?.begin)throw new Error('YDB client required for test seeding.');
   return sql.begin({isolation:'serializableReadWrite',idempotent:true},async tx=>{
-    // Safety fence: no synthetic writes beside real existing parents or children.
-    // Test database is expected to be totally new and empty.
+    const [markers]=await tx`SELECT bootstrap_id,status FROM stand_bootstrap_state
+      WHERE bootstrap_id=${'synthetic_roster_v1'} LIMIT 1`;
+    if(markers.length){
+      if(markers.length===1&&markers[0].status==='complete'){
+        return {children:DEMO_CHILDREN.length,parents:DEMO_PARENTS.length,alreadySeeded:true};
+      }
+      throw new Error('Synthetic seed marker is invalid; refusing to mutate the test database.');
+    }
+    // Safety fence: the fixture is only seeded into a wholly empty catalog.
+    // These names/columns are static repository schema, never operator input.
     for(const [table,columns] of [
       ['children','child_id'],['admissions','admission_id'],
-      ['parent_profiles','phone10'],['parent_auth_profiles','phone10'],
-      ['raw_reports','publication_id'],['chat_messages','phone10']
+      ['parent_profiles','phone10'],['name_variants','base_key'],
+      ['report_publication_head','kind'],['report_submissions','submission_id'],
+      ['raw_reports','publication_id'],['report_ownership','owner_key'],
+      ['parent_current_reports','phone10'],['parent_report_history','phone10'],
+      ['chat_messages','message_key'],['chat_media','file_id'],
+      ['chat_thread_state','phone10'],['chat_message_dedup','client_message_id'],
+      ['chat_pins','phone10'],['chat_sessions','token_hash'],
+      ['parent_auth_profiles','phone10'],['parent_passkeys','credential_id'],
+      ['parent_auth_challenges','challenge_id'],['parent_deletion_queue','operation_id'],
+      ['parent_registration_attempts','attempt_id'],['parent_access_requests','request_id'],
+      ['push_subscriptions','subscription_id'],['push_outbox','event_id'],
+      ['background_jobs','job_id'],['migration_state','stream_id']
     ]){
       const [rows]=await tx`SELECT ${sql.identifier(columns)} FROM ${sql.identifier(table)} LIMIT 1`;
       if(rows.length)throw new Error('Synthetic seed requires an entirely empty database.');
@@ -50,7 +68,9 @@ export async function seedSyntheticRoster({sql,now=()=>Date.now()}) {
       await tx`UPSERT INTO parent_auth_profiles (phone10,user_handle,generation_id,created_at)
         VALUES (${parent.phone},${userHandle},${gen},${timestamp})`;
     }
-    return {children:DEMO_CHILDREN.length,parents:DEMO_PARENTS.length};
+    await tx`UPSERT INTO stand_bootstrap_state (bootstrap_id,status,completed_at)
+      VALUES (${'synthetic_roster_v1'},${'complete'},${timestamp})`;
+    return {children:DEMO_CHILDREN.length,parents:DEMO_PARENTS.length,alreadySeeded:false};
   });
 }
 if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {

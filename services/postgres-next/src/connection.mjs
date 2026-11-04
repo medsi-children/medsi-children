@@ -7,9 +7,14 @@ import pg from 'pg';
 const IDENTIFIER = Symbol('allowlisted-pg-identifier');
 const schema = readFileSync(new URL('../sql/001_initial.sql', import.meta.url), 'utf8');
 const primaryKeys = new Map();
+const allowedIdentifiers = new Set();
 for (const match of schema.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)\s*\(([\s\S]*?)\n\);/gi)) {
   const key = /PRIMARY KEY\s*\(([^)]+)\)/i.exec(match[2]);
   if (key) primaryKeys.set(match[1], key[1].split(',').map(part => part.trim()));
+  allowedIdentifiers.add(match[1]);
+  for (const col of match[2].matchAll(/^\s*([a-z_][a-z_0-9]*)\s+(?:TEXT|BIGINT|BOOLEAN|BYTEA)\b/gim)) {
+    allowedIdentifiers.add(col[1]);
+  }
 }
 if (primaryKeys.size !== 27) throw new Error('PostgreSQL schema metadata mismatch.');
 
@@ -37,7 +42,7 @@ export function compilePgQuery(strings, values) {
     statement += strings[index];
     const value = values[index];
     if (value && typeof value === 'object' && value[IDENTIFIER]) {
-      if (!primaryKeys.has(value[IDENTIFIER])) throw new Error('Unapproved SQL identifier.');
+      if (!allowedIdentifiers.has(value[IDENTIFIER])) throw new Error('Unapproved SQL identifier.');
       statement += '"' + value[IDENTIFIER] + '"';
     } else {
       parameters.push(normalizePgValue(value));
@@ -75,7 +80,7 @@ export function createPostgresSql(pool) {
   };
   const sql = execute(pool);
   sql.identifier = name => {
-    if (!primaryKeys.has(name)) throw new Error('Unapproved SQL identifier.');
+    if (!allowedIdentifiers.has(name)) throw new Error('Unapproved SQL identifier.');
     return Object.freeze({ [IDENTIFIER]: name });
   };
   sql.begin = async (options, callback) => {

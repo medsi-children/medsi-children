@@ -1,7 +1,7 @@
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 import {randomBytes} from 'node:crypto';
 import {pathToFileURL} from 'node:url';
-import {connectYdbNext} from './connection.mjs';
+// The YDB CLI loads its client lazily. PostgreSQL production does not import YDB.
 
 // Fictional parents and children only. NEVER seed a production or populated DB.
 export const DEMO_CHILDREN=Object.freeze([
@@ -80,6 +80,7 @@ if(process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   }else{
     let driver;
     try{
+      const {connectYdbNext}=await import('./connection.mjs');
       const connection=await connectYdbNext(process.env);
       driver=connection.driver;
       const result=await seedSyntheticRoster(connection);

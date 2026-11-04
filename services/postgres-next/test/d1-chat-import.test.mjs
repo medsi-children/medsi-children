@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {connectPostgresNext} from '../src/connection.mjs';
 import {captureRosterManifests,importRosterCapture} from '../src/roster-capture.mjs';
+import {captureD1ReportManifests,importD1Reports} from '../src/d1-report-capture.mjs';
 import {installSchema} from '../src/schema-cli.mjs';
 import {prepareChatMediaImport,importChatMediaOwnership} from '../src/chat-media-copy.mjs';
 import {captureD1ParentProfileManifest,importD1ParentProfiles} from '../src/d1-profile-capture.mjs';
@@ -46,6 +47,16 @@ test('D1 chat baseline imports once, verifies PostgreSQL data, and refuses misma
         {...rosterAdmissions[0],admission_id:'another-active-stay'}],hmacKey),/ambiguous/);
       assert.deepEqual(await importProfiles(),{count:1,alreadyImported:false});
       assert.deepEqual(await importProfiles(),{count:1,alreadyImported:true});
+      const current=[{phone10:profiles[0].phone10,kind:'morning',text:'Тестовый отчёт',
+        version:'v2',read_version:'v1',updated_at:1700000000000,revision:2,publication_id:'pub-2',
+        profile_generation:'generation-1',child_admission_id:'stay-1'}];
+      const history=[{...current[0],profile_generation:'generation-old',child_admission_id:'stay-old',
+        report_date:'2020-09-13',captured_at:1600000000000}];
+      const oldLinks=[{...links[0],profile_generation:'generation-old',admission_id:'stay-old'}];
+      const reportOptions={...profileOptions,expectedManifests:captureD1ReportManifests(current,history,links,oldLinks,hmacKey)};
+      const importReports=()=>importD1Reports(connection.sql,current,history,links,oldLinks,reportOptions);
+      assert.deepEqual(await importReports(),{parent_current_reports:1,parent_report_history:1});
+      assert.deepEqual(await importReports(),{parent_current_reports:1,parent_report_history:1});
       const plan=prepareChatMediaImport(source,mapping);
       const rows=plan.messages;
       const options={hmacKey,explicitImport:true,freezeConfirmed:true,

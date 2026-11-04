@@ -34,6 +34,7 @@ import {createParentDeletionService} from './parent-deletion.mjs';
 import {createMediaService} from './media-service.mjs';
 import {createNextLabRouter} from './api-router.mjs';
 import {createLegacyBridge} from './legacy-bridge.mjs';
+import {schemaMatches} from '../src/schema-contract.mjs';
 
 const ROOT=fileURLToPath(new URL('../../../',import.meta.url));
 const require=createRequire(import.meta.url);
@@ -76,14 +77,22 @@ export function readLegacyAuthConfig(env) {
 // LIMIT 0 validates table/column resolution without reading patient rows.
 export async function checkNextTestSchema(sql) {
   if(typeof sql!=='function')throw new Error('PostgreSQL query adapter unavailable.');
-  await sql`SELECT child_id FROM children LIMIT 0`;
-  await sql`SELECT admission_id FROM admissions LIMIT 0`;
-  await sql`SELECT phone10 FROM parent_profiles LIMIT 0`;
-  await sql`SELECT phone10 FROM parent_auth_profiles LIMIT 0`;
-  await sql`SELECT message_key FROM chat_messages LIMIT 0`;
-  await sql`SELECT phone10 FROM parent_current_reports LIMIT 0`;
-  await sql`SELECT phone10 FROM parent_report_history LIMIT 0`;
-  await sql`SELECT event_id FROM push_outbox LIMIT 0`;
+  const [[tables],[indexes],[otherRelations]] = await Promise.all([
+    sql`SELECT table_name FROM information_schema.tables
+      WHERE table_schema='public' AND table_type='BASE TABLE'`,
+    sql`SELECT indexname FROM pg_indexes WHERE schemaname='public'`,
+    sql`SELECT count(*)::integer AS n FROM pg_class c
+      JOIN pg_namespace n ON n.oid=c.relnamespace
+      WHERE n.nspname NOT IN ('public','pg_catalog','information_schema')
+        AND n.nspname NOT LIKE 'pg_toast%'
+        AND n.nspname NOT LIKE 'pg_temp_%'
+        AND n.nspname NOT LIKE 'pg_toast_temp_%'
+        AND c.relkind IN ('r','p','v','m','S','f','i','I')`
+  ]);
+  if(!schemaMatches(tables.map(row=>row.table_name),
+      indexes.map(row=>row.indexname),otherRelations[0]?.n)){
+    throw new Error('PostgreSQL schema does not match the approved 27-table contract.');
+  }
   return {ok:true};
 }
 

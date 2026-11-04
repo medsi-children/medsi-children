@@ -3,10 +3,15 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 // Aggregated keyed digests for comparing live D1/Sheets exports with PostgreSQL.
 // Never print, persist or commit real input rows, HMAC keys or raw identifiers.
 export const REQUIRED_STREAMS = Object.freeze([
-  'parents', 'admissions', 'name_variants',
-  'raw_reports', 'current_reports', 'report_history',
-  'chat_messages', 'chat_pins',
-  'passkeys', 'auth_profiles', 'push_subscriptions'
+  'children', 'admissions', 'parent_profiles', 'name_variants',
+  'report_publication_head', 'report_submissions', 'raw_reports',
+  'report_ownership', 'parent_current_reports', 'parent_report_history',
+  'chat_messages', 'chat_media', 'chat_thread_state', 'chat_message_dedup',
+  'chat_pins', 'chat_sessions', 'parent_auth_profiles', 'parent_passkeys',
+  'parent_auth_challenges', 'parent_deletion_queue',
+  'parent_registration_attempts', 'parent_access_requests',
+  'push_subscriptions', 'push_outbox', 'background_jobs',
+  's3_objects'
 ]);
 
 function canonical(value) {
@@ -49,6 +54,41 @@ export function generateManifest(stream, rows, secret) {
     duplicateRows: duplicates,
     digest: hmac(secret, 'manifest:' + stream, itemDigests.join('\n'))
   };
+}
+
+function orderedManifests(manifests) {
+  if (!Array.isArray(manifests)) throw new Error('Manifest list is required.');
+  return [...manifests].sort((a, b) => String(a?.stream).localeCompare(String(b?.stream)));
+}
+
+function envelopePayload(captureId, manifests) {
+  return canonical({captureId, manifests:orderedManifests(manifests)});
+}
+
+export function signManifestEnvelope(captureId, manifests, secret) {
+  if (typeof captureId !== 'string' || !/^[-A-Za-z0-9_]{12,120}$/.test(captureId) ||
+      typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') < 32) {
+    throw new Error('Invalid migration envelope identity or audit key.');
+  }
+  return {
+    captureId,
+    manifests:orderedManifests(manifests),
+    signature:hmac(secret, 'migration-envelope:v1', envelopePayload(captureId, manifests))
+  };
+}
+
+export function verifyManifestEnvelope(envelope, secret) {
+  if (typeof secret !== 'string' || Buffer.byteLength(secret, 'utf8') < 32 ||
+      !envelope || typeof envelope.signature !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(envelope.signature)) return false;
+  let expected;
+  try {
+    expected = hmac(secret, 'migration-envelope:v1',
+      envelopePayload(envelope.captureId, envelope.manifests));
+  } catch (_) { return false; }
+  const actualBytes = Buffer.from(envelope.signature, 'hex');
+  const expectedBytes = Buffer.from(expected, 'hex');
+  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
 }
 
 // Compare only normalized stream snapshots captured behind the same write fence.

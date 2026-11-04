@@ -1,11 +1,11 @@
-import { readFileSync } from 'node:fs';
 import pg from 'pg';
+import {SCHEMA_SQL} from './schema-contract.mjs';
 
 // PostgreSQL adapter for the existing NEXT service contracts.
 // Parameterized PostgreSQL statements retain the application's [rows]
 // contract; transactions use one connection and fail closed on errors.
 const IDENTIFIER = Symbol('allowlisted-pg-identifier');
-const schema = readFileSync(new URL('../sql/001_initial.sql', import.meta.url), 'utf8');
+const schema = SCHEMA_SQL;
 const primaryKeys = new Map();
 const allowedIdentifiers = new Set();
 for (const match of schema.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-z_]+)\s*\(([\s\S]*?)\n\);/gi)) {

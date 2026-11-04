@@ -8,6 +8,7 @@ import { createEducatorReportsDashboardStore } from '../app/educator-report-dash
 import { seedSyntheticRoster } from '../app/seed-demo.mjs';
 import { importLegacyIdentityCapture } from '../app/identity-continuity.mjs';
 import { importLegacyPushCapture } from '../app/push-continuity.mjs';
+import {probePostgresNext} from '../src/probe-cli.mjs';
 import { createECDH, createHash } from 'node:crypto';
 import { createNextStandApp, createNextServices } from '../app/stand-server.mjs';
 import {createPushService} from '../app/push-service.mjs';
@@ -20,6 +21,9 @@ test('real PostgreSQL: initialize, transact, and send/deduplicate synthetic mess
   const env = { ...process.env, PG_SCHEMA_CONFIRM: 'CREATE_SCHEMA_IN_EMPTY_DATABASE' };
   const installed = await installSchema(env);
   assert.equal(installed.tables, 27);
+  assert.equal(installed.indexes,5);
+  const probe=await probePostgresNext(env);
+  assert.deepEqual(probe,{ok:true,major:18,tables:27,indexes:5,schemaReady:true});
   const connection = await connectPostgresNext(env);
   try {
     const { sql } = connection;

@@ -1,11 +1,12 @@
-import {compareManifests,REQUIRED_STREAMS} from './migration-audit.mjs';
+import {compareManifests,REQUIRED_STREAMS,verifyManifestEnvelope} from './migration-audit.mjs';
 import {readFile} from 'node:fs/promises';
 import {pathToFileURL} from 'node:url';
 
 const HEX=/^[a-f0-9]{64}$/;
 function validSnapshot(value) {
   if(!value||typeof value!=='object'||!Array.isArray(value.manifests)||
-    typeof value.captureId!=='string'||!/^[-A-Za-z0-9_]{12,120}$/.test(value.captureId)){
+    typeof value.captureId!=='string'||!/^[-A-Za-z0-9_]{12,120}$/.test(value.captureId)||
+    typeof value.signature!=='string'||!HEX.test(value.signature)){
     throw new Error('Invalid migration manifest envelope.');
   }
   const seen=new Set();
@@ -23,8 +24,13 @@ function validSnapshot(value) {
 
 // Input: aggregate keyed manifests only; source patient records never enter
 // the cutover-gate process. Both captures MUST be frozen to the same write fence.
-export function evaluateMigrationGate(source,destination) {
+export function evaluateMigrationGate(source,destination,{hmacKey}={}) {
   const src=validSnapshot(source),dst=validSnapshot(destination);
+  if(typeof hmacKey!=='string'||Buffer.byteLength(hmacKey,'utf8')<32||
+    !verifyManifestEnvelope(src,hmacKey)||!verifyManifestEnvelope(dst,hmacKey)){
+    return {ready:false,reason:'MANIFEST_SIGNATURE_INVALID',matched:0,
+      expected:REQUIRED_STREAMS.length,findings:[]};
+  }
   if(src.captureId!==dst.captureId){
     return {ready:false,reason:'CAPTURE_WINDOW_MISMATCH',matched:0,
       expected:REQUIRED_STREAMS.length,findings:[]};
@@ -51,7 +57,7 @@ async function cli() {
     if(contents.length>1024*1024)throw new Error('Manifest file exceeds metadata-only size limit.');
     return JSON.parse(contents);
   }));
-  const result=evaluateMigrationGate(src,dst);
+  const result=evaluateMigrationGate(src,dst,{hmacKey:process.env.MIGRATION_AUDIT_HMAC_KEY});
   // Only stream types and counts; never print names, phones, raw medical text or digests.
   console.log('PostgreSQL migration gate:',result.ready?'READY':'BLOCKED',
     '- streams matched',result.matched+'/'+result.expected);

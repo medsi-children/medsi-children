@@ -1,6 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { compilePgQuery, createPostgresSql, readPostgresConfig, normalizePgValue } from '../src/connection.mjs';
+import {SCHEMA_INDEXES,SCHEMA_TABLES,schemaMatches} from '../src/schema-contract.mjs';
+
+test('schema contract requires the exact 27 tables and all declared indexes',()=>{
+  assert.equal(SCHEMA_TABLES.length,27);
+  assert.equal(SCHEMA_INDEXES.length,5);
+  assert.equal(schemaMatches(SCHEMA_TABLES,SCHEMA_INDEXES),true);
+  assert.equal(schemaMatches(SCHEMA_TABLES.slice(1),SCHEMA_INDEXES),false);
+  assert.equal(schemaMatches(SCHEMA_TABLES,[...SCHEMA_INDEXES].slice(1)),false);
+  assert.equal(schemaMatches([...SCHEMA_TABLES,'unapproved_extra'],SCHEMA_INDEXES),false);
+  assert.equal(schemaMatches(SCHEMA_TABLES,SCHEMA_INDEXES,1),false);
+});
 
 test('the compatibility compiler parameterizes values rather than interpolating text', () => {
   const input = "hello'; DROP TABLE children;--";

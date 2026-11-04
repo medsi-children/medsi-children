@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand,checkNextTestSchema} from '../app/stand-server.mjs';
+import {SCHEMA_INDEXES,SCHEMA_TABLES} from '../src/schema-contract.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',MEDSI_NEXT_PG_ENABLED:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
   NEXT_TUTOR_LOGIN:'staff',NEXT_TUTOR_PASSWORD:'long-fake-test-password',
@@ -250,18 +251,24 @@ test('database initialization never reveals private connector errors',async()=>{
   }
 });
 
-test('isolated PostgreSQL schema probe checks eight tables without loading patient rows',async()=>{
+test('isolated PostgreSQL schema probe requires the exact 27 tables and five indexes',async()=>{
   const queries=[];
   const sql=async(parts,...values)=>{
     queries.push({query:parts.join('?'),values});
-    return [[]];
+    if(parts.join('').includes('information_schema.tables'))return [SCHEMA_TABLES.map(table_name=>({table_name}))];
+    if(parts.join('').includes('pg_indexes'))return [SCHEMA_INDEXES.map(indexname=>({indexname}))];
+    return [[{n:0}]];
   };
   assert.deepEqual(await checkNextTestSchema(sql),{ok:true});
-  assert.equal(queries.length,8);
+  assert.equal(queries.length,3);
   for(const {query,values} of queries){
-    assert.match(query,/^SELECT [a-z_0-9]+ FROM [a-z_]+ LIMIT 0$/);
+    assert.match(query,/^SELECT (?:table_name FROM information_schema\.tables|indexname FROM pg_indexes|count\(\*\)::integer AS n FROM pg_class)/);
     assert.deepEqual(values,[]);
   }
+  const incomplete=async(parts)=>parts.join('').includes('information_schema.tables')
+    ?[SCHEMA_TABLES.slice(1).map(table_name=>({table_name}))]
+    :parts.join('').includes('pg_indexes')?[SCHEMA_INDEXES.map(indexname=>({indexname}))]:[[{n:0}]];
+  await assert.rejects(checkNextTestSchema(incomplete),/approved 27-table contract/);
 });
 
 test('schema health is separate from DB connectivity and never exposes SQL errors',async()=>{

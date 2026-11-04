@@ -135,8 +135,9 @@ function handler(fn) {
       const message=String(error?.message||'');
       const unauthorized=/^Unauthorized/.test(message);
       const expired=error?.code==='PUSH_SUBSCRIPTION_EXPIRED';
-      const userError=/^(Invalid |Unauthorized|Unsupported |Parent profile|Request |Forbidden)/.test(message);
-      if(!res.headersSent)res.status(expired?409:unauthorized?401:userError?400:503).json({
+      const forbidden=/^(Forbidden|Subscription belongs)/.test(message);
+      const userError=/^(Invalid |Unauthorized|Unsupported |Parent profile|Request |Forbidden|Subscription belongs)/.test(message);
+      if(!res.headersSent)res.status(expired?409:unauthorized?401:forbidden?403:userError?400:503).json({
         ok:false,...(expired?{code:'PUSH_SUBSCRIPTION_EXPIRED'}:{}),
         message:expired?'Подписка устарела, требуется обновление.':userError
           ?'Некорректный или недоступный запрос.':'Сервис временно недоступен.'

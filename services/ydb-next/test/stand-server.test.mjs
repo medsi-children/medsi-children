@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand} from '../src/stand-server.mjs';
+import {closeYdbDriver,connectYdbNext} from '../src/connection.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
   NEXT_TUTOR_LOGIN:'staff',NEXT_TUTOR_PASSWORD:'long-fake-test-password',
@@ -230,4 +231,45 @@ test('stand separates YDB configuration, auth-provider and driver initialization
       assert.equal(JSON.stringify(body).includes(internalMessage),false);
     }finally{await started.shutdown();}
   }
+});
+
+
+test('YDB initialization reveals only allowlisted stages, never raw key errors',async()=>{
+  const stages=[];
+  await assert.rejects(
+    connectYdbNext({MEDSI_NEXT_YDB_ENABLED:'0'},{
+      onStage:stage=>stages.push(stage)
+    }),
+    /YDB NEXT is disabled/
+  );
+  assert.deepEqual(stages,['YDB_CONFIG_PENDING']);
+  const started=await startIsolatedStand({...env,PORT:'0'},{
+    connect:async(_env,{onStage})=>{
+      onStage('YDB_AUTH_PROVIDER_PENDING');
+      throw new Error('synthetic-key-must-not-leak');
+    }
+  });
+  try{
+    if(!started.server.listening)await new Promise(resolve=>started.server.once('listening',resolve));
+    await started.initialize;
+    const response=await fetch('http://127.0.0.1:'+started.server.address().port+'/__health');
+    assert.equal(response.status,503);
+    const body=await response.json();
+    assert.equal(body.code,'YDB_AUTH_PROVIDER_INIT_FAILED');
+    assert.equal(JSON.stringify(body).includes('synthetic-key-must-not-leak'),false);
+  }finally{
+    await started.shutdown();
+  }
+});
+
+test('YDB SDK v6 close() is preferred while legacy destroy() remains compatible',async()=>{
+  const invoked=[];
+  await closeYdbDriver({
+    close:()=>{invoked.push('close');},
+    destroy:()=>{throw new Error('must not call legacy destroy');}
+  });
+  await closeYdbDriver({destroy:async()=>{invoked.push('destroy');}});
+  await closeYdbDriver({close:()=>{throw new Error('synthetic cleanup fault');}});
+  await closeYdbDriver(null);
+  assert.deepEqual(invoked,['close','destroy']);
 });

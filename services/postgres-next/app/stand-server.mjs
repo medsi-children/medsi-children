@@ -346,6 +346,13 @@ export async function startIsolatedStand(env=process.env,{
       state.phase='ready';
       state.code='READY';
       console.log('MEDSI_NEXT_STAND_READY');
+      // Report the catalog-only schema check even if the public endpoint is unreachable.
+      if(typeof services.dbSchemaHealth==='function'){
+        void Promise.resolve().then(()=>services.dbSchemaHealth()).then(
+          ()=>console.log('MEDSI_NEXT_SCHEMA_READY'),
+          ()=>console.warn('MEDSI_NEXT_SCHEMA_NOT_READY')
+        );
+      }
       ticker=setInterval(async()=>{
         if(working||stopped)return;
         working=true;

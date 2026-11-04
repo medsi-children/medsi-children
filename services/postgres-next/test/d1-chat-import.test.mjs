@@ -7,7 +7,10 @@ import {captureReportBaselineManifests,importReportBaseline} from '../src/report
 import {installSchema} from '../src/schema-cli.mjs';
 import {prepareChatMediaImport,importChatMediaOwnership} from '../src/chat-media-copy.mjs';
 import {captureD1ParentProfileManifest,importD1ParentProfiles} from '../src/d1-profile-capture.mjs';
-import {generateManifest} from '../app/migration-audit.mjs';
+import {generateManifest,signManifestEnvelope} from '../app/migration-audit.mjs';
+import {evaluateMigrationGate} from '../app/migration-gate.mjs';
+import {capturePostgresManifests} from '../src/postgres-manifests.mjs';
+import {captureDrainedOperationalManifests,DRAIN_STREAMS} from '../src/operational-drain.mjs';
 import {captureD1ChatMessageManifest,importD1ChatMessages,
   captureD1ChatRelatedManifests,importD1ChatRelatedStreams} from '../src/d1-chat-capture.mjs';
 
@@ -15,7 +18,7 @@ const env=process.env;
 const disposable=env.CI==='true' && env.PG_TEST_INSECURE_LOCAL==='1' &&
   env.PGHOST==='127.0.0.1' && env.PGDATABASE==='medsi_chat_import' && env.PGUSER==='medsi_ci';
 
-test('D1 chat baseline imports once, verifies PostgreSQL data, and refuses mismatches',
+test('synthetic migration baseline is repeatable and verifies all 26 signed streams',
   {skip:!disposable},async()=>{
     await installSchema({...env,PG_SCHEMA_CONFIRM:'CREATE_SCHEMA_IN_EMPTY_DATABASE'});
     const connection=await connectPostgresNext(env);
@@ -89,6 +92,24 @@ test('D1 chat baseline imports once, verifies PostgreSQL data, and refuses misma
       await assert.rejects(importD1ChatMessages(connection.sql,changed,options),/manifest mismatch/);
       await assert.rejects(importD1ChatMessages(connection.sql,changed,{...options,
         expectedManifest:captureD1ChatMessageManifest(changed,hmacKey)}),/differ from the baseline/);
+      const drained=Object.fromEntries(DRAIN_STREAMS.map(stream=>[stream,[]]));
+      const emptyIdentity=['parent_auth_profiles','parent_passkeys','push_subscriptions']
+        .map(stream=>generateManifest(stream,[],hmacKey));
+      const objectManifest=generateManifest('s3_objects',plan.s3Objects,hmacKey);
+      const sourceManifests=[...rosterOptions.expectedManifests,profileOptions.expectedManifest,
+        ...reportOptions.expectedManifests,...baselineOptions.expectedManifests,
+        options.expectedManifest,mediaOptions.expectedManifest,...relatedOptions.expectedManifests,
+        ...captureDrainedOperationalManifests(drained,hmacKey),...emptyIdentity,objectManifest];
+      const destinationManifests=[...await capturePostgresManifests(connection.sql,hmacKey),objectManifest];
+      const sign=manifests=>signManifestEnvelope('synthetic-frozen-capture-01',manifests,hmacKey);
+      const evaluate=(src,dst)=>evaluateMigrationGate(sign(src),sign(dst),{hmacKey});
+      const result=evaluate(sourceManifests,destinationManifests);
+      assert.equal(result.ready,true);
+      assert.equal(result.matched,26);
+      assert.equal(evaluate(sourceManifests,destinationManifests.filter(item=>item.stream!=='s3_objects')).ready,false);
+      const mismatched=destinationManifests.map(item=>item.stream==='parent_current_reports'
+        ? {...item,digest:'0'.repeat(64)} : item);
+      assert.equal(evaluate(sourceManifests,mismatched).ready,false);
     }finally{
       await connection.driver.close();
     }

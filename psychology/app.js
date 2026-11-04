@@ -1,5 +1,5 @@
 (function(){
-  const APP_BASE_URL='/__session/apps-script';
+  const APP_BASE_URL='/__session/api';
   const $=id=>document.getElementById(id);
   const TUTOR_KEY='medsi_tutor_session_v1',D1_KEY='medsi_psychology_d1_session_v1';
   let sendBusy=false,tutorToken='',d1Session=null;
@@ -16,7 +16,7 @@
     const attempts=readOnly?2:1;let lastError;
     for(let attempt=0;attempt<attempts;attempt++){
       const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),timeoutMs||15000);
-      try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',signal:controller.signal});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));clearTimeout(timer);return p.result}catch(e){clearTimeout(timer);lastError=controller.signal.aborted?new Error('TIMEOUT'):e;if(attempt+1<attempts)await delay(350)}
+      try{const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body:JSON.stringify({action:'api',method,args:args||[]}),cache:'no-store',signal:controller.signal});const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Сервер вернул некорректный ответ.')}if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));clearTimeout(timer);return p.result}catch(e){clearTimeout(timer);lastError=controller.signal.aborted?new Error('TIMEOUT'):e;if(attempt+1<attempts)await delay(350)}
     }
     throw lastError||new Error('TIMEOUT');
   }

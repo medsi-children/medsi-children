@@ -1,4 +1,4 @@
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 
 const ru=value=>String(value||'').normalize('NFC').trim().toLocaleLowerCase('ru').replace(/ё/g,'е');
 function cleanWord(value) {

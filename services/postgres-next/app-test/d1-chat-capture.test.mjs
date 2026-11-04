@@ -44,3 +44,15 @@ test('D1 chat related streams preserve timestamp ties, unread state and historic
   assert.deepEqual(streams.chat_pins,[{...pin,updated_at:'1700000000003'}]);
   assert.throws(()=>deriveD1ChatRelatedStreams([first],[pin,pin]),/ambiguous/);
 });
+
+test('D1 media inventory counts unresolved sources and refuses to infer shared ownership',async()=>{
+  const {inventoryD1ChatMedia}=await import('../src/d1-chat-capture.mjs');
+  const repeated={...fixture,message_key:'second',client_message_id:'second',status:'active'};
+  const conflict={...repeated,phone10:'9000000002',message_key:'third'};
+  const unresolved={...repeated,file_id:'old-unclassified-id',message_key:'fourth',client_message_id:'fourth'};
+  const missing={...repeated,file_id:'',message_key:'fifth',client_message_id:'fifth'};
+  const {objects,summary}=inventoryD1ChatMedia([fixture,repeated,conflict,unresolved,missing]);
+  assert.deepEqual(summary,{s3:0,kv:1,drive:0,unresolved:1,ownershipConflicts:1,missingReferences:1});
+  assert.deepEqual(objects[0],{fileId:fixture.file_id,source:'kv',phone10:null,
+    activeReferences:2,deletedReferences:1});
+});

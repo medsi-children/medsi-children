@@ -185,3 +185,36 @@ export async function importD1ChatRelatedStreams(sql,messages,pins,
     return counts;
   });
 }
+
+// Inventory references before copying bytes. Unknown formats and conflicts
+// must stay visible to the operator, with no patient identifiers in the summary.
+export function inventoryD1ChatMedia(messages){
+  const byFile=new Map();
+  let missingReferences=0;
+  for(const row of normalizeD1ChatMessages(messages)){
+    if(!row.file_id){
+      if(row.status==='active' && row.type!=='text')missingReferences++;
+      continue;
+    }
+    let entry=byFile.get(row.file_id);
+    if(!entry){
+      const match=/^(s3|kv|drive):(.+)$/.exec(row.file_id);
+      entry={fileId:row.file_id,source:match?.[1]??'unresolved',
+        owners:new Set(),activeReferences:0,deletedReferences:0};
+      byFile.set(row.file_id,entry);
+    }
+    entry.owners.add(row.phone10);
+    if(row.status==='active')entry.activeReferences++;
+    else entry.deletedReferences++;
+  }
+  const objects=[...byFile.values()].map(entry=>({
+    fileId:entry.fileId,source:entry.source,phone10:entry.owners.size===1?[...entry.owners][0]:null,
+    activeReferences:entry.activeReferences,deletedReferences:entry.deletedReferences
+  }));
+  const summary={s3:0,kv:0,drive:0,unresolved:0,ownershipConflicts:0,missingReferences};
+  for(const object of objects){
+    summary[object.source]++;
+    if(object.phone10===null)summary.ownershipConflicts++;
+  }
+  return {objects,summary};
+}

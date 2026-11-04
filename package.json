@@ -5,7 +5,7 @@
   "description": "Medsi web interface with Timeweb gateway, encrypted chat sessions and S3 media storage.",
   "main": "server.js",
   "scripts": {
-    "start": "npm run prepare:ydb-test",
+    "start": "node server.js",
     "prepare:ydb-test": "node scripts/prepare-ydb-test.mjs",
     "verify:server": "node --check server.js && node --check lib/session-preload.js",
     "verify:source-control": "node scripts/verify-source-control.mjs",
@@ -20,7 +20,7 @@
     "verify:recovery": "node --test tests/parent-recovery.test.cjs",
     "verify:auth": "node --test tests/parent-passkeys.test.cjs tests/parent-passkey-offer.test.cjs",
     "verify:ydb-next": "npm --prefix services/ydb-next run check",
-    "build": "npm --prefix services/ydb-next install --ignore-scripts --no-audit --no-fund"
+    "build": "node --check server.js && node --check services/ydb-next/src/stand-server.mjs && node --check services/postgres-next/src/connection.mjs"
   },
   "engines": {
     "node": ">=20"

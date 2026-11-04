@@ -61,6 +61,22 @@ jobs:
         run: node --test services/postgres-next/test/adapter.test.mjs services/postgres-next/test/integration.test.mjs
       - name: Verify purchased-database probe contract against disposable database
         run: node services/postgres-next/src/probe-cli.mjs
+      - name: Rehearse backup and restore with synthetic PostgreSQL 18 data
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          set -euo pipefail
+          docker exec "$PG_CONTAINER" createdb -U medsi_ci medsi_restore
+          docker exec "$PG_CONTAINER" pg_dump -U medsi_ci -Fc medsi_ci |
+            docker exec -i "$PG_CONTAINER" pg_restore -U medsi_ci --exit-on-error -d medsi_restore
+          PGDATABASE=medsi_restore node services/postgres-next/src/probe-cli.mjs
+          for table in parent_profiles parent_passkeys chat_messages raw_reports push_outbox; do
+            query="SELECT count(*) FROM $table"
+            source=$(docker exec "$PG_CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U medsi_ci -d medsi_ci -c "$query")
+            restored=$(docker exec "$PG_CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U medsi_ci -d medsi_restore -c "$query")
+            test "$source" -gt 0
+            test "$source" = "$restored"
+          done
       - name: Existing NEXT report logic and app regressions
         run: |
           npm test --prefix services/postgres-next

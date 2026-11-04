@@ -372,21 +372,27 @@ export async function startIsolatedStand(env=process.env,{
           }
         );
       }
-      ticker=setInterval(async()=>{
-        if(working||stopped)return;
-        working=true;
-        try{
-          const ids=await services.push.pendingEvents(20);
-          for(const id of ids)await services.push.deliverEvent(id);
-          if(env.MEDSI_NEXT_DELETION_ENABLED==='1'){
-            const cleanup=await services.parentDeletion.processNext();
-            if(cleanup.ok===false)console.warn('NEXT_PARENT_DELETION_RETRY_REQUIRED');
-          }
-        }catch(_){
-          console.warn('NEXT_PUSH_DISPATCH_UNAVAILABLE');
-        }finally{working=false;}
-      },30000);
-      ticker.unref();
+      const dispatchPush=env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='1';
+      const processDeletion=env.MEDSI_NEXT_DELETION_ENABLED==='1';
+      if(dispatchPush||processDeletion){
+        ticker=setInterval(async()=>{
+          if(working||stopped)return;
+          working=true;
+          try{
+            if(dispatchPush){
+              const ids=await services.push.pendingEvents(20);
+              for(const id of ids)await services.push.deliverEvent(id);
+            }
+            if(processDeletion){
+              const cleanup=await services.parentDeletion.processNext();
+              if(cleanup.ok===false)console.warn('NEXT_PARENT_DELETION_RETRY_REQUIRED');
+            }
+          }catch(_){
+            console.warn('NEXT_BACKGROUND_JOBS_UNAVAILABLE');
+          }finally{working=false;}
+        },30000);
+        ticker.unref();
+      }
     }catch(error){
       // No raw errors: they can contain connection strings or patient data.
       const msg=String(error?.message||'');

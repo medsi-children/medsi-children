@@ -350,7 +350,26 @@ export async function startIsolatedStand(env=process.env,{
       if(typeof services.dbSchemaHealth==='function'){
         void Promise.resolve().then(()=>services.dbSchemaHealth()).then(
           ()=>console.log('MEDSI_NEXT_SCHEMA_READY'),
-          ()=>console.warn('MEDSI_NEXT_SCHEMA_NOT_READY')
+          async()=>{
+            try{
+              const [[rows]]=await connection.sql`
+                SELECT count(*)::integer AS relation_count
+                FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
+                WHERE n.nspname NOT IN ('pg_catalog','information_schema')
+                  AND n.nspname NOT LIKE 'pg_toast%'
+                  AND n.nspname NOT LIKE 'pg_temp_%'
+                  AND c.relkind IN ('r','p','v','m','S','f','i','I')
+              `;
+              const count=rows[0]?.relation_count;
+              if(Number.isSafeInteger(count)&&count>=0){
+                console.warn('MEDSI_NEXT_SCHEMA_NOT_READY relation_count='+count);
+                return;
+              }
+            }catch(_){
+              // Never write database error details to the application log.
+            }
+            console.warn('MEDSI_NEXT_SCHEMA_CATALOG_UNAVAILABLE');
+          }
         );
       }
       ticker=setInterval(async()=>{

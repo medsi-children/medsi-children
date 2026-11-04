@@ -328,20 +328,10 @@
     document.head.appendChild(style);
   }
 
-  function repairS3Source(media) {
-    const src = String(media.getAttribute('src') || '');
-    if (!src || !src.includes('drive.google.com/thumbnail')) return;
-    try {
-      const url = new URL(src);
-      const id = url.searchParams.get('id') || '';
-      if (id.startsWith('s3:')) media.src = mediaUrl(id);
-    } catch (_) {}
-  }
 
   function enhanceVideo(video) {
     if (!video || video.dataset.medsiVideoEnhanced === '1') return;
     video.dataset.medsiVideoEnhanced = '1';
-    repairS3Source(video);
     video.playsInline = true;
     video.preload = 'metadata';
     const frame = video.parentElement;

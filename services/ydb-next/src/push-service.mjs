@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 import webpush from 'web-push';
 
 const sha=value=>createHash('sha256').update(value,'utf8').digest('hex');

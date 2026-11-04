@@ -48,19 +48,29 @@ export function evaluateMigrationGate(source,destination,{hmacKey}={}) {
     matched:findings.filter(f=>f.status==='matched').length,
     expected:REQUIRED_STREAMS.length,findings};
 }
-async function cli() {
-  if(process.env.MEDSI_NEXT_MIGRATION_PREFLIGHT!=='YES'||process.argv.length!==4){
-    throw new Error('Set explicit preflight confirmation and pass two manifest JSON paths.');
+// Require a fresh capture from the source after the destination import.
+export function evaluateSingleWindowMigration(sourceBefore,destination,sourceAfter,options){
+  const stable=evaluateMigrationGate(sourceBefore,sourceAfter,options);
+  if(!stable.ready){
+    return {...stable,phase:'source-stability',
+      reason:stable.reason==='STREAM_MISMATCH'?'SOURCE_CHANGED_OR_INCOMPLETE':stable.reason};
   }
-  const [src,dst]=await Promise.all(process.argv.slice(2).map(async pathname=>{
+  return {...evaluateMigrationGate(sourceBefore,destination,options),phase:'destination'};
+}
+
+async function cli() {
+  if(process.env.MEDSI_NEXT_MIGRATION_PREFLIGHT!=='YES'||process.argv.length!==5){
+    throw new Error('Set explicit preflight confirmation and pass source-before, destination and source-after manifest JSON paths.');
+  }
+  const [src,dst,srcAfter]=await Promise.all(process.argv.slice(2).map(async pathname=>{
     const contents=await readFile(pathname,'utf8');
     if(contents.length>1024*1024)throw new Error('Manifest file exceeds metadata-only size limit.');
     return JSON.parse(contents);
   }));
-  const result=evaluateMigrationGate(src,dst,{hmacKey:process.env.MIGRATION_AUDIT_HMAC_KEY});
+  const result=evaluateSingleWindowMigration(src,dst,srcAfter,{hmacKey:process.env.MIGRATION_AUDIT_HMAC_KEY});
   // Only stream types and counts; never print names, phones, raw medical text or digests.
   console.log('PostgreSQL migration gate:',result.ready?'READY':'BLOCKED',
-    '- streams matched',result.matched+'/'+result.expected);
+    result.phase,result.reason,'- streams matched',result.matched+'/'+result.expected);
   for(const item of result.findings)if(item.status!=='matched') {
     console.log('Stream check:',item.stream,item.status,
       'source count:',item.sourceCount??'-','destination count:',item.destinationCount??'-');

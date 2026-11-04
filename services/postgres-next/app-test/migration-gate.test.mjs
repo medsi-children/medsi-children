@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {generateManifest,REQUIRED_STREAMS,signManifestEnvelope} from '../app/migration-audit.mjs';
-import {evaluateMigrationGate} from '../app/migration-gate.mjs';
+import {evaluateMigrationGate,evaluateSingleWindowMigration} from '../app/migration-gate.mjs';
 
 const secret='m'.repeat(64);
 const envelope=(key,mutate=()=>{})=>signManifestEnvelope('frozen_20261103_001',
@@ -53,4 +53,15 @@ test('missing audit key, bad envelope signature, or missing stream fails closed'
   const correctlySignedButIncomplete=signManifestEnvelope(incomplete.captureId,
     incomplete.manifests,secret);
   assert.equal(gate(correctlySignedButIncomplete,destination).reason,'STREAM_MISMATCH');
+});
+
+test('one full capture permits cutover only if a fresh source capture still matches',()=>{
+  const source=envelope('same'),destination=envelope('same'),after=envelope('same');
+  const verify=(target,second)=>evaluateSingleWindowMigration(source,target,second,{hmacKey:secret});
+  assert.equal(verify(destination,after).ready,true);
+  const changed=envelope('same',(rows,stream)=>{if(stream==='chat_messages')rows.push({id:'new'});});
+  assert.equal(verify(destination,changed).reason,'SOURCE_CHANGED_OR_INCOMPLETE');
+  assert.equal(verify(envelope('different'),after).phase,'destination');
+  const wrongWindow=signManifestEnvelope('other_frozen_20261103',after.manifests,secret);
+  assert.equal(verify(destination,wrongWindow).reason,'CAPTURE_WINDOW_MISMATCH');
 });

@@ -6,6 +6,9 @@ import { createChatStore } from '../../ydb-next/src/chat-store.mjs';
 import { createReportPublicationStore } from '../../ydb-next/src/report-publications.mjs';
 import { createEducatorReportsDashboardStore } from '../../ydb-next/src/educator-report-dashboard.mjs';
 import { seedSyntheticRoster } from '../../ydb-next/src/seed-demo.mjs';
+import { importLegacyIdentityCapture } from '../../ydb-next/src/identity-continuity.mjs';
+import { importLegacyPushCapture } from '../../ydb-next/src/push-continuity.mjs';
+import { createECDH, createHash } from 'node:crypto';
 
 const enabled = process.env.CI === 'true' && process.env.PG_TEST_INSECURE_LOCAL === '1';
 
@@ -97,6 +100,76 @@ test('real PostgreSQL: synthetic roster, safeguarded report publication, dashboa
     );
     const [remaining] = await sql(['SELECT publication_id FROM raw_reports']);
     assert.equal(remaining.length, 1);
+  } finally {
+    await conn.driver.close();
+  }
+});
+
+test('real PostgreSQL: authenticated identity and push migration preserves opaque legacy values', {
+  skip: enabled ? false : 'Disposable PostgreSQL CI only.'
+}, async () => {
+  const conn = await connectPostgresNext(process.env);
+  try {
+    const { sql } = conn;
+    const [people] = await sql(['SELECT phone10 FROM parent_profiles']);
+    assert.equal(people.length, 3);
+    const capture = people.map((p, i) => ({
+      phone10: p.phone10,
+      user_handle: (String(i + 1).repeat(32)).slice(0, 32),
+      generation_id: (String(i + 4).repeat(32)).slice(0, 32),
+      created_at: 1700000000000 + i
+    }));
+    // Only within ephemeral CI: remove the seed fixture's mock identities.
+    await sql(['DELETE FROM parent_auth_profiles']);
+    const keyBytes = Buffer.alloc(64, 7);
+    const keys = [{
+      credential_id: 'synthetic_passkey_ci_key_1234567',
+      user_handle: capture[0].user_handle,
+      public_key_base64url: keyBytes.toString('base64url'),
+      counter: 0,
+      transports: ['internal'],
+      device_type: 'synthetic',
+      backed_up: true,
+      created_at: 1700000000000
+    }];
+    await assert.rejects(importLegacyIdentityCapture(sql,
+      { authProfiles: capture, passkeys: keys },
+      { expectedProfiles: 3, expectedPasskeys: 1 }
+    ), /explicit approval/);
+    const imported = await importLegacyIdentityCapture(sql,
+      { authProfiles: capture, passkeys: keys },
+      { expectedProfiles: 3, expectedPasskeys: 1, freezeConfirmed: true, explicitImport: true }
+    );
+    assert.equal(imported.authProfiles, 3);
+    assert.equal(imported.passkeys, 1);
+    const [bytes] = await sql(['SELECT public_key FROM parent_passkeys']);
+    assert.ok(Buffer.isBuffer(bytes[0].public_key));
+    assert.deepEqual(bytes[0].public_key, keyBytes);
+
+    const curve = createECDH('prime256v1');
+    curve.generateKeys();
+    const publicKey = curve.getPublicKey().toString('base64url');
+    const privateKey = curve.getPrivateKey().toString('base64url');
+    const endpoint = 'https://push.example.invalid/fictional-ci-endpoint';
+    const digest = createHash('sha256').update(endpoint).digest('hex');
+    const pushCapture = [{
+      key: 'sub:' + digest,
+      value: {
+        role: 'parent', phone10: capture[0].phone10, enabled: true,
+        updatedAt: '2026-11-04T10:00:00.000Z',
+        subscription: { endpoint, keys: { auth: 'synthetic-auth', p256dh: 'synthetic-p256dh' } }
+      }
+    }];
+    const opts = {
+      sourceVapidPublicKey: publicKey, targetVapidPublicKey: publicKey,
+      targetVapidPrivateKey: privateKey, expectedCount: 1,
+      freezeConfirmed: true, explicitImport: true
+    };
+    const migrated = await importLegacyPushCapture(sql, pushCapture, opts);
+    assert.equal(migrated.enabled, 1);
+    const [subscribed] = await sql(['SELECT subscription_id,enabled FROM push_subscriptions']);
+    assert.equal(subscribed.length, 1);
+    assert.equal(subscribed[0].enabled, true);
   } finally {
     await conn.driver.close();
   }

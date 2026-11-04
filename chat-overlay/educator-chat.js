@@ -25,7 +25,7 @@
   function samePendingMessage(pending,confirmed){return isPending(pending)&&!isPending(confirmed)&&String(pending&&pending.side||'')===String(confirmed&&confirmed.side||'')&&String(pending&&pending.type||'')===String(confirmed&&confirmed.type||'')&&String(pending&&pending.text||'')===String(confirmed&&confirmed.text||'')&&String(pending&&pending.fileId||'')===String(confirmed&&confirmed.fileId||'')&&Math.abs(Number(pending&&pending.timestamp||0)-Number(confirmed&&confirmed.timestamp||0))<120000}
   function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'[Фотография]';if(c.lastType==='video')return c.lastText||'[Видео]';return c.lastText||'Нет сообщений'}
   function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';return'Сообщение'}
-  function mediaUrl(m){const id=String(m&&m.fileId||'');if(!id)return'';const transport=window.MedsiOverlayTransport;if(transport&&typeof transport.mediaUrl==='function')return transport.mediaUrl(id,'w1200');if(id.startsWith('kv:')||id.startsWith('r2:'))return window.MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(id.slice(3));return'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200'}
+  function mediaUrl(m){const id=String(m&&m.fileId||'');const transport=window.MedsiOverlayTransport;return id&&transport&&typeof transport.mediaUrl==='function'?transport.mediaUrl(id,'w1200'):''}
 
   function getEyeIconSvg(isRead){
     if(isRead){

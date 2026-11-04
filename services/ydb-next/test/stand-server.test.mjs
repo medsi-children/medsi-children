@@ -172,3 +172,40 @@ test('missing test-only secrets are reported on the health endpoint without open
     assert.equal((await response.json()).code,'STAND_ENV_INVALID');
   }finally{await started.shutdown();}
 });
+
+test('stand identifies invalid authorized-key JSON without displaying its contents',async()=>{
+  const started=await startIsolatedStand({...env,PORT:'0'},{
+    connect:async()=>{throw new Error('YDB_SERVICE_ACCOUNT_JSON is missing or invalid.');}
+  });
+  try{
+    if(!started.server.listening)await new Promise(resolve=>started.server.once('listening',resolve));
+    await started.initialize;
+    const response=await fetch('http://127.0.0.1:'+started.server.address().port+'/__health');
+    assert.equal(response.status,503);
+    const body=await response.json();
+    assert.equal(body.code,'YDB_SERVICE_ACCOUNT_JSON_INVALID');
+    assert.equal(body.database,'unavailable');
+    assert.equal(JSON.stringify(body).includes('private_key'),false);
+  }finally{await started.shutdown();}
+});
+
+test('stand pinpoints service initialization versus protected router failures',async()=>{
+  for(const {breakAt,expected} of [
+    {breakAt:'services',expected:'NEXT_SERVICES_INIT_FAILED'},
+    {breakAt:'router',expected:'NEXT_ROUTER_INIT_FAILED'}
+  ]){
+    const started=await startIsolatedStand({...env,PORT:'0'},{
+      connect:async()=>({sql:{},driver:{destroy:async()=>{}}}),
+      makeServices:()=>breakAt==='services'
+        ?(()=>{throw new Error('Synthetic service failure');})():fakeServices(),
+      makeApp:()=>{throw new Error('Synthetic router failure');}
+    });
+    try{
+      if(!started.server.listening)await new Promise(resolve=>started.server.once('listening',resolve));
+      await started.initialize;
+      const response=await fetch('http://127.0.0.1:'+started.server.address().port+'/__health');
+      assert.equal(response.status,503);
+      assert.equal((await response.json()).code,expected);
+    }finally{await started.shutdown();}
+  }
+});

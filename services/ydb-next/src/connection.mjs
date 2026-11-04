@@ -56,7 +56,32 @@ export function readConnectionConfig(env = process.env) {
   } };
 }
 
-export async function connectYdbNext(env = process.env) {
+// v6 uses close(); keep destroy() only for older test doubles/SDKs.
+// Cleanup is deliberately best-effort: it must never mask the startup fault.
+export async function closeYdbDriver(driver) {
+  const close=typeof driver?.close==='function'
+    ?()=>driver.close()
+    :typeof driver?.destroy==='function'?()=>driver.destroy():null;
+  if(!close)return;
+  let timer;
+  try {
+    await Promise.race([
+      Promise.resolve().then(close).catch(()=>{}),
+      new Promise(resolve=>{
+        timer=setTimeout(resolve,3000);
+        timer.unref?.();
+      })
+    ]);
+  }finally{
+    if(timer)clearTimeout(timer);
+  }
+}
+
+export async function connectYdbNext(env = process.env, {onStage=()=>{}} = {}) {
+  // Only fixed stage labels can leave this module. Never send secrets,
+  // connection strings, raw SDK errors or patient information to health.
+  const mark=stage=>{try{onStage(stage);}catch(_){/* diagnostics are optional */}};
+  mark('YDB_CONFIG_PENDING');
   let config;
   try {
     config = readConnectionConfig(env);
@@ -68,19 +93,23 @@ export async function connectYdbNext(env = process.env) {
     }
     throw new Error('YDB NEXT configuration validation failed.');
   }
+  mark('YDB_AUTH_PROVIDER_PENDING');
   let credentialsProvider;
   try {
     credentialsProvider = new ServiceAccountCredentialsProvider(config.serviceAccount);
   } catch (_) {
     throw new Error('YDB NEXT credentials provider initialization failed.');
   }
+  mark('YDB_DRIVER_PENDING');
   let driver;
   try {
     driver = new Driver(config.connectionString, {credentialsProvider});
   } catch (_) {
     throw new Error('YDB NEXT driver initialization failed.');
   }
+  mark('YDB_HANDSHAKE_PENDING');
   let readyTimer;
+  let currentStage='handshake';
   try {
     // A stalled SDK handshake must not hang the Timeweb rollout forever.
     // The bootstrap HTTP listener remains available for safe diagnostics.
@@ -90,6 +119,8 @@ export async function connectYdbNext(env = process.env) {
         readyTimer=setTimeout(()=>reject(new Error('YDB readiness deadline exceeded')),20000);
       })
     ]);
+    currentStage='query-adapter';
+    mark('YDB_QUERY_ADAPTER_PENDING');
     const rawSql=query(driver);
     const sql=config.tableScope
       ?withTableScope(rawSql,config.tableScope,{stand:env.MEDSI_NEXT_STAND==='1'})
@@ -97,14 +128,12 @@ export async function connectYdbNext(env = process.env) {
     return { sql, driver };
   } catch (error) {
     // Never print the connection string, credential object or patient data.
-    if (typeof driver.destroy === 'function') {
-      await Promise.race([
-        driver.destroy().catch(()=>{}),
-        new Promise(resolve=>setTimeout(resolve,3000))
-      ]);
-    }
+    await closeYdbDriver(driver);
     if(error?.message==='YDB readiness deadline exceeded'){
       throw new Error('YDB NEXT connection timed out.');
+    }
+    if(currentStage==='query-adapter'){
+      throw new Error('YDB NEXT query adapter initialization failed.');
     }
     throw new Error('YDB NEXT connection failed.');
   } finally{

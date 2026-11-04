@@ -10,28 +10,26 @@ test('the compatibility compiler parameterizes values rather than interpolating 
   assert.doesNotMatch(q.text, /DROP TABLE/);
 });
 
-test('YDB UPSERT maps to an atomic PostgreSQL conflict update', () => {
+test('PostgreSQL upsert helper emits a native conflict update', () => {
   const q = compilePgQuery(
-    ['UPSERT INTO chat_pins (phone10,bucket,updated_at) VALUES (', ',', ',', ')'],
-    ['9990001112', 'pinned', 123]
+    ['INSERT INTO chat_pins (phone10,bucket,updated_at) VALUES (', ',', ',', ')'],
+    ['9990001112', 'pinned', 123], {upsert:true}
   );
   assert.match(q.text, /^INSERT INTO "chat_pins"/);
   assert.match(q.text, /ON CONFLICT \("phone10"\) DO UPDATE SET/);
   assert.deepEqual(q.values, ['9990001112', 'pinned', 123]);
 });
 
-test('YDB index hints disappear without changing the WHERE clause', () => {
+test('queries use ordinary PostgreSQL table access without index hint syntax', () => {
   const q = compilePgQuery(
-    ['SELECT phone10 FROM chat_messages VIEW chat_messages_by_file WHERE file_id=', ''],
+    ['SELECT phone10 FROM chat_messages WHERE file_id=', ''],
     ['s3:synthetic']
   );
-  assert.doesNotMatch(q.text, /VIEW/);
   assert.match(q.text, /WHERE file_id=\$1/);
 });
 
-test('Uint64 values become PostgreSQL BIGINT parameters', () => {
-  class Uint64 { constructor(value) { this.value = value; } }
-  assert.equal(normalizePgValue(new Uint64(123n)), '123');
+test('BigInt values become PostgreSQL BIGINT parameters', () => {
+  assert.equal(normalizePgValue(123n), '123');
 });
 
 test('dynamic SQL identifiers must refer to existing schema tables', () => {

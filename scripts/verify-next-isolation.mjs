@@ -33,12 +33,16 @@ for (const file of candidates) {
 const server=readFileSync(new URL('server.js',ROOT),'utf8');
 const branch=server.split('} else {')[0];
 if (!branch.includes("MEDSI_NEXT_STAND === '1'") ||
-    !branch.includes("MEDSI_NEXT_PG_ENABLED === '1'") ||
     !branch.includes('services/postgres-next/src/connection.mjs') ||
     /\.workers\.dev|script\.google\.com\/macros/.test(branch)) {
   errors.push('NEXT bootstrap is not isolated from legacy services');
 }
-const next=readFileSync(new URL('services/ydb-next/src/stand-server.mjs',ROOT),'utf8');
+const next=readFileSync(new URL('services/postgres-next/app/stand-server.mjs',ROOT),'utf8');
+if (/from ['"]\.\/connection\.mjs|import\(['"]\.\/connection\.mjs/.test(next) ||
+    !next.includes("env.MEDSI_NEXT_PG_ENABLED!=='1'") ||
+    !/connect\s*,/.test(next)) {
+  errors.push('NEXT runtime must require an explicitly injected PostgreSQL connector');
+}
 for(const must of [
   "app.post(['/__session/api','/__session/apps-script']",
   "app.use('/lab'",
@@ -52,7 +56,7 @@ for(const must of [
 if (/fetch\(['"]https?:\/\/|\.workers\.dev|script\.google\.com\/macros/.test(next)) {
   errors.push('NEXT backend contains external legacy network dependency');
 }
-const router=readFileSync(new URL('services/ydb-next/src/api-router.mjs',ROOT),'utf8');
+const router=readFileSync(new URL('services/postgres-next/app/api-router.mjs',ROOT),'utf8');
 for(const must of [
   "router.post('/parent-registration'",
   "router.post('/parent-auth/request'",

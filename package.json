@@ -6,7 +6,6 @@
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
-    "prepare:ydb-test": "node scripts/prepare-ydb-test.mjs",
     "verify:server": "node --check server.js && node --check lib/session-preload.js",
     "verify:source-control": "node scripts/verify-source-control.mjs",
     "verify:chat": "node --test tests/chat-send-retry.test.cjs tests/parent-chat-send-retry.test.cjs tests/parent-assistant-offer.test.cjs tests/educator-message-delete.test.cjs",
@@ -19,8 +18,8 @@
     "verify:reliability": "node --test tests/push-recovery.test.cjs tests/platform-reliability.test.cjs tests/apps-script-chat-retirement.test.cjs tests/report-state-d1-migration.test.cjs tests/report-state-apps-script-cutover.test.cjs tests/report-generations-migration.test.cjs tests/report-publication-fencing.test.cjs",
     "verify:recovery": "node --test tests/parent-recovery.test.cjs",
     "verify:auth": "node --test tests/parent-passkeys.test.cjs tests/parent-passkey-offer.test.cjs",
-    "verify:ydb-next": "npm --prefix services/ydb-next run check",
-    "build": "node --check server.js && node --check services/ydb-next/src/stand-server.mjs && node --check services/postgres-next/src/connection.mjs"
+    "verify:postgres-next": "npm --prefix services/postgres-next run check",
+    "build": "node --check server.js && node --check services/postgres-next/app/stand-server.mjs && node --check services/postgres-next/src/connection.mjs"
   },
   "engines": {
     "node": ">=20"

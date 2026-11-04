@@ -2,15 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { installSchema } from '../src/schema-cli.mjs';
 import { connectPostgresNext } from '../src/connection.mjs';
-import { createChatStore } from '../../ydb-next/src/chat-store.mjs';
-import { createReportPublicationStore } from '../../ydb-next/src/report-publications.mjs';
-import { createEducatorReportsDashboardStore } from '../../ydb-next/src/educator-report-dashboard.mjs';
-import { seedSyntheticRoster } from '../../ydb-next/src/seed-demo.mjs';
-import { importLegacyIdentityCapture } from '../../ydb-next/src/identity-continuity.mjs';
-import { importLegacyPushCapture } from '../../ydb-next/src/push-continuity.mjs';
+import { createChatStore } from '../app/chat-store.mjs';
+import { createReportPublicationStore } from '../app/report-publications.mjs';
+import { createEducatorReportsDashboardStore } from '../app/educator-report-dashboard.mjs';
+import { seedSyntheticRoster } from '../app/seed-demo.mjs';
+import { importLegacyIdentityCapture } from '../app/identity-continuity.mjs';
+import { importLegacyPushCapture } from '../app/push-continuity.mjs';
 import { createECDH, createHash } from 'node:crypto';
-import { createNextStandApp, createNextServices } from '../../ydb-next/src/stand-server.mjs';
-import {createPushService} from '../../ydb-next/src/push-service.mjs';
+import { createNextStandApp, createNextServices } from '../app/stand-server.mjs';
+import {createPushService} from '../app/push-service.mjs';
 
 const enabled = process.env.CI === 'true' && process.env.PG_TEST_INSECURE_LOCAL === '1';
 

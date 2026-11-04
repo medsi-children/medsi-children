@@ -1,4 +1,4 @@
--- MEDSI NEXT PostgreSQL 18 schema, derived from YDB NEXT data model.
+-- MEDSI NEXT PostgreSQL 18 schema, derived from PostgreSQL NEXT data model.
 -- APPLY ONLY TO AN EMPTY, EXPLICITLY APPROVED DATABASE.
 -- All timestamps are UTC Unix milliseconds; IDs and phones are opaque text.
 -- Sensitive clinical data must never appear in migration logs or GitHub Actions.

@@ -1,4 +1,4 @@
-/* YDB NEXT: educator settings/report library, intentionally branch-only.
+/* PostgreSQL NEXT: educator settings/report library, intentionally branch-only.
    Original menu, legacy event handlers and confirmation flow remain mounted. */
 .medsi-settings-next-enabled .tutor-settings-body > .tutor-setting-block { display: none !important; }
 .medsi-settings-next-enabled .tutor-settings-body { gap: 14px; }

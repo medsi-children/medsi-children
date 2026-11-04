@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs';
 import pg from 'pg';
 
 // PostgreSQL adapter for the existing NEXT service contracts.
-// A tagged statement resolves to [rows], matching the YDB query client's
-// shape; transactions use a single connection and fail closed on errors.
+// Parameterized PostgreSQL statements retain the application's [rows]
+// contract; transactions use one connection and fail closed on errors.
 const IDENTIFIER = Symbol('allowlisted-pg-identifier');
 const schema = readFileSync(new URL('../sql/001_initial.sql', import.meta.url), 'utf8');
 const primaryKeys = new Map();
@@ -21,18 +21,10 @@ if (primaryKeys.size !== 27) throw new Error('PostgreSQL schema metadata mismatc
 export function normalizePgValue(value) {
   if (typeof value === 'bigint') return value.toString();
   if (value instanceof Uint8Array) return Buffer.from(value);
-  // Legacy YDB service modules still build Uint64 values. Convert their
-  // underlying integer without ever submitting YDB objects to node-postgres.
-  if (value && typeof value === 'object' && value.constructor?.name === 'Uint64') {
-    const integer = value.value ?? value.toString();
-    const text = String(integer);
-    if (!/^\d+$/.test(text)) throw new Error('Invalid Uint64 parameter.');
-    return text;
-  }
   return value;
 }
 
-export function compilePgQuery(strings, values) {
+export function compilePgQuery(strings, values, {upsert = false} = {}) {
   if (!Array.isArray(strings) || strings.length !== values.length + 1) {
     throw new Error('Invalid SQL template.');
   }
@@ -50,20 +42,18 @@ export function compilePgQuery(strings, values) {
     }
   }
   statement += strings[strings.length - 1];
-  // YDB VIEW clauses are index hints. PostgreSQL uses its own indexes.
-  statement = statement.replace(/\s+VIEW\s+chat_messages_by_(?:key|file)\b/gi, '');
-  const upsert = /^\s*UPSERT\s+INTO\s+([a-z_]+)\s*\(([\s\S]*?)\)\s*VALUES\s*\(([\s\S]*?)\)\s*;?\s*$/i.exec(statement);
-  if (/^\s*UPSERT\b/i.test(statement)) {
-    if (!upsert) throw new Error('Unsupported UPSERT statement.');
-    const table = upsert[1], keys = primaryKeys.get(table);
-    if (!keys) throw new Error('Unknown UPSERT table.');
-    const columns = upsert[2].split(',').map(part => part.trim());
-    if (!columns.every(name => /^[a-z_][a-z_0-9]*$/i.test(name))) throw new Error('Invalid UPSERT columns.');
-    if (!keys.every(key => columns.includes(key))) throw new Error('UPSERT omits primary key.');
+  if (upsert) {
+    const insert = /^\s*INSERT\s+INTO\s+([a-z_]+)\s*\(([\s\S]*?)\)\s*VALUES\s*\(([\s\S]*?)\)\s*;?\s*$/i.exec(statement);
+    if (!insert) throw new Error('Unsupported PostgreSQL upsert statement.');
+    const table = insert[1], keys = primaryKeys.get(table);
+    if (!keys) throw new Error('Unknown PostgreSQL upsert table.');
+    const columns = insert[2].split(',').map(part => part.trim());
+    if (!columns.every(name => /^[a-z_][a-z_0-9]*$/i.test(name))) throw new Error('Invalid PostgreSQL upsert columns.');
+    if (!keys.every(key => columns.includes(key))) throw new Error('PostgreSQL upsert omits primary key.');
     const update = columns.filter(col => !keys.includes(col))
       .map(col => '"' + col + '" = EXCLUDED."' + col + '"').join(', ');
     statement = 'INSERT INTO "' + table + '" (' + columns.map(col => '"' + col + '"').join(', ') +
-      ') VALUES (' + upsert[3] + ') ON CONFLICT (' +
+      ') VALUES (' + insert[3] + ') ON CONFLICT (' +
       keys.map(key => '"' + key + '"').join(', ') + ') ' +
       (update ? 'DO UPDATE SET ' + update : 'DO NOTHING');
   }
@@ -74,11 +64,22 @@ export function createPostgresSql(pool) {
   if (!pool || typeof pool.query !== 'function' || typeof pool.connect !== 'function') {
     throw new Error('PostgreSQL client required.');
   }
-  const execute = client => async (strings, ...values) => {
-    const result = await client.query(compilePgQuery(strings, values));
-    return [result.rows || []];
+  const execute = client => {
+    const run = async (strings, ...values) => {
+      const result = await client.query(compilePgQuery(strings, values));
+      return [result.rows || []];
+    };
+    run.upsert = async (strings, ...values) => {
+      const result = await client.query(compilePgQuery(strings, values, {upsert:true}));
+      return [result.rows || []];
+    };
+    return run;
   };
   const sql = execute(pool);
+  sql.upsert = async (strings, ...values) => {
+    const result = await pool.query(compilePgQuery(strings, values, {upsert:true}));
+    return [result.rows || []];
+  };
   sql.identifier = name => {
     if (!allowedIdentifiers.has(name)) throw new Error('Unapproved SQL identifier.');
     return Object.freeze({ [IDENTIFIER]: name });
@@ -113,7 +114,7 @@ export function createPostgresSql(pool) {
 
 export function readPostgresConfig(env = process.env) {
   if (env.MEDSI_NEXT_PG_ENABLED !== '1' || env.MEDSI_NEXT_STAND !== '1') {
-    throw new Error('PostgreSQL NEXT requires explicit isolated opt-in.');
+    throw new Error('PostgreSQL NEXT stand mode must be explicitly enabled.');
   }
   const host = String(env.PGHOST || '').trim();
   const port = Number(env.PGPORT || 5432);

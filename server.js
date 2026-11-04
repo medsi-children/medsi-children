@@ -8,24 +8,22 @@ if (process.env.MEDSI_NEXT_STAND === '1') {
   // Timeweb scans for an open port before it considers a container ready.
   // Load no external dependencies until the isolated diagnostic socket exists.
   console.log('MEDSI_NEXT_STAND_ENTRY_STARTED');
-  const {startStandBootstrap} = require('./services/ydb-next/src/stand-bootstrap.cjs');
+  const {startStandBootstrap} = require('./services/postgres-next/app/stand-bootstrap.cjs');
   const bootstrap = startStandBootstrap();
-  import('./services/ydb-next/src/stand-server.mjs')
+  import('./services/postgres-next/app/stand-server.mjs')
     .then(async ({startIsolatedStand}) => {
       // The PostgreSQL branch reuses the existing NEXT business logic.
       // Fail closed: PostgreSQL is opt-in; production gateway remains unchanged.
-      const connection = process.env.MEDSI_NEXT_PG_ENABLED === '1'
-        ? await import('./services/postgres-next/src/connection.mjs')
-        : null;
+      const connection = await import('./services/postgres-next/src/connection.mjs');
       return startIsolatedStand(process.env, {
-        ...(connection ? {connect: connection.connectPostgresNext} : {}),
+        connect: connection.connectPostgresNext,
         externalServer:bootstrap.server,
         installHandler:bootstrap.activate
       });
     })
     .catch(() => {
       // Missing dependencies are reported without leaking environment values
-      // or YDB metadata. The diagnostic listener remains operational.
+      // or database metadata. The diagnostic listener remains operational.
       bootstrap.fail();
     });
 } else {

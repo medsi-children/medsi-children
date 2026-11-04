@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { Uint64 } from '@ydbjs/value/primitive';
+import { Uint64 } from './uint64-compat.mjs';
 
 const ALLOWED_KINDS = new Set(['morning', 'evening', 'psychology']);
 const ID_RE = /^[A-Za-z0-9_-]{8,128}$/;

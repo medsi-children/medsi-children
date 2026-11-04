@@ -17,7 +17,10 @@ function setup() {
     reportReader:{profile:async()=>({ok:true,parentName:'Анна',childName:'Лена'}),
       markRead:async(...args)=>{calls.push(['markRead',...args]);return {ok:true}}},
     chatOperations:{markRead:async(...args)=>{calls.push(['chatMark',...args]);return {ok:true}}},
-    reportSubmission:{status:async()=>({status:'completed'})},
+    reportSubmission:{
+      status:async()=>({status:'completed'}),
+      submit:async input=>{calls.push(['submit',input]);return {ok:true,status:'published'}}
+    },
     parentRegistration:{status:async()=>({ok:true,status:'PENDING'})},
     parentAccess:{listPending:async()=>({ok:true,requests:[]})}
   };
@@ -33,7 +36,8 @@ test('legacy bridge supports old shell without Google or Cloudflare',async()=>{
 test('legacy bridge denies cross-parent access and unsupported old writes',async()=>{
   const {legacy,calls}=setup();
   await assert.rejects(()=>legacy('markReportAsRead',['89990001122','morning','v1','parent-token']),/Unauthorized/);
-  await assert.rejects(()=>legacy('appendReport',['raw','tutor-ok']),/Unsupported/);
+  await assert.rejects(()=>legacy('appendReport',[{reportType:'psychology',text:'Test',submissionId:'submission123'},'wrong-tutor']),/Unauthorized/);
+  await assert.rejects(()=>legacy('appendReport',[{reportType:'psychology',text:'',submissionId:'submission123'},'tutor-ok']),/Invalid/);
   await assert.rejects(()=>legacy('deleteReportChildByPhone',['89991112233','tutor-ok']),/Unsupported/);
   assert.equal(calls.length,0);
 });
@@ -43,7 +47,22 @@ test('registration callback is local and bound to the authenticated parent',asyn
   const result=await legacy('mirrorCloudflareParentRegistration',[
     '89991112233','reg_testregistration000001','parent-token']);
   assert.equal(result.synced,true);
-  assert.equal(result.source,'ydb');
+  assert.equal(result.source,'postgres');
   await assert.rejects(()=>legacy('mirrorCloudflareParentRegistration',[
     '89990001122','reg_testregistration000001','parent-token']),/Unauthorized/);
+});
+
+test('legacy psychology fallback submits locally with verified tutor token',async()=>{
+  const {legacy,calls}=setup();
+  const result=await legacy('appendReport',[{
+    reportType:'psychology',text:'Only synthetic text',
+    submissionId:'ci_psychology_0001'
+  },'tutor-ok']);
+  assert.equal(result.ok,true);
+  assert.equal(result.status,'completed');
+  assert.equal(calls.length,1);
+  assert.equal(calls[0][0],'submit');
+  assert.equal(calls[0][1].kind,'psychology');
+  assert.equal(calls[0][1].submissionId,'ci_psychology_0001');
+  assert.match(calls[0][1].authorId,/^educator_[a-f0-9]{20}$/);
 });

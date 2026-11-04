@@ -3,7 +3,7 @@
   if(window.__medsiTimewebSessionClient)return;
   window.__medsiTimewebSessionClient=true;
   const nativeFetch=window.fetch.bind(window);
-  const RETIRED=/^(?:script\.google\.com|script\.googleusercontent\.com|(?:[a-z0-9-]+\.)?workers\.dev|drive\.google\.com)$/i;
+  const RETIRED=/^(?:script\.google\.com|script\.googleusercontent\.com|(?:[a-z0-9-]+\.)+workers\.dev|drive\.google\.com)$/i;
   window.fetch=function(input,init){
     try{
       const raw=typeof input==='string'?input:String(input&&input.url||'');

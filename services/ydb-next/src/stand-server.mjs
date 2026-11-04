@@ -132,8 +132,10 @@ function handler(fn) {
       const result=await fn(req,res);
       if(!res.headersSent&&result!==undefined)res.json(result);
     }catch(error) {
-      const userError=/^(Invalid |Unauthorized|Unsupported |Parent profile|Request |Forbidden)/.test(String(error?.message||''));
-      if(!res.headersSent)res.status(userError?400:503).json({ok:false,
+      const message=String(error?.message||'');
+      const unauthorized=/^Unauthorized/.test(message);
+      const userError=/^(Invalid |Unauthorized|Unsupported |Parent profile|Request |Forbidden)/.test(message);
+      if(!res.headersSent)res.status(unauthorized?401:userError?400:503).json({ok:false,
         message:userError?'Некорректный или недоступный запрос.':'Сервис временно недоступен.'});
     }
   };

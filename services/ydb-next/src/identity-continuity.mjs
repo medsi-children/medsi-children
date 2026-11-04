@@ -1,4 +1,4 @@
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 
 // Offline identity capture for migration under a frozen D1 write-fence.
 // Inputs must come from an authorized encrypted export, never a public upload,

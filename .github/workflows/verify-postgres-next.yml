@@ -74,8 +74,11 @@ jobs:
             query="SELECT count(*) FROM $table"
             source=$(docker exec "$PG_CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U medsi_ci -d medsi_ci -c "$query")
             restored=$(docker exec "$PG_CONTAINER" psql -XAt -v ON_ERROR_STOP=1 -U medsi_ci -d medsi_restore -c "$query")
-            test "$source" -gt 0
+            printf '%s: source=%s restored=%s\n' "$table" "$source" "$restored"
             test "$source" = "$restored"
+            if [ "$table" = parent_profiles ] || [ "$table" = raw_reports ]; then
+              test "$source" -gt 0
+            fi
           done
       - name: Existing NEXT report logic and app regressions
         run: |

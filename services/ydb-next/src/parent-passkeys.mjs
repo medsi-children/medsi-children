@@ -1,5 +1,5 @@
 import {randomBytes} from 'node:crypto';
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 import {
   generateAuthenticationOptions,generateRegistrationOptions,
   verifyAuthenticationResponse,verifyRegistrationResponse

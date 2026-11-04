@@ -1,6 +1,7 @@
 import {createHash,createHmac} from 'node:crypto';
 import storageDefinitions from '../../../lib/s3-storage.js';
-import {inventoryD1ChatMedia} from './d1-chat-capture.mjs';
+import {captureD1ChatMessageManifest,inventoryD1ChatMedia} from './d1-chat-capture.mjs';
+import {generateManifest} from '../app/migration-audit.mjs';
 
 const MAX_BYTES=100*1024*1024;
 
@@ -87,4 +88,37 @@ export function prepareChatMediaImport(messages,mapping){
     })),
     s3Objects:mapping.map(entry=>({file_id:entry.fileId,bytes:entry.bytes,sha256:entry.sha256}))
   };
+}
+
+export async function importChatMediaOwnership(sql,messages,mapping,
+  {hmacKey,expectedManifest,explicitImport,freezeConfirmed}={}){
+  if(explicitImport!==true || freezeConfirmed!==true){
+    throw new Error('Explicit frozen chat media import approval required.');
+  }
+  const plan=prepareChatMediaImport(messages,mapping);
+  const wanted=generateManifest('chat_media',plan.chatMedia,hmacKey);
+  if(expectedManifest?.stream!==wanted.stream || expectedManifest.digest!==wanted.digest ||
+     expectedManifest.count!==wanted.count || expectedManifest.duplicateRows!==wanted.duplicateRows){
+    throw new Error('Chat media ownership manifest mismatch.');
+  }
+  const chat=captureD1ChatMessageManifest(plan.messages,hmacKey);
+  return sql.begin({},async tx=>{
+    await tx`LOCK TABLE public.chat_messages, public.chat_media IN SHARE ROW EXCLUSIVE MODE`;
+    const [storedMessages]=await tx`SELECT * FROM public.chat_messages`;
+    if(generateManifest('chat_messages',storedMessages,hmacKey).digest!==chat.digest){
+      throw new Error('Import the matching rewritten chat messages before media ownership.');
+    }
+    const [existing]=await tx`SELECT * FROM public.chat_media`;
+    if(!existing.length){
+      for(const row of plan.chatMedia){
+        await tx`INSERT INTO public.chat_media (file_id,phone10,uploaded_at)
+          VALUES (${row.file_id},${row.phone10},${row.uploaded_at})`;
+      }
+    }
+    const [stored]=await tx`SELECT * FROM public.chat_media`;
+    if(generateManifest('chat_media',stored,hmacKey).digest!==wanted.digest){
+      throw new Error('PostgreSQL chat media ownership differs from the baseline.');
+    }
+    return {count:stored.length,alreadyImported:existing.length>0};
+  });
 }

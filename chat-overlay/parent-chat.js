@@ -2,7 +2,7 @@
 const REACTIONS=['❤️','👍','👌','🙏','🥰','😁','🔥'];const cache=new Map();
 const p10=v=>String(v||'').replace(/\D+/g,'').slice(-10);const phoneDisplay=v=>{const p=p10(v);return p?'8'+p:''};
 const fmt=v=>{const d=new Date(Number(v));return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
-const mediaUrl=m=>{const id=String(m&&m.fileId||'');if(!id)return'';if(id.startsWith('kv:')||id.startsWith('r2:'))return window.MedsiOverlayTransport.baseUrl+'/media/'+encodeURIComponent(id.slice(3));return'https://drive.google.com/thumbnail?id='+encodeURIComponent(id)+'&sz=w1200'};
+const mediaUrl=m=>{const id=String(m&&m.fileId||'');return id&&window.MedsiOverlayTransport?window.MedsiOverlayTransport.mediaUrl(id,'w1200'):''};
 const replyText=m=>m&&m.text?String(m.text).slice(0,120):m&&m.type==='image'?'Фотография':m&&m.type==='video'?'Видео':'Сообщение';
 function mount(overlay,state){const t=window.MedsiOverlayTransport,session=state&&state.session,phone=p10(state&&state.phone);if(!overlay||!t||!session||!session.token||!phone){overlay&&overlay.showError('Не удалось открыть родительский чат.');return}overlay.body.replaceChildren();
 const wrap=document.createElement('div');wrap.className='medsi-legacy-wrap parent-role';const card=document.createElement('section');card.className='medsi-legacy-card';

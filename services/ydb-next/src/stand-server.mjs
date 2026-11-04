@@ -156,7 +156,7 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     chatOperations:services.chatOperations,reportSubmission:services.reports,
     parentRegistration:services.parentRegistration,parentAccess:services.parentAccess
   });
-  app.post('/__session/apps-script',express.text({type:'*/*',limit:'64kb'}),handler(async req=>{
+  app.post(['/__session/api','/__session/apps-script'],express.text({type:'*/*',limit:'64kb'}),handler(async req=>{
     let payload;
     try{payload=JSON.parse(String(req.body||''));}catch(_){throw new Error('Invalid legacy payload.');}
     if(payload?.action!=='api')throw new Error('Invalid legacy action.');

@@ -209,6 +209,53 @@ test('real PostgreSQL HTTP: complete NEXT UI, protected endpoints and schema hea
     assert.equal(protectedPage.status, 401);
     const reportBody = await protectedPage.text();
     assert.doesNotMatch(reportBody, /Фантазийный отчёт|Тестовая|Проверочный/);
+
+    // Emulate the exact text/plain Web Push client that used to call a Worker.
+    const tutor=services.sessions.loginTutor('fictional_ci_tutor','not-a-production-password');
+    assert.equal(tutor.ok,true);
+    const sub={
+      endpoint:'https://push.example.invalid/tutor-ci-endpoint',
+      keys:{auth:'synthetic-auth',p256dh:'synthetic-ecdh-key'}
+    };
+    const sendPush=(route,payload)=>fetch(base+route,{
+      method:'POST',headers:{'content-type':'text/plain;charset=utf-8'},
+      body:JSON.stringify(payload)
+    });
+    let res=await sendPush('/push/subscribe',{role:'educator',subscription:sub});
+    assert.equal(res.status,401,'unauthenticated educator push must fail');
+    res=await sendPush('/push/subscribe',{role:'educator',tutorToken:tutor.token,subscription:sub});
+    assert.equal(res.status,200);
+    assert.equal((await res.json()).ok,true);
+    let [subscriptions]=await conn.sql(
+      ['SELECT role,enabled FROM push_subscriptions WHERE subscription_id=',
+       ''],createHash('sha256').update(sub.endpoint).digest('hex'));
+    assert.equal(subscriptions[0].role,'educator');
+    assert.equal(subscriptions[0].enabled,true);
+    res=await sendPush('/push/unsubscribe',{
+      role:'educator',tutorToken:tutor.token,endpoint:sub.endpoint,reason:'user_disabled'
+    });
+    assert.equal(res.status,200);
+    [subscriptions]=await conn.sql(
+      ['SELECT enabled,disabled_reason FROM push_subscriptions WHERE subscription_id=',
+       ''],createHash('sha256').update(sub.endpoint).digest('hex'));
+    assert.equal(subscriptions[0].enabled,false);
+    assert.equal(subscriptions[0].disabled_reason,'user_disabled');
+    const parentA=await services.sessions.issueParent('9000000001');
+    const parentB=await services.sessions.issueParent('9000000002');
+    const shared={
+      endpoint:'https://push.example.invalid/parent-A-endpoint',
+      keys:{auth:'synthetic-auth',p256dh:'synthetic-ecdh-key'}
+    };
+    res=await sendPush('/push/subscribe',{
+      role:'parent',phone:'9000000001',parentSession:parentA.token,subscription:shared
+    });
+    assert.equal(res.status,200);
+    res=await sendPush('/push/subscribe',{
+      role:'parent',phone:'9000000002',parentSession:parentB.token,subscription:shared
+    });
+    assert.equal(res.status,403,'another parent cannot steal an existing endpoint');
+    res=await sendPush('/push/notify',{role:'educator'});
+    assert.equal(res.status,404,'legacy unauthenticated Worker notify route remains disabled');
   } finally {
     await new Promise(resolve => server.close(resolve));
     await conn.driver.close();

@@ -57,6 +57,21 @@ export function readLegacyAuthConfig(env) {
       version:env.NEXT_LEGACY_TUTOR_VERSION}
   };
 }
+// Read-only schema probe for the isolated test stand.
+// LIMIT 0 validates table/column resolution without reading patient rows.
+export async function checkNextTestSchema(sql) {
+  if(typeof sql!=='function')throw new Error('YDB query client unavailable.');
+  await sql`SELECT child_id FROM children LIMIT 0`;
+  await sql`SELECT admission_id FROM admissions LIMIT 0`;
+  await sql`SELECT phone10 FROM parent_profiles LIMIT 0`;
+  await sql`SELECT phone10 FROM parent_auth_profiles LIMIT 0`;
+  await sql`SELECT message_key FROM chat_messages LIMIT 0`;
+  await sql`SELECT phone10 FROM parent_current_reports LIMIT 0`;
+  await sql`SELECT phone10 FROM parent_report_history LIMIT 0`;
+  await sql`SELECT event_id FROM push_outbox LIMIT 0`;
+  return {ok:true};
+}
+
 export function createNextServices({sql,env=process.env}) {
   requireEnv(env);
   const sessions=createSessionService({
@@ -86,8 +101,9 @@ export function createNextServices({sql,env=process.env}) {
   const media=createMediaService({sql,sessions,secret:env.NEXT_SESSION_SECRET,
     storage:require('../../../lib/s3-storage.js')});
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
+  const dbSchemaHealth=()=>checkNextTestSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,
-    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,media};
+    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media};
 }
 
 function handler(fn) {
@@ -117,6 +133,23 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     await services.dbHealth();
     return {ok:true,service:'medsi-ydb-next',mode:'isolated',database:'reachable'};
   }));
+
+  // Separate from /__health: DB connectivity can succeed even without schema.
+  // No patient data, schema errors or query text are included in the response.
+  app.get('/__schema-health',async(_req,res)=>{
+    if(typeof services.dbSchemaHealth!=='function') {
+      return res.status(503).json({ok:false,service:'medsi-ydb-next',
+        mode:'isolated',schema:'unavailable',code:'YDB_TEST_SCHEMA_UNAVAILABLE'});
+    }
+    try{
+      await services.dbSchemaHealth();
+      return res.json({ok:true,service:'medsi-ydb-next',mode:'isolated',
+        schema:'reachable',checks:8});
+    }catch(_){
+      return res.status(503).json({ok:false,service:'medsi-ydb-next',
+        mode:'isolated',schema:'unavailable',code:'YDB_TEST_SCHEMA_NOT_READY'});
+    }
+  });
 
   const legacy=createLegacyBridge({
     sessions:services.sessions,reportReader:services.reportReader,

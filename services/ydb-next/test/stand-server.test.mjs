@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand} from '../src/stand-server.mjs';
+import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand,checkNextTestSchema} from '../src/stand-server.mjs';
 import {closeYdbDriver,connectYdbNext} from '../src/connection.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
@@ -272,4 +272,42 @@ test('YDB SDK v6 close() is preferred while legacy destroy() remains compatible'
   await closeYdbDriver({close:()=>{throw new Error('synthetic cleanup fault');}});
   await closeYdbDriver(null);
   assert.deepEqual(invoked,['close','destroy']);
+});
+
+test('isolated YDB schema probe checks eight tables without loading patient rows',async()=>{
+  const queries=[];
+  const sql=async(parts,...values)=>{
+    queries.push({query:parts.join('?'),values});
+    return [[]];
+  };
+  assert.deepEqual(await checkNextTestSchema(sql),{ok:true});
+  assert.equal(queries.length,8);
+  for(const {query,values} of queries){
+    assert.match(query,/^SELECT [a-z_]+ FROM [a-z_]+ LIMIT 0$/);
+    assert.deepEqual(values,[]);
+  }
+});
+
+test('schema health is separate from DB connectivity and never exposes SQL errors',async()=>{
+  const fake=fakeServices();
+  fake.dbSchemaHealth=async()=>{throw new Error('hidden schema/table metadata');};
+  const app=createNextStandApp(fake,{env});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const root='http://127.0.0.1:'+server.address().port;
+  try{
+    const health=await fetch(root+'/__health');
+    assert.equal(health.status,200);
+    const response=await fetch(root+'/__schema-health');
+    assert.equal(response.status,503);
+    const failed=await response.json();
+    assert.equal(failed.code,'YDB_TEST_SCHEMA_NOT_READY');
+    assert.equal(JSON.stringify(failed).includes('hidden'),false);
+    fake.dbSchemaHealth=async()=>({ok:true});
+    const recovered=await fetch(root+'/__schema-health');
+    assert.equal(recovered.status,200);
+    assert.deepEqual(await recovered.json(),{
+      ok:true,service:'medsi-ydb-next',mode:'isolated',schema:'reachable',checks:8
+    });
+  }finally{await new Promise(resolve=>server.close(resolve));}
 });

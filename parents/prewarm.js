@@ -44,7 +44,7 @@
     const ph=p10(phone||parentPhone()),auth=parentAuth();
     if(!ph||!auth)return null;
     if(d1RecoveryPending&&d1RecoveryPending.phone===ph)return d1RecoveryPending.promise;
-    const promise=RAW_FETCH('/__session/apps-script',{
+    const promise=RAW_FETCH('/__session/api',{
       method:'POST',
       headers:{'content-type':'application/json'},
       body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,auth]}),
@@ -65,19 +65,9 @@
 
   if(!window.__medsiTimewebSessionFetchWrapped){
     window.__medsiTimewebSessionFetchWrapped=true;
-    const allowed=new Set(['getD1ChatSession','verifyTutorSession','verifyTutorAccess']);
     window.fetch=async function(input,init){
-      try{
-        const url=typeof input==='string'?input:(input&&input.url)||'';
-        const body=init&&typeof init.body==='string'?init.body:'';
-        if(url.includes('script.google.com/macros/s/')&&body){
-          const payload=JSON.parse(body);
-          if(payload&&payload.action==='api'&&allowed.has(String(payload.method||''))){
-            return RAW_FETCH('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),cache:'no-store',signal:init.signal});
-          }
-        }
-      }catch(_){}
-
+      // Only same-origin lab requests receive a refreshed signed session.
+      // Old Google Node.js fetch interception is retired.
       if(!isLabRequest(input))return RAW_FETCH(input,init);
 
       const ph=parentPhone();
@@ -108,7 +98,7 @@
   async function confirmParentExists(phone){
     const auth=parentAuth(),ph=p10(phone);if(!auth||!ph)return null;
     try{
-      const response=await fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getParentBootstrap',args:[ph,auth]}),cache:'no-store'});
+      const response=await fetch('/__session/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getParentBootstrap',args:[ph,auth]}),cache:'no-store'});
       const payload=await response.json();
       if(!response.ok||!payload||payload.ok!==true)return null;
       const result=payload.result;
@@ -166,10 +156,10 @@
 
   let loginWarm=null;
   function saveLoginSession(phone,session){if(!session||!session.token)return;saveStoredD1Session(phone,session);fetchThread(session,p10(phone),'',100).catch(()=>{})}
-  function prewarmLogin(phone){const ph=p10(phone),auth=parentAuth();if(!ph||!auth)return Promise.resolve(null);if(loginWarm&&loginWarm.phone===ph)return loginWarm.promise;const promise=fetch('/__session/apps-script',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,auth]}),cache:'no-store'}).then(r=>r.json()).then(p=>{const s=extractSession(p&&p.result);if(s)saveLoginSession(ph,s);return s}).catch(()=>null);loginWarm={phone:ph,promise};return promise}
+  function prewarmLogin(phone){const ph=p10(phone),auth=parentAuth();if(!ph||!auth)return Promise.resolve(null);if(loginWarm&&loginWarm.phone===ph)return loginWarm.promise;const promise=fetch('/__session/api',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'api',method:'getD1ChatSession',args:['parent',ph,auth]}),cache:'no-store'}).then(r=>r.json()).then(p=>{const s=extractSession(p&&p.result);if(s)saveLoginSession(ph,s);return s}).catch(()=>null);loginWarm={phone:ph,promise};return promise}
   function installLoginWarm(){const run=()=>{const btn=document.getElementById('authBtn'),input=document.getElementById('phoneInputAuth');if(btn&&input&&!btn.dataset.medsiSessionWarm){btn.dataset.medsiSessionWarm='1';btn.addEventListener('click',()=>prewarmLogin(input.value),true);input.addEventListener('keydown',e=>{if(e.key==='Enter')prewarmLogin(input.value)},true)}};if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',run,{once:true});else run()}
-  // Do not contact Apps Script before the parent authorization flow finishes.
-  // A successful bootstrap already carries the D1 session used for prewarming.
+  // Do not contact Node.js before the parent authorization flow finishes.
+  // A successful bootstrap already carries the chat session used for prewarming.
 
   let savedWarmKey='',savedWarmAttemptAt=0;
   function savedChat(){

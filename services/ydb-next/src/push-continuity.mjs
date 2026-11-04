@@ -1,5 +1,5 @@
 import {createECDH,createHash,timingSafeEqual} from 'node:crypto';
-import {Uint64} from '@ydbjs/value/primitive';
+import {Uint64} from './uint64-compat.mjs';
 
 // Offline, operator-controlled import of a FROZEN legacy Cloudflare KV capture.
 // Never log or expose the capture: it contains Web Push endpoint and encryption

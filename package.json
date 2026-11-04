@@ -18,7 +18,6 @@
     "verify:reliability": "node --test tests/push-recovery.test.cjs tests/platform-reliability.test.cjs tests/apps-script-chat-retirement.test.cjs tests/report-state-d1-migration.test.cjs tests/report-state-apps-script-cutover.test.cjs tests/report-generations-migration.test.cjs tests/report-publication-fencing.test.cjs",
     "verify:recovery": "node --test tests/parent-recovery.test.cjs",
     "verify:auth": "node --test tests/parent-passkeys.test.cjs tests/parent-passkey-offer.test.cjs",
-    "postinstall": "npm --prefix services/ydb-next install --ignore-scripts --no-audit --no-fund",
     "verify:ydb-next": "npm --prefix services/ydb-next run check",
     "build": "npm --prefix services/ydb-next install --ignore-scripts --no-audit --no-fund"
   },

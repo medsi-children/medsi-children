@@ -1,0 +1,4 @@
+# Timeweb invokes pnpm run build even for a package-lock/npm project.
+# Avoid pnpm's automatic reinstall over npm ci's node_modules, which fails
+# across Timeweb image filesystem boundaries (ERR_PNPM_PACKAGE_MANAGER_SYMLINK_FAILED).
+verifyDepsBeforeRun: false

@@ -7,6 +7,7 @@
 if (process.env.MEDSI_NEXT_STAND === '1') {
   // Timeweb scans for an open port before it considers a container ready.
   // Load no external dependencies until the isolated diagnostic socket exists.
+  console.log('MEDSI_NEXT_STAND_ENTRY_STARTED');
   const {startStandBootstrap} = require('./services/ydb-next/src/stand-bootstrap.cjs');
   const bootstrap = startStandBootstrap();
   import('./services/ydb-next/src/stand-server.mjs')

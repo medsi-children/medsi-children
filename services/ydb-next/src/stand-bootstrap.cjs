@@ -37,7 +37,12 @@ function startStandBootstrap(env=process.env){
     console.error('MEDSI_NEXT_STAND_PORT_BIND_FAILED');
     process.exitCode=1;
   });
-  server.listen(port,'0.0.0.0',()=>console.log('MEDSI_NEXT_STAND_HTTP_LISTENING'));
+  const bindStarted=process.hrtime.bigint();
+  console.log('MEDSI_NEXT_STAND_PORT_BIND_REQUESTED');
+  server.listen(port,'0.0.0.0',()=>{
+    const elapsedMs=Number((process.hrtime.bigint()-bindStarted)/1000000n);
+    console.log('MEDSI_NEXT_STAND_HTTP_LISTENING bind_ms='+elapsedMs);
+  });
   return {
     server,
     activate(handler){

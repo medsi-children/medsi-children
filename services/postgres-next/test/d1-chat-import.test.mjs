@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {connectPostgresNext} from '../src/connection.mjs';
 import {captureRosterManifests,importRosterCapture} from '../src/roster-capture.mjs';
 import {captureD1ReportManifests,importD1Reports} from '../src/d1-report-capture.mjs';
+import {captureReportBaselineManifests,importReportBaseline} from '../src/report-baseline.mjs';
 import {installSchema} from '../src/schema-cli.mjs';
 import {prepareChatMediaImport,importChatMediaOwnership} from '../src/chat-media-copy.mjs';
 import {captureD1ParentProfileManifest,importD1ParentProfiles} from '../src/d1-profile-capture.mjs';
@@ -54,6 +55,16 @@ test('D1 chat baseline imports once, verifies PostgreSQL data, and refuses misma
         report_date:'2020-09-13',captured_at:1600000000000}];
       const oldLinks=[{...links[0],profile_generation:'generation-old',admission_id:'stay-old'}];
       const reportOptions={...profileOptions,expectedManifests:captureD1ReportManifests(current,history,links,oldLinks,hmacKey)};
+      const head={publication_id:'pub-2',kind:'morning',submitted_at:1700000000000,revision:2};
+      const baseline={nameRows:[['Тестолина','Тестуля']],raw:[{...head,report_date:'2023-11-14',
+        raw_text:'Синтетический исходник',normalized_text:'Синтетический текст',author_id:'synthetic-author'}],
+        heads:[head],submissions:[{...head,submission_id:'sub-2',payload_hash:'a'.repeat(64)}],
+        ownership:[{owner_key:'synthetic-owner',record_json:'{"synthetic":true}',updated_at:1700000000000}]};
+      const baselineOptions={...profileOptions,expectedManifests:captureReportBaselineManifests(baseline,hmacKey)};
+      const importBaseline=()=>importReportBaseline(connection.sql,baseline,baselineOptions);
+      const baselineCounts={name_variants:1,raw_reports:1,report_publication_head:1,report_submissions:1,report_ownership:1};
+      assert.deepEqual(await importBaseline(),baselineCounts);
+      assert.deepEqual(await importBaseline(),baselineCounts);
       const importReports=()=>importD1Reports(connection.sql,current,history,links,oldLinks,reportOptions);
       assert.deepEqual(await importReports(),{parent_current_reports:1,parent_report_history:1});
       assert.deepEqual(await importReports(),{parent_current_reports:1,parent_report_history:1});

@@ -364,10 +364,8 @@
 
   function enhanceMediaNode(node) {
     if (!node || node.nodeType !== 1) return;
-    if (node.matches && node.matches('img,video')) repairS3Source(node);
     if (node.matches && node.matches('video')) enhanceVideo(node);
     if (node.querySelectorAll) {
-      node.querySelectorAll('img,video').forEach(repairS3Source);
       node.querySelectorAll('video').forEach(enhanceVideo);
     }
   }
@@ -405,7 +403,6 @@
 
   function installMediaUi() {
     injectVideoStyles();
-    document.querySelectorAll('img,video').forEach(repairS3Source);
     document.querySelectorAll('video').forEach(enhanceVideo);
     const observer = new MutationObserver(records => {
       records.forEach(record => record.addedNodes.forEach(enhanceMediaNode));

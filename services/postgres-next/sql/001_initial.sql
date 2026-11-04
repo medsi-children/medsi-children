@@ -227,6 +227,7 @@ CREATE TABLE IF NOT EXISTS push_subscriptions (
   phone10 TEXT,
   subscription_json TEXT,
   enabled BOOLEAN,
+  disabled_reason TEXT,
   updated_at BIGINT,
   PRIMARY KEY (subscription_id)
 );

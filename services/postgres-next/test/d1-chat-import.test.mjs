@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {connectPostgresNext} from '../src/connection.mjs';
+import {captureRosterManifests,importRosterCapture} from '../src/roster-capture.mjs';
 import {installSchema} from '../src/schema-cli.mjs';
 import {prepareChatMediaImport,importChatMediaOwnership} from '../src/chat-media-copy.mjs';
 import {captureD1ParentProfileManifest,importD1ParentProfiles} from '../src/d1-profile-capture.mjs';
@@ -34,9 +35,15 @@ test('D1 chat baseline imports once, verifies PostgreSQL data, and refuses misma
         expectedManifest:captureD1ParentProfileManifest(profiles,links,admissions,hmacKey)};
       const importProfiles=()=>importD1ParentProfiles(connection.sql,profiles,links,admissions,profileOptions);
       await assert.rejects(importProfiles(),/roster/);
-      await connection.sql`INSERT INTO children (child_id) VALUES ('child-1')`;
-      await connection.sql`INSERT INTO admissions (admission_id,child_id,status)
-        VALUES ('stay-1','child-1','active')`;
+      const children=[{child_id:'child-1',registered_first_name:'Тестолина',surname:'Вымышленная',created_at:null}];
+      const rosterAdmissions=[{...admissions[0],admitted_at:1700000000000,discharged_at:null},
+        {admission_id:'stay-old',child_id:'child-1',status:'discharged',admitted_at:null,discharged_at:1600000000000}];
+      const rosterOptions={...profileOptions,expectedManifests:captureRosterManifests(children,rosterAdmissions,hmacKey)};
+      const importRoster=()=>importRosterCapture(connection.sql,children,rosterAdmissions,rosterOptions);
+      assert.deepEqual(await importRoster(),{children:1,admissions:2,alreadyImported:false});
+      assert.deepEqual(await importRoster(),{children:1,admissions:2,alreadyImported:true});
+      assert.throws(()=>captureRosterManifests(children,[...rosterAdmissions,
+        {...rosterAdmissions[0],admission_id:'another-active-stay'}],hmacKey),/ambiguous/);
       assert.deepEqual(await importProfiles(),{count:1,alreadyImported:false});
       assert.deepEqual(await importProfiles(),{count:1,alreadyImported:true});
       const plan=prepareChatMediaImport(source,mapping);

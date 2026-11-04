@@ -111,7 +111,7 @@ test('synthetic migration baseline is repeatable and verifies all 26 signed stre
       const publicKey=vapid.getPublicKey().toString('base64url');
       const endpoint='https://push.example.invalid/synthetic';
       const subscription={key:'sub:'+createHash('sha256').update(endpoint).digest('hex'),
-        value:{role:'parent',phone10:profiles[0].phone10,enabled:false,
+        value:{role:'parent',phone10:profiles[0].phone10,enabled:false,disabledReason:'user_disabled',
           updatedAt:'2025-11-05T00:00:00Z',subscription:{endpoint,keys:{auth:'synthetic',p256dh:'synthetic'}}}};
       const pushOptions={...options,sourceVapidPublicKey:publicKey,targetVapidPublicKey:publicKey,
         targetVapidPrivateKey:vapid.getPrivateKey().toString('base64url'),expectedCount:1};

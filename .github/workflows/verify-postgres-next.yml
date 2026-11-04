@@ -71,6 +71,12 @@ jobs:
             docker exec -i "$PG_CONTAINER" pg_restore -U medsi_ci --exit-on-error -d medsi_restore
           PGDATABASE=medsi_restore node services/postgres-next/src/probe-cli.mjs
           node services/postgres-next/test/verify-restored-backup.mjs
+      - name: Rehearse D1 chat baseline import on PostgreSQL 18
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_CONTAINER" createdb -U medsi_ci medsi_chat_import
+          PGDATABASE=medsi_chat_import node --test services/postgres-next/test/d1-chat-import.test.mjs
       - name: Existing NEXT report logic and app regressions
         run: |
           npm test --prefix services/postgres-next

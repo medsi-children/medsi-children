@@ -134,9 +134,13 @@ function handler(fn) {
     }catch(error) {
       const message=String(error?.message||'');
       const unauthorized=/^Unauthorized/.test(message);
+      const expired=error?.code==='PUSH_SUBSCRIPTION_EXPIRED';
       const userError=/^(Invalid |Unauthorized|Unsupported |Parent profile|Request |Forbidden)/.test(message);
-      if(!res.headersSent)res.status(unauthorized?401:userError?400:503).json({ok:false,
-        message:userError?'Некорректный или недоступный запрос.':'Сервис временно недоступен.'});
+      if(!res.headersSent)res.status(expired?409:unauthorized?401:userError?400:503).json({
+        ok:false,...(expired?{code:'PUSH_SUBSCRIPTION_EXPIRED'}:{}),
+        message:expired?'Подписка устарела, требуется обновление.':userError
+          ?'Некорректный или недоступный запрос.':'Сервис временно недоступен.'
+      });
     }
   };
 }
@@ -218,7 +222,7 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
   }));
   push.post('/unsubscribe',handler(async req=>{
     const data=parsePayload(req),auth=await pushAuth(data);
-    return services.push.unsubscribe({...auth,endpoint:data.endpoint});
+    return services.push.unsubscribe({...auth,endpoint:data.endpoint,reason:data.reason});
   }));
   app.use('/push',push);
   // Media is private: chat headers authorize upload; short-lived HttpOnly
@@ -233,9 +237,10 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
   app.get('/notify-client.js',handler(async (_req,res)=>{
     const script=await readFile(path.join(root,'notify-client.js'),'utf8');
     const pub=String(env.VAPID_PUBLIC_KEY||'');
-    const updated=pub
-      ?script.replace(/const VAPID_PUBLIC_KEY = '[^']*';/,
-        'const VAPID_PUBLIC_KEY = '+JSON.stringify(pub)+';'):script;
+    // A missing current VAPID configuration must never expose a stale
+    // hard-coded key from the previous push infrastructure.
+    const updated=script.replace(/const VAPID_PUBLIC_KEY = '[^']*';/,
+      'const VAPID_PUBLIC_KEY = '+JSON.stringify(pub)+';');
     res.type('application/javascript').send(updated);
   }));
   const send=(file)=> (_req,res)=>res.sendFile(path.join(root,file));

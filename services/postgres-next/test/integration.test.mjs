@@ -9,6 +9,7 @@ import { seedSyntheticRoster } from '../../ydb-next/src/seed-demo.mjs';
 import { importLegacyIdentityCapture } from '../../ydb-next/src/identity-continuity.mjs';
 import { importLegacyPushCapture } from '../../ydb-next/src/push-continuity.mjs';
 import { createECDH, createHash } from 'node:crypto';
+import { createNextStandApp, createNextServices } from '../../ydb-next/src/stand-server.mjs';
 
 const enabled = process.env.CI === 'true' && process.env.PG_TEST_INSECURE_LOCAL === '1';
 
@@ -171,6 +172,45 @@ test('real PostgreSQL: authenticated identity and push migration preserves opaqu
     assert.equal(subscribed.length, 1);
     assert.equal(subscribed[0].enabled, true);
   } finally {
+    await conn.driver.close();
+  }
+});
+
+test('real PostgreSQL HTTP: complete NEXT UI, protected endpoints and schema health', {
+  skip: enabled ? false : 'Disposable PostgreSQL CI only.'
+}, async () => {
+  const conn = await connectPostgresNext(process.env);
+  const env = {
+    ...process.env, MEDSI_NEXT_STAND: '1', MEDSI_NEXT_PG_ENABLED: '1',
+    NEXT_SESSION_SECRET: 'synthetic-ci-session-secret-1234567890',
+    NEXT_TUTOR_LOGIN: 'fictional_ci_tutor',
+    NEXT_TUTOR_PASSWORD: 'not-a-production-password',
+    NEXT_TUTOR_VERSION: 'ci-1'
+  };
+  const services = createNextServices({ sql: conn.sql, env });
+  const app = createNextStandApp(services, { env });
+  const server = await new Promise(resolve => {
+    const listener = app.listen(0, '127.0.0.1', () => resolve(listener));
+  });
+  const base = 'http://127.0.0.1:' + server.address().port;
+  try {
+    const health = await fetch(base + '/__health');
+    assert.equal(health.status, 200);
+    assert.equal((await health.json()).database, 'reachable');
+    const schema = await fetch(base + '/__schema-health');
+    assert.equal(schema.status, 200);
+    assert.equal((await schema.json()).schema, 'reachable');
+    for (const path of ['/', '/tutors', '/psychology']) {
+      const res = await fetch(base + path);
+      assert.equal(res.status, 200, path);
+      assert.match(res.headers.get('content-type') || '', /html/);
+    }
+    const protectedPage = await fetch(base + '/lab/admin/reports/dashboard');
+    assert.equal(protectedPage.status, 401);
+    const reportBody = await protectedPage.text();
+    assert.doesNotMatch(reportBody, /Фантазийный отчёт|Тестовая|Проверочный/);
+  } finally {
+    await new Promise(resolve => server.close(resolve));
     await conn.driver.close();
   }
 });

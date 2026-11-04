@@ -92,3 +92,19 @@ test('TLS certificate is mandatory outside an isolated local CI database', () =>
   });
   assert.equal(config.ssl, false);
 });
+
+test('unencrypted database mode is limited to an explicit RFC1918 IPv4 endpoint', () => {
+  const base = {
+    MEDSI_NEXT_PG_ENABLED: '1', MEDSI_NEXT_STAND: '1',
+    PGDATABASE: 'medsi', PGUSER: 'app', PGPASSWORD: 'synthetic-only',
+    PG_SSL_MODE: 'private_network_no_tls'
+  };
+  assert.equal(readPostgresConfig({...base, PGHOST:'192.168.0.4'}).ssl, false);
+  assert.equal(readPostgresConfig({...base, PGHOST:'10.12.0.9'}).ssl, false);
+  for (const PGHOST of ['172.16.1.2','172.31.255.1']) {
+    assert.equal(readPostgresConfig({...base, PGHOST}).ssl, false);
+  }
+  for (const PGHOST of ['db.internal','8.8.8.8','172.32.0.1','192.167.0.1','169.254.1.2']) {
+    assert.throws(() => readPostgresConfig({...base, PGHOST}), /trusted TLS CA/);
+  }
+});

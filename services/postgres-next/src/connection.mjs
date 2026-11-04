@@ -1,4 +1,5 @@
 import pg from 'pg';
+import net from 'node:net';
 import {SCHEMA_SQL} from './schema-contract.mjs';
 
 // PostgreSQL adapter for the existing NEXT service contracts.
@@ -127,17 +128,26 @@ export function readPostgresConfig(env = process.env) {
   // An insecure local connection is permissible ONLY inside isolated CI.
   const localCI = env.CI === 'true' && env.NODE_ENV === 'test' &&
     env.PG_TEST_INSECURE_LOCAL === '1' && ['127.0.0.1', 'localhost'].includes(host);
+  // Timeweb currently offers this database only without TLS on its private
+  // network. This explicitly authorized mode accepts a numeric RFC1918 IPv4
+  // address only; hostnames and public addresses continue to require TLS.
+  const privateNetworkNoTls = env.PG_SSL_MODE === 'private_network_no_tls' &&
+    net.isIPv4(host) && (() => {
+      const [a,b] = host.split('.').map(Number);
+      return a === 10 || (a === 172 && b >= 16 && b <= 31) ||
+        (a === 192 && b === 168);
+    })();
   const caPem = env.PG_SSL_CA_B64
     ? Buffer.from(String(env.PG_SSL_CA_B64), 'base64').toString('utf8')
     : String(env.PG_SSL_CA_PEM || '');
-  if (!localCI && (!caPem.includes('-----BEGIN CERTIFICATE-----') ||
+  if (!localCI && !privateNetworkNoTls && (!caPem.includes('-----BEGIN CERTIFICATE-----') ||
       !caPem.includes('-----END CERTIFICATE-----'))) {
     throw new Error('PostgreSQL NEXT requires a trusted TLS CA certificate.');
   }
   return {
     host, port, database, user, password,
-    ssl: localCI ? false : { ca: caPem, rejectUnauthorized: true },
-    max: 4, application_name: 'medsi-next-isolated',
+    ssl: localCI || privateNetworkNoTls ? false : { ca: caPem, rejectUnauthorized: true },
+    max: 4, application_name: 'medsi-bot-2.0',
     connectionTimeoutMillis: 8000, idleTimeoutMillis: 30000,
     statement_timeout: 20000
   };

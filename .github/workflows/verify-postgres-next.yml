@@ -61,6 +61,8 @@ jobs:
           node --check tutors/next-settings.js
       - name: PostgreSQL adapter and real disposable database
         run: node --test services/postgres-next/test/adapter.test.mjs services/postgres-next/test/integration.test.mjs
+      - name: Verify purchased-database probe contract against disposable database
+        run: node services/postgres-next/src/probe-cli.mjs
       - name: Existing NEXT report logic and app regressions
         run: |
           npm test --prefix services/ydb-next

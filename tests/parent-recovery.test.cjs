@@ -9,7 +9,7 @@ function environment(fetch){
   const elements=new Map(),storage=new Map(),timers=new Map(),intervals=new Map();let timerId=0,intervalId=0;
   const noop=()=>{};
   const node=()=>({classList:{add:noop,remove:noop,toggle:noop,contains:()=>false},style:{},dataset:{},addEventListener:noop,setAttribute:noop,scrollTo:noop,replaceChildren:noop,appendChild:noop,querySelector:()=>null,value:'',textContent:''});
-  const ctx={console,AbortController,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{fetch,scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
+  const ctx={console,AbortController,URL,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{fetch,scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
   vm.createContext(ctx);return {ctx,elements,storage,timers,intervals};
 }
 function parent(fetch){
@@ -73,7 +73,7 @@ test('chat obtains a fresh session before reading and does not wait for prewarm'
 test('rejected read token is renewed once and the read resumes',async()=>{
   let reads=0,renewals=0;const tokens=[];
   const env=parent(async(url,options)=>{
-    if(url==='/__session/apps-script'){renewals++;return response({ok:true,result:{...session,token:'renewed'}});}
+    if(url==='/__session/api'){renewals++;return response({ok:true,result:{...session,token:'renewed'}});}
     reads++;tokens.push(options.headers['X-Medsi-Chat-Session']);
     if(reads===1)return {ok:false,status:401,json:async()=>({ok:false})};
     return response({ok:true,reports:[]});
@@ -158,14 +158,23 @@ test('saved D1 session starts a parent thread prewarm in the background',async()
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);await tick();
   assert.equal(calls,1);
 });
-test('parent session bridge preserves the original cancellation signal',async()=>{
-  let received;
-  const env=environment(async(url,options)=>{received={url,options};return response({ok:true})});
+test('parent prewarm refuses old Google URLs and preserves local cancellation',async()=>{
+  const calls=[];
+  const env=environment(async(url,options)=>{
+    calls.push({url,options});
+    return response({ok:true});
+  });
   vm.runInContext(fs.readFileSync(path.join(root,'parents/prewarm.js'),'utf8'),env.ctx);
   const controller=new AbortController();
-  await env.ctx.window.fetch('https://script.google.com/macros/s/synthetic/exec',{body:JSON.stringify({action:'api',method:'getD1ChatSession',args:[]}),signal:controller.signal});
-  assert.equal(received.url,'/__session/apps-script');
-  assert.equal(received.options.signal,controller.signal);
+  await assert.rejects(env.ctx.window.fetch('https://script.google.com/macros/s/synthetic/exec',{
+    body:JSON.stringify({action:'api',method:'getD1ChatSession',args:[]}),
+    signal:controller.signal
+  }),/LEGACY_UPSTREAM_DISABLED/);
+  await assert.rejects(env.ctx.window.fetch('https://example.foo.workers.dev/lab/profile'),/LEGACY_UPSTREAM_DISABLED/);
+  assert.equal(calls.length,0);
+  await env.ctx.window.fetch('/__session/api',{signal:controller.signal});
+  assert.equal(calls[0].url,'/__session/api');
+  assert.equal(calls[0].options.signal,controller.signal);
 });
 
 test('educator preview opens the actual parent menu immediately and never renews through a saved parent account',async()=>{

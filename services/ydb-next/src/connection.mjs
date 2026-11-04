@@ -57,10 +57,29 @@ export function readConnectionConfig(env = process.env) {
 }
 
 export async function connectYdbNext(env = process.env) {
-  const config = readConnectionConfig(env);
-  const driver = new Driver(config.connectionString, {
-    credentialsProvider: new ServiceAccountCredentialsProvider(config.serviceAccount)
-  });
+  let config;
+  try {
+    config = readConnectionConfig(env);
+  } catch (error) {
+    // Keep the known, sanitized configuration messages. Never emit env values.
+    const message = String(error?.message || '');
+    if (/^(YDB NEXT is disabled|YDB NEXT requires|YDB_SERVICE_ACCOUNT_JSON|YDB service account JSON|Isolated YDB operations|Unrecognized YDB table scope)/.test(message)) {
+      throw error;
+    }
+    throw new Error('YDB NEXT configuration validation failed.');
+  }
+  let credentialsProvider;
+  try {
+    credentialsProvider = new ServiceAccountCredentialsProvider(config.serviceAccount);
+  } catch (_) {
+    throw new Error('YDB NEXT credentials provider initialization failed.');
+  }
+  let driver;
+  try {
+    driver = new Driver(config.connectionString, {credentialsProvider});
+  } catch (_) {
+    throw new Error('YDB NEXT driver initialization failed.');
+  }
   let readyTimer;
   try {
     // A stalled SDK handshake must not hang the Timeweb rollout forever.

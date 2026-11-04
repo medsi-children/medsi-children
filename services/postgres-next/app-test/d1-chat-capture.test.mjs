@@ -26,3 +26,21 @@ test('D1 chat capture rejects ambiguous identities and lossy values',()=>{
     assert.throws(()=>normalizeD1ChatMessages([{...fixture,...patch}]),/ambiguous/);
   }
 });
+
+test('D1 chat related streams preserve timestamp ties, unread state and historic request keys',async()=>{
+  const {deriveD1ChatRelatedStreams}=await import('../src/d1-chat-capture.mjs');
+  const first={...fixture,client_message_id:'fictional-first',type:'text',status:'active',file_id:'',reply_to_key:''};
+  const edited={...first,message_key:'fictional-edited',client_message_id:'fictional-edited',
+    side:'educator',read_by_parent:0,read_by_educator:1,edited_at:1700000000001};
+  const deleted={...fixture,message_key:'fictional-deleted',created_at:1700000000002};
+  const pin={phone10:first.phone10,bucket:'unread',updated_at:1700000000003};
+  const streams=deriveD1ChatRelatedStreams([first,edited,deleted],[pin]);
+  assert.deepEqual(streams.chat_thread_state,[{phone10:first.phone10,last_message_key:edited.message_key,
+    last_side:'educator',last_type:'text',last_text:edited.text,last_at:'1700000000000',
+    educator_has_unread:true,parent_has_unread:true}]);
+  assert.match(streams.chat_message_dedup[0].payload_hash,/^[a-f0-9]{64}$/);
+  assert.equal(streams.chat_message_dedup[1].payload_hash,null);
+  assert.equal(streams.chat_message_dedup[2].payload_hash,null);
+  assert.deepEqual(streams.chat_pins,[{...pin,updated_at:'1700000000003'}]);
+  assert.throws(()=>deriveD1ChatRelatedStreams([first],[pin,pin]),/ambiguous/);
+});

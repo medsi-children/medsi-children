@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {connectPostgresNext} from '../src/connection.mjs';
 import {installSchema} from '../src/schema-cli.mjs';
-import {captureD1ChatMessageManifest,importD1ChatMessages} from '../src/d1-chat-capture.mjs';
+import {captureD1ChatMessageManifest,importD1ChatMessages,
+  captureD1ChatRelatedManifests,importD1ChatRelatedStreams} from '../src/d1-chat-capture.mjs';
 
 const env=process.env;
 const disposable=env.CI==='true' && env.PG_TEST_INSECURE_LOCAL==='1' &&
@@ -25,6 +26,11 @@ test('D1 chat baseline imports once, verifies PostgreSQL data, and refuses misma
       await assert.rejects(importD1ChatMessages(connection.sql,rows,{...options,freezeConfirmed:false}),/approval/);
       assert.deepEqual(await importD1ChatMessages(connection.sql,rows,options),{count:1,alreadyImported:false});
       assert.deepEqual(await importD1ChatMessages(connection.sql,rows,options),{count:1,alreadyImported:true});
+      const pins=[{phone10:rows[0].phone10,bucket:'unread',updated_at:1700000000001}];
+      const relatedOptions={...options,expectedManifests:captureD1ChatRelatedManifests(rows,pins,hmacKey)};
+      const counts={chat_thread_state:1,chat_message_dedup:1,chat_pins:1};
+      assert.deepEqual(await importD1ChatRelatedStreams(connection.sql,rows,pins,relatedOptions),counts);
+      assert.deepEqual(await importD1ChatRelatedStreams(connection.sql,rows,pins,relatedOptions),counts);
       const changed=[{...rows[0],text:'Другая синтетическая запись'}];
       await assert.rejects(importD1ChatMessages(connection.sql,changed,options),/manifest mismatch/);
       await assert.rejects(importD1ChatMessages(connection.sql,changed,{...options,

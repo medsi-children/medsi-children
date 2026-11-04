@@ -20,7 +20,7 @@ async function fixture() {
     chatStore:{send:async()=>{calls.push({op:'send'});return {status:'created',messageKey:'synthetic-message'}}},
     chatOperations:{markRead:async(role,phone)=>{calls.push({role,phone});return {ok:true}}},
     reportReader:{markRead:async()=>{calls.push({op:'report-read'});return {ok:true}}},
-    reports:{},dashboard:{},nameVariants:{},passkeys:{},
+    reports:{},dashboard:{},reportEdits:{},nameVariants:{},passkeys:{},
     parentRegistration:{},parentAccess:{},parentDeletion:{},push:{}
   };
   const app=express();

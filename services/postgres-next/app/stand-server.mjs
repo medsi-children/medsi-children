@@ -25,6 +25,7 @@ import {createReportSubmissionService} from './report-submission-service.mjs';
 import {createChatStore} from './chat-store.mjs';
 import {createChatOperations} from './chat-operations.mjs';
 import {createEducatorReportsDashboardStore} from './educator-report-dashboard.mjs';
+import {createEducatorReportEditsStore} from './educator-report-edits.mjs';
 import {createNameVariantsStore} from './name-variants-store.mjs';
 import {createPushService} from './push-service.mjs';
 import {createParentPasskeyService} from './parent-passkeys.mjs';
@@ -106,6 +107,7 @@ export function createNextServices({sql,env=process.env}) {
   const reportReader=createReportReader(sql),reports=createReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
   const dashboard=createEducatorReportsDashboardStore(sql),nameVariants=createNameVariantsStore(sql);
+  const reportEdits=createEducatorReportEditsStore(sql);
   const push=createPushService({sql,env});
   const parentRegistration=createParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});
@@ -127,7 +129,7 @@ export function createNextServices({sql,env=process.env}) {
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   const dbSchemaHealth=()=>checkNextTestSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,
-    nameVariants,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media};
+    nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media};
 }
 
 function handler(fn) {

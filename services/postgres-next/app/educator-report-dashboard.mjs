@@ -54,7 +54,8 @@ export function assembleEducatorReports({ profiles, children, admissions, curren
       }
     }
     card.parentViews.push({
-      phone: parent.phone, parentName: parent.parentName, reports
+      phone: parent.phone, phone10: profile.phone10, admissionId: id,
+      parentName: parent.parentName, reports
     });
   }
 

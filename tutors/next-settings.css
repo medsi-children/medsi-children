@@ -5,7 +5,7 @@
 .medsi-settings-next { position: relative; min-width: 0; }
 .medsi-setting-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .medsi-setting-tile {
-  appearance: none; min-width: 0; min-height: 152px; padding: 18px 15px; display: flex;
+  appearance: none; min-width: 0; aspect-ratio: 1 / 1; min-height: 142px; padding: 18px 15px; display: flex;
   flex-direction: column; align-items: flex-start; justify-content: flex-start; gap: 7px;
   border: 1px solid #d7e8ec; border-radius: 20px; background: #f4fafb;
   font-family: inherit; text-align: left; color: #144650; cursor: pointer;
@@ -18,11 +18,11 @@
 .medsi-tile-icon { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 13px; background: rgba(255,255,255,.6); }
 .medsi-tile-heading { font-size: 16px; line-height: 1.16; font-weight: 800; letter-spacing: -.32px; overflow-wrap: anywhere; }
 .medsi-tile-sub { font-size: 12px; line-height: 1.3; font-weight: 500; opacity: .75; }
-.medsi-tile-reports { background: #e9f6fc; border-color: #c9e6f3; color: #276f92; }
-.medsi-tile-push { background: #fff5e8; border-color: #f4dfc1; color: #9b6c2c; }
-.medsi-tile-push[data-enabled="1"] { background: #e8f7ec; border-color: #b8e3cb; color: #28794f; }
-.medsi-tile-parent { background: #eeeafc; border-color: #dcd6f6; color: #7362a3; }
-.medsi-tile-delete { background: #fff0f1; border-color: #f4d8db; color: #a45b64; }
+.medsi-tile-reports { background: linear-gradient(145deg,#f1fbff,#d8f0fb); border-color: #c9e6f3; color: #276f92; }
+.medsi-tile-push { background: linear-gradient(145deg,#fffaf1,#f8e7ca); border-color: #f4dfc1; color: #9b6c2c; }
+.medsi-tile-push[data-enabled="1"] { background: linear-gradient(145deg,#f1fcf3,#d6f0df); border-color: #b8e3cb; color: #28794f; }
+.medsi-tile-parent { background: linear-gradient(145deg,#f7f4ff,#e3dcf7); border-color: #dcd6f6; color: #7362a3; }
+.medsi-tile-delete { background: linear-gradient(145deg,#fff6f6,#f5dfe1); border-color: #f4d8db; color: #a45b64; }
 .medsi-setting-feedback { margin: 0; font-size: 12px; line-height: 1.5; color: #935e64; }
 .medsi-setting-feedback:empty { display: none; }
 .medsi-setting-picker { display: flex; flex-direction: column; gap: 12px; min-height: 180px; max-height: 55dvh; }
@@ -48,11 +48,20 @@ body.medsi-report-library-open { overflow: hidden; }
   border:1px solid #d9e9ec; border-radius: 14px; padding: 11px 13px; background: white;
   color: #21616a; font: 700 13px/1.3 inherit; cursor:pointer; }
 .medsi-reports-refresh { font-size: 22px; line-height: .6; min-width: 42px; justify-content:center; }
-.medsi-reports-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding: 6px;
+.medsi-reports-switch { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 7px; padding: 6px;
   border-radius: 18px; background: #e9f0f2; }
 .medsi-reports-switch button { min-height: 49px; border: 0; border-radius: 13px; background: transparent;
   color:#6a8b91; font: 750 14px/1.2 inherit; cursor:pointer; }
 .medsi-reports-switch button[aria-selected="true"] { background: white; color:#1d626f; box-shadow: 0 3px 10px rgba(42,97,108,.1); }
+.medsi-report-edit,.medsi-report-edit-form button,.medsi-name-card button,.medsi-name-form button { border:1px solid #d5e7e9; border-radius:12px; background:#f5fbfc; color:#286b74; padding:9px 12px; font:700 13px/1.2 inherit; cursor:pointer; margin:10px 7px 0 0; }
+.medsi-report-edit-form { display:grid; gap:8px; margin-top:10px; }
+.medsi-report-edit-form textarea { min-height:130px; resize:vertical; border:1px solid #cbdfe3; border-radius:12px; padding:12px; font:14px/1.5 inherit; }
+.medsi-name-form { display:grid; grid-template-columns:1fr 2fr auto; gap:9px; }
+.medsi-name-form input { min-width:0; border:1px solid #d6e8eb; border-radius:13px; padding:12px; font:14px inherit; }
+.medsi-name-card { border:1px solid #dbeaec; border-radius:21px; padding:20px; background:white; box-shadow:0 5px 18px rgba(36,91,104,.045); }
+.medsi-name-card h3 { margin:0 0 12px; font-size:21px; }
+.medsi-name-blobs { display:flex; flex-wrap:wrap; gap:8px; }
+.medsi-name-blob { display:inline-flex; border-radius:999px; background:linear-gradient(140deg,#f3edff,#e0f5f2); color:#496f78; padding:8px 12px; font-size:13px; font-weight:700; }
 .medsi-reports-feedback { font-size: 14px; color: #a06b60; margin: 0; }
 .medsi-reports-feedback:empty { display:none; }
 .medsi-reports-content { display:grid; align-content: start; gap:14px; padding:0 0 28px; }
@@ -64,6 +73,8 @@ body.medsi-report-library-open { overflow: hidden; }
 .medsi-raw-evening { border-left: 5px solid #7cb9e7; }
 .medsi-raw-psychology { border-left: 5px solid #dc9ec1; }
 .medsi-report-date { color:#849aa0; font-size:12px; margin: 5px 0 17px; }
+.medsi-normalized-source { margin-top:16px; padding-top:12px; border-top:1px solid #e6eff0; color:#64818a; font-size:13px; }
+.medsi-normalized-source summary { cursor:pointer; font-weight:700; }
 .medsi-report-body { font-size: 14px; line-height: 1.58; color:#244d55;
   overflow-wrap: anywhere; white-space: pre-wrap; }
 .medsi-child-report-card { display: grid; grid-template-columns:minmax(0, .8fr) minmax(0, 1.4fr); gap:0;
@@ -84,7 +95,7 @@ body.medsi-report-library-open { overflow: hidden; }
 .medsi-reports-empty { font-size:15px; color:#64818a; padding:28px 10px; text-align:center; }
 @media (max-width:600px) {
   .medsi-setting-grid { gap:9px; }
-  .medsi-setting-tile { min-height: 139px; padding:13px 11px; border-radius:16px; gap:6px; }
+  .medsi-setting-tile { min-height: 0; padding:13px 11px; border-radius:16px; gap:6px; }
   .medsi-tile-icon { width:35px; height:35px; border-radius:11px; }
   .medsi-tile-icon svg { width:24px; height:24px; }
   .medsi-tile-heading { font-size:14px; }
@@ -92,7 +103,8 @@ body.medsi-report-library-open { overflow: hidden; }
   .medsi-reports-shell { gap:12px; }
   .medsi-reports-back span { display:none; }
   .medsi-reports-header h2 { font-size:25px; }
-  .medsi-reports-switch button { font-size:12px; }
+  .medsi-reports-switch button { font-size:11px; }
+  .medsi-name-form { grid-template-columns:1fr; }
   .medsi-child-report-card { grid-template-columns: 1fr; }
   .medsi-child-details { border-right:0; border-bottom:1px solid #deecef; padding:18px; }
   .medsi-child-report-view { padding:18px; }

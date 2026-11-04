@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,reportEdits,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
   const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
@@ -119,6 +119,11 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
   router.get('/admin/reports/dashboard',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return dashboard.readForEducator();
+  }));
+  router.post('/admin/reports/edit',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    if(!reportEdits?.update)throw new Error('Report edit service unavailable.');
+    return reportEdits.update(req.body||{});
   }));
   router.get('/admin/name-variants',run(async(req,res)=>{
     if(!await educator(req,res))return;

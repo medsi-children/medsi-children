@@ -161,10 +161,12 @@
       <div class="medsi-reports-switch" role="tablist" aria-label="Тип отчётов">
         <button type="button" id="medsiTabRaw" role="tab" aria-selected="true" aria-controls="medsiRawPane">Исходные отчёты</button>
         <button type="button" id="medsiTabChildren" role="tab" aria-selected="false" aria-controls="medsiChildrenPane">Отчёты по детям</button>
+        <button type="button" id="medsiTabNames" role="tab" aria-selected="false" aria-controls="medsiNamesPane">Варианты имен</button>
       </div>
       <p id="medsiReportsFeedback" class="medsi-reports-feedback" role="status"></p>
       <div id="medsiRawPane" role="tabpanel" aria-labelledby="medsiTabRaw" class="medsi-reports-content"></div>
       <div id="medsiChildrenPane" role="tabpanel" aria-labelledby="medsiTabChildren" class="medsi-reports-content hidden"></div>
+      <div id="medsiNamesPane" role="tabpanel" aria-labelledby="medsiTabNames" class="medsi-reports-content hidden"></div>
     </div>`;
   document.body.append(library);
 
@@ -175,7 +177,7 @@
 
   function reportTypeLabel(type) {
     return type === 'morning' ? 'Утренний отчёт' : type === 'evening'
-      ? 'Вечерний отчёт' : 'Групповая терапия';
+      ? 'Вечерний отчёт' : 'Психотерапевтический отчёт';
   }
   function textNode(tag, className, value) {
     const el = document.createElement(tag);
@@ -190,13 +192,17 @@
   function showTab(kind) {
     activeTab = kind;
     const raw = kind === 'raw';
+    const children = kind === 'children';
     byId('medsiTabRaw').setAttribute('aria-selected', String(raw));
-    byId('medsiTabChildren').setAttribute('aria-selected', String(!raw));
+    byId('medsiTabChildren').setAttribute('aria-selected', String(children));
+    byId('medsiTabNames').setAttribute('aria-selected', String(kind === 'names'));
     byId('medsiRawPane').classList.toggle('hidden', !raw);
-    byId('medsiChildrenPane').classList.toggle('hidden', raw);
+    byId('medsiChildrenPane').classList.toggle('hidden', !children);
+    byId('medsiNamesPane').classList.toggle('hidden', kind !== 'names');
   }
   byId('medsiTabRaw').addEventListener('click', () => showTab('raw'));
   byId('medsiTabChildren').addEventListener('click', () => showTab('children'));
+  byId('medsiTabNames').addEventListener('click', () => { showTab('names'); refreshNames(); });
 
   function renderRaw(data) {
     const root = byId('medsiRawPane');
@@ -208,7 +214,12 @@
       card.append(textNode('h3', '', reportTypeLabel(kind)));
       const details = entry.reportDate ? 'Дата: ' + entry.reportDate : 'Публикации пока нет';
       card.append(textNode('p', 'medsi-report-date', details));
-      card.append(textNode('div', 'medsi-report-body', reportText(entry.normalizedText || entry.rawText)));
+      card.append(textNode('div', 'medsi-report-body', reportText(entry.rawText)));
+      if (entry.normalizedText && entry.normalizedText !== entry.rawText) {
+        const details = document.createElement('details'); details.className = 'medsi-normalized-source';
+        details.append(textNode('summary', '', 'Подготовленный текст перед распределением'));
+        details.append(textNode('div', 'medsi-report-body', entry.normalizedText)); card.append(details);
+      }
       root.append(card);
     }
   }
@@ -248,12 +259,80 @@
         for (const kind of ['morning', 'evening', 'psychology']) {
           block.append(textNode('h5', '', reportTypeLabel(kind)));
           block.append(textNode('div', 'medsi-report-body', reportText(view.reports && view.reports[kind])));
+          const edit = document.createElement('button');
+          edit.type = 'button'; edit.className = 'medsi-report-edit'; edit.textContent = 'Изменить';
+          edit.addEventListener('click', () => editDistributedReport(block, child, view, kind));
+          block.append(edit);
         }
         right.append(block);
       }
       card.append(left, right);
       root.append(card);
     }
+  }
+
+  async function editDistributedReport(block, child, view, kind) {
+    if (block.querySelector('.medsi-report-edit-form')) return;
+    const form = document.createElement('form'); form.className = 'medsi-report-edit-form';
+    const area = document.createElement('textarea'); area.maxLength = 240000;
+    area.value = String(view.reports && view.reports[kind] || ''); area.setAttribute('aria-label', 'Исправленный отчёт');
+    const save = document.createElement('button'); save.type = 'submit'; save.textContent = 'Сохранить исправление';
+    const cancel = document.createElement('button'); cancel.type = 'button'; cancel.textContent = 'Отмена';
+    cancel.addEventListener('click', () => form.remove()); form.append(area, save, cancel); block.append(form);
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); save.disabled = true;
+      try {
+        const session = await MedsiEducatorSession.get();
+        const response = await fetch('/lab/admin/reports/edit', { method:'POST',
+          headers:{'Content-Type':'application/json','X-Medsi-Chat-Session':session.token},
+          body:JSON.stringify({phone10:view.phone10,admissionId:child.admissionId,kind,text:area.value}) });
+        const result = await response.json().catch(()=>null);
+        if (!response.ok || !result || result.ok !== true) throw new Error('save failed');
+        byId('medsiReportsFeedback').textContent = 'Исправление сохранено. Обновите экран, чтобы проверить результат.';
+        form.remove(); await refreshLibrary();
+      } catch (_) { save.disabled = false; byId('medsiReportsFeedback').textContent = 'Не удалось сохранить. Повторите попытку.'; }
+    });
+  }
+
+  async function refreshNames() {
+    const pane = byId('medsiNamesPane'); pane.replaceChildren();
+    const form = document.createElement('form'); form.className = 'medsi-name-form';
+    const preferred = document.createElement('input'); preferred.placeholder = 'Каноничное имя'; preferred.required = true;
+    const variants = document.createElement('input'); variants.placeholder = 'Варианты через запятую';
+    const submit = document.createElement('button'); submit.type = 'submit'; submit.textContent = 'Добавить вариант';
+    form.append(preferred, variants, submit); pane.append(form);
+    form.addEventListener('submit', async event => {
+      event.preventDefault(); await saveNameVariant({preferredName:preferred.value,variants:variants.value});
+    });
+    try {
+      const session = await MedsiEducatorSession.get();
+      const response = await fetch('/lab/admin/name-variants',{headers:{'X-Medsi-Chat-Session':session.token},cache:'no-store'});
+      const data = await response.json(); if(!response.ok || !data.ok) throw new Error('read');
+      for(const row of data.items||[]) {
+        const card=document.createElement('article'); card.className='medsi-name-card';
+        const title=textNode('h3','',row.preferredName); card.append(title);
+        const blobs=document.createElement('div'); blobs.className='medsi-name-blobs';
+        for(const name of row.variants||[]) blobs.append(textNode('span','medsi-name-blob',name));
+        card.append(blobs);
+        const edit=document.createElement('button'); edit.type='button'; edit.textContent='Изменить';
+        edit.addEventListener('click',()=>{preferred.value=row.preferredName;variants.value=(row.variants||[]).filter(x=>x!==row.preferredName).join(', ');form.dataset.previous=row.baseKey;preferred.focus();});
+        const remove=document.createElement('button'); remove.type='button'; remove.textContent='Удалить группу';
+        remove.addEventListener('click',async()=>{if(!confirm('Удалить группу вариантов имени «'+row.preferredName+'»?'))return;await removeNameVariant(row.baseKey);});
+        card.append(edit,remove); pane.append(card);
+      }
+      if(!data.items?.length) pane.append(textNode('p','medsi-reports-empty','Варианты имён пока не добавлены.'));
+    } catch (_) { byId('medsiReportsFeedback').textContent='Не удалось загрузить варианты имён.'; }
+  }
+  async function saveNameVariant(row) {
+    try {
+      const session=await MedsiEducatorSession.get();
+      const response=await fetch('/lab/admin/name-variants',{method:'POST',headers:{'Content-Type':'application/json','X-Medsi-Chat-Session':session.token},body:JSON.stringify({...row,previousBaseKey:byId('medsiNamesPane').querySelector('.medsi-name-form').dataset.previous})});
+      if(!response.ok)throw new Error('save'); await refreshNames(); byId('medsiReportsFeedback').textContent='Варианты имени сохранены.';
+    } catch(_){byId('medsiReportsFeedback').textContent='Не удалось сохранить: имя может уже входить в другую группу.';}
+  }
+  async function removeNameVariant(key) {
+    try { const session=await MedsiEducatorSession.get(); const response=await fetch('/lab/admin/name-variants/'+encodeURIComponent(key),{method:'DELETE',headers:{'X-Medsi-Chat-Session':session.token}}); if(!response.ok)throw new Error(); await refreshNames(); }
+    catch(_){byId('medsiReportsFeedback').textContent='Не удалось удалить группу вариантов имени.';}
   }
 
   async function refreshLibrary() {

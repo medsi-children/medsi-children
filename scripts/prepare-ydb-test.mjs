@@ -44,7 +44,8 @@ export async function prepareYdbTest(env=process.env,{onStage=()=>{}}={}) {
     if(env.MEDSI_NEXT_PREPARE_YDB_TEST==='YES') {
       mark('APPLYING_TEST_SCHEMA');
       const schema=await readFile(new URL('../services/ydb-next/sql/001_initial.sql',import.meta.url),'utf8');
-      const statements=await applyTestSchema({sql:connection.sql,source:schema});
+      const statements=await applyTestSchema({sql:connection.sql,source:schema,
+        onStatement:number=>mark('APPLYING_TEST_SCHEMA_'+String(number).padStart(2,'0'))});
       mark('ADDING_SYNTHETIC_FIXTURE');
       const fixture=await seedSyntheticRoster(connection);
       mark('PREPARATION_COMPLETE');
@@ -97,9 +98,12 @@ if(process.argv[1]&&fileURLToPath(import.meta.url)===process.argv[1]) {
     console.log(result.alreadySeeded
       ?'MEDSI_NEXT_TEST_FIXTURE_ALREADY_PRESENT'
       :'MEDSI_NEXT_TEST_FIXTURE_CREATED');
-  } catch (_) {
+  } catch (error) {
     // Never print YDB SDK errors, secrets, or fixture contents.
-    console.error('MEDSI_NEXT_TEST_PREPARATION_FAILED stage='+stage);
+    const safeCode=['YDB_TEST_SCHEMA_PERMISSION_DENIED','YDB_TEST_SCHEMA_DDL_FAILED'].includes(error?.code)
+      ?error.code:'';
+    const statement=Number.isInteger(error?.statementNumber)?' statement='+error.statementNumber:'';
+    console.error('MEDSI_NEXT_TEST_PREPARATION_FAILED stage='+stage+statement+(safeCode?' code='+safeCode:''));
     server.kill('SIGTERM');
     process.exitCode=1;
   }

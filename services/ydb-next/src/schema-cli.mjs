@@ -13,12 +13,25 @@ export function splitSchemaStatements(source) {
   }
   return statements;
 }
-export async function applyTestSchema({sql,source}) {
+export async function applyTestSchema({sql,source,onStatement=()=>{}}) {
   if(typeof sql!=='function')throw new Error('YDB query executor unavailable.');
   const statements=splitSchemaStatements(source);
-  for(const statement of statements) {
+  for(let index=0;index<statements.length;index++) {
+    const statement=statements[index];
+    try{onStatement(index+1);}catch(_){/* diagnostics are optional */}
     // Statements are reviewed static repository SQL, never interpolated input.
-    await sql`${sql.unsafe(statement)}`;
+    try{
+      await sql`${sql.unsafe(statement)}`;
+    }catch(error){
+      const message=String(error?.message||'').toLowerCase();
+      const code=/permission|not authorized|unauthorized|access denied|forbidden/.test(message)
+        ?'YDB_TEST_SCHEMA_PERMISSION_DENIED'
+        :'YDB_TEST_SCHEMA_DDL_FAILED';
+      const failure=new Error(code);
+      failure.code=code;
+      failure.statementNumber=index+1;
+      throw failure;
+    }
   }
   return statements.length;
 }

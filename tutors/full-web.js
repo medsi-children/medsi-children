@@ -1,5 +1,5 @@
 (function(){
-  const APP_BASE_URL='/__session/apps-script';
+  const APP_BASE_URL='/__session/api';
   const TUTOR_KEY='medsi_tutor_session_v1';
   const D1_KEY='medsi_d1_educator_session_v1';
   const DELETION_KEY='medsi_parent_deletions_v1';
@@ -52,7 +52,7 @@
       try{
         const body=JSON.stringify({action:'api',method,args:args||[]});
         const r=await fetch(APP_BASE_URL,{method:'POST',headers:{'content-type':'text/plain;charset=UTF-8'},body,cache:'no-store',signal:controller.signal});
-        const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Apps Script вернул некорректный ответ.')}
+        const raw=await r.text();let p;try{p=JSON.parse(raw)}catch(_){throw new Error('Сервер вернул некорректный ответ.')}
         if(!r.ok||!p||p.ok!==true)throw new Error((p&&p.message)||('HTTP '+r.status));
         clearTimeout(timer);return p.result;
       }catch(e){clearTimeout(timer);lastError=controller.signal.aborted?new Error('TIMEOUT'):e;if(attempt+1<attempts)await new Promise(resolve=>setTimeout(resolve,350))}

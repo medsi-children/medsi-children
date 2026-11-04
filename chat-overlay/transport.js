@@ -21,8 +21,9 @@
     const id = String(fileId || '');
     if (!id) return '';
     if (id.startsWith('s3:')) return BASE_URL + '/media/s3/' + encodeURIComponent(id.slice(3));
-    if (id.startsWith('kv:') || id.startsWith('r2:')) return BASE_URL + '/media/' + encodeURIComponent(id.slice(3));
-    return 'https://drive.google.com/thumbnail?id=' + encodeURIComponent(id) + '&sz=' + encodeURIComponent(driveSize || 'w1600');
+    // All existing KV/R2/Drive media must be moved into private S3 before cutover.
+    // Never silently contact retired Workers or Google Drive with patient IDs.
+    return BASE_URL + '/media/legacy-unavailable';
   }
 
   function mediaPreviewUrl(fileId, driveSize) {

@@ -1,0 +1,90 @@
+import {createHash,createHmac} from 'node:crypto';
+import storageDefinitions from '../../../lib/s3-storage.js';
+import {inventoryD1ChatMedia} from './d1-chat-capture.mjs';
+
+const MAX_BYTES=100*1024*1024;
+
+// Offline only. Source adapters must enforce the same maximum while reading.
+export async function copyD1ChatMedia(messages,{readSource,destination,hmacKey,explicitCopy}={}){
+  if(explicitCopy!==true || typeof hmacKey!=='string' || Buffer.byteLength(hmacKey)<32 ||
+     typeof readSource!=='function' || !destination?.configured){
+    throw new Error('Explicit media copy approval and storage configuration required.');
+  }
+  const {objects,summary}=inventoryD1ChatMedia(messages);
+  const active=objects.filter(object=>object.activeReferences>0);
+  if(summary.missingReferences || active.some(object=>!object.phone10 || object.source==='unresolved')){
+    throw new Error('Active chat attachments have unresolved references or owners.');
+  }
+  const mapping=[];
+  for(const object of active){
+    try{
+      const {body,contentType}=await readSource(object.source,object.fileId,MAX_BYTES);
+      if(!Buffer.isBuffer(body) || body.length<1 || body.length>MAX_BYTES ||
+         typeof contentType!=='string')throw new Error();
+      const mime=contentType.toLowerCase().split(';')[0].trim();
+      const media=storageDefinitions.mediaDefinition(mime);
+      if(!media)throw new Error();
+      const digest=createHash('sha256').update(body).digest('hex');
+      const id=createHmac('sha256',hmacKey).update(JSON.stringify([object.phone10,object.fileId])).digest('hex');
+      const key='chat/'+id+media.extension;
+      if(!await destination.hasObject(key)){
+        try{
+          await destination.putBuffer(key,body,mime,{ifAbsent:true});
+        }catch(error){
+          if(error?.$metadata?.httpStatusCode!==412)throw error;
+        }
+      }
+      if(await destination.sha256Object(key)!==digest)throw new Error();
+      mapping.push({sourceFileId:object.fileId,fileId:'s3:'+key,phone10:object.phone10,
+        bytes:body.length,sha256:digest});
+    }catch(_){
+      // Provider errors may contain private object keys or URLs.
+      throw new Error('Chat attachment copy or verification failed.');
+    }
+  }
+  return mapping;
+}
+
+// Rewriting is an in-memory transformation of the frozen capture. The caller
+// signs the rewritten streams before the separate PostgreSQL import.
+export function prepareChatMediaImport(messages,mapping){
+  const {objects,summary}=inventoryD1ChatMedia(messages);
+  const required=objects.filter(object=>object.activeReferences>0);
+  if(summary.missingReferences || !Array.isArray(mapping) || mapping.length!==required.length){
+    throw new Error('Incomplete chat attachment mapping.');
+  }
+  const bySource=new Map(),byTarget=new Set();
+  for(const entry of mapping){
+    if(!entry || typeof entry.sourceFileId!=='string' || bySource.has(entry.sourceFileId) ||
+       !/^s3:chat\/[a-f0-9]{64}\.[a-z0-9]{2,5}$/.test(entry.fileId) || byTarget.has(entry.fileId) ||
+       !/^[a-f0-9]{64}$/.test(entry.sha256) || !Number.isSafeInteger(entry.bytes) ||
+       entry.bytes<1 || entry.bytes>MAX_BYTES){
+      throw new Error('Invalid chat attachment mapping.');
+    }
+    bySource.set(entry.sourceFileId,entry);
+    byTarget.add(entry.fileId);
+  }
+  for(const object of required){
+    const entry=bySource.get(object.fileId);
+    if(!object.phone10 || object.source==='unresolved' || entry?.phone10!==object.phone10){
+      throw new Error('Chat attachment mapping has an unresolved owner or source.');
+    }
+  }
+  const firstReference=new Map();
+  const rewritten=messages.map(row=>{
+    const entry=bySource.get(row.file_id);
+    if(!entry || row.status!=='active')return {...row};
+    const previous=firstReference.get(entry.fileId);
+    if(previous===undefined || BigInt(row.created_at)<BigInt(previous)){
+      firstReference.set(entry.fileId,String(row.created_at));
+    }
+    return {...row,file_id:entry.fileId};
+  });
+  return {
+    messages:rewritten,
+    chatMedia:mapping.map(entry=>({
+      file_id:entry.fileId,phone10:entry.phone10,uploaded_at:firstReference.get(entry.fileId)
+    })),
+    s3Objects:mapping.map(entry=>({file_id:entry.fileId,bytes:entry.bytes,sha256:entry.sha256}))
+  };
+}

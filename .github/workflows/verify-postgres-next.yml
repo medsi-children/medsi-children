@@ -51,6 +51,8 @@ jobs:
           node --input-type=module -e "await import('./services/ydb-next/src/stand-server.mjs'); await import('./services/postgres-next/src/connection.mjs'); console.log('POSTGRES_ROOT_ONLY_IMPORT_OK')"
       - name: Install old YDB SDK only for legacy test compatibility
         run: npm install --ignore-scripts --no-audit --no-fund --prefix services/ydb-next
+      - name: Audit retired Cloudflare and Google upstreams
+        run: node scripts/verify-next-isolation.mjs
       - name: Validate PostgreSQL runtime syntax
         run: |
           node --check services/postgres-next/src/connection.mjs

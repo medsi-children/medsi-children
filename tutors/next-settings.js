@@ -447,16 +447,18 @@
             if(answer?.accepted!==true)throw new Error(answer?.message||'Сервер не принял удаление профиля.');
             accepted++;
           }
-          await refreshRoster();
+          const refreshed=await refreshRoster();
+          if(!refreshed)throw new Error('Справочник не удалось обновить после удаления.');
           await refreshLibrary();
-          byId('medsiReportsFeedback').textContent='Профили удалены из справочника. Очистка истории поставлена в очередь.';
+          byId('medsiReportsFeedback').textContent='Профили исключены из справочника. Очистка истории поставлена в очередь.';
         }catch(error){
           del.disabled=false;
           await refreshRoster();
           const reason=String(error?.message||'Ошибка удаления');
-          byId('medsiReportsFeedback').textContent=
-            'Удаление завершено частично ('+accepted+' из '+parents.length+'). '+reason+
-            ' Проверьте оставшиеся профили перед повторной попыткой.';
+          byId('medsiReportsFeedback').textContent=accepted===parents.length
+            ?'Удаление профилей принято, но список пока не обновился. '+reason+' Попробуйте обновить раздел.'
+            :'Удаление завершено частично ('+accepted+' из '+parents.length+'). '+reason+
+              ' Проверьте оставшиеся профили перед повторной попыткой.';
         }
       };
       actions.append(del);
@@ -464,8 +466,14 @@
     }
   }
   async function refreshRoster(){
-    try{rosterData=await request('/lab/admin/roster');if(activeTab==='roster')renderRoster(rosterData);}
-    catch(error){byId('medsiReportsFeedback').textContent=error.message||'Не удалось загрузить список детей и родителей.';}
+    try{
+      rosterData=await request('/lab/admin/roster');
+      if(activeTab==='roster')renderRoster(rosterData);
+      return true;
+    }catch(error){
+      byId('medsiReportsFeedback').textContent=error.message||'Не удалось загрузить список детей и родителей.';
+      return false;
+    }
   }
   function nameToken(row,name,canonical){
     const token=textNode('span','medsi-name-token'+(canonical?' medsi-name-canonical':''),'');token.dataset.tone=String(Math.max(0,row.variants.indexOf(name)-1)%4);

@@ -42,7 +42,6 @@
     <section id="medsiSettingPicker" class="medsi-setting-picker hidden" aria-label="Выбор профиля">
       <header class="medsi-setting-picker-head">
         <h3 id="medsiSettingPickerTitle">Выберите профиль</h3>
-        <button id="medsiSettingPickerBack" type="button" aria-label="Назад к параметрам">×</button>
       </header>
       <div id="medsiSettingPickerList" class="medsi-setting-picker-list" role="list"></div>
     </section>`;
@@ -131,8 +130,8 @@
   }
   byId('medsiParentPreviewCard').addEventListener('click', () =>
     openPicker('Родительская панель', 'previewChildSelect', 'previewParentButton'));
-  byId('medsiDeleteParentCard').addEventListener('click', () => openPicker('Удалить ребёнка', 'deleteChildSelect', 'settingsDeleteChild'));
-  byId('medsiSettingPickerBack').addEventListener('click', closePicker);
+  byId('medsiDeleteParentCard').addEventListener('click', () =>
+    openPicker('Удалить ребёнка', 'deleteChildSelect', 'settingsDeleteChild'));
   for (const id of ['previewChildSelect', 'deleteChildSelect']) {
     const select = byId(id);
     if (select) new MutationObserver(() => { if (pickerSource === select) renderPicker(); })

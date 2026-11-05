@@ -416,11 +416,20 @@
       for(const [kind,label,present] of [['morning','Утренний',child.morning],['evening','Вечерний',child.evening]]){
         const button=textNode('button','medsi-roster-status-icon medsi-roster-status-'+kind,'');
         button.type='button';button.dataset.present=present?'1':'0';
-        button.setAttribute('aria-label',label+(present?' отчёт есть':' отчёта нет'));
-        button.title=label+(present?' отчёт есть':' отчёта нет');
+        const tooltip=kind==='morning'
+          ?(present?'Утренний отчёт есть':'Утреннего отчёта нет')
+          :(present?'Вечерний отчёт есть':'Вечернего отчёта нет');
+        button.setAttribute('aria-label',tooltip);
+        button.dataset.tooltip=tooltip;
         button.innerHTML=kind==='morning'?icon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>'):
           icon('<path d="M20.5 15.5A9 9 0 0 1 8.5 3.5a9 9 0 1 0 12 12Z"/>');
-        button.onclick=()=>{byId('medsiReportsFeedback').textContent=button.getAttribute('aria-label');};
+        button.onclick=()=>{
+          const opening=!button.classList.contains('medsi-roster-tooltip-open');
+          pane.querySelectorAll('.medsi-roster-tooltip-open').forEach(node=>node.classList.remove('medsi-roster-tooltip-open'));
+          if(!opening)return;
+          button.classList.add('medsi-roster-tooltip-open');
+          setTimeout(()=>button.classList.remove('medsi-roster-tooltip-open'),3200);
+        };
         actions.append(button);
       }
       const del=textNode('button','medsi-roster-line-delete','');

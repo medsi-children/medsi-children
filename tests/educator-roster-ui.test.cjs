@@ -29,7 +29,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261106-square-child-card-13/);
+  assert.match(html,/next-settings\.css\?v=20261106-compact-square-14/);
   assert.match(html,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });
 
@@ -67,12 +67,12 @@ test('mobile child identity stays centered and aliases have compact readable row
   assert.match(css,/\.medsi-name-word\{padding:7px 9px;font-size:14px\}/);
 });
 
-test('mobile child profile uses a square card and bottom corner arrows without changing desktop',()=>{
+test('mobile child profile uses a compact centered square and bottom arrows without changing desktop',()=>{
   const css=read('tutors/next-settings.css');
   assert.match(css,/@media\(max-width:650px\)/);
-  assert.match(css,/aspect-ratio:1 \/ 1;min-height:320px/);
-  assert.match(css,/\.medsi-child-nav-arrow\{position:absolute;bottom:18px;left:18px;width:43px;height:43px\}/);
-  assert.match(css,/\.medsi-child-nav-next\{left:auto;right:18px\}/);
-  assert.match(css,/\.medsi-child-deck-identity\{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:18px\}/);
+  assert.match(css,/justify-self:center;width:min\(100%,272px\);aspect-ratio:1 \/ 1;min-height:min-content/);
+  assert.match(css,/\.medsi-child-nav-arrow\{position:absolute;bottom:11px;left:11px;width:37px;height:37px\}/);
+  assert.match(css,/\.medsi-child-nav-next\{left:auto;right:11px\}/);
+  assert.match(css,/\.medsi-child-deck-identity\{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:10px\}/);
   assert.match(css,/\.medsi-child-deck-nav \{\s*display:grid;grid-template-columns:48px/);
 });

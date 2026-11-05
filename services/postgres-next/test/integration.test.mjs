@@ -153,7 +153,9 @@ test('real PostgreSQL: authenticated identity and push migration preserves opaqu
     assert.deepEqual(bytes[0].public_key, keyBytes);
 
     const curve = createECDH('prime256v1');
-    curve.generateKeys();
+    // Stable 32-byte scalar avoids generateKeys() returning a shortened test
+    // scalar when the random value begins with a zero byte.
+    curve.setPrivateKey(Buffer.alloc(32, 7));
     const publicKey = curve.getPublicKey().toString('base64url');
     const privateKey = curve.getPrivateKey().toString('base64url');
     const endpoint = 'https://push.example.invalid/fictional-ci-endpoint';

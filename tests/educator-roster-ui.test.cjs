@@ -29,8 +29,8 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261105-settings-complete-10/);
-  assert.match(html,/next-settings\.js\?v=20261105-settings-complete-10/);
+  assert.match(html,/next-settings\.css\?v=20261105-roster-tooltips-11/);
+  assert.match(html,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });
 
 test('deleting the final linked parent removes the child directory row',()=>{
@@ -45,4 +45,16 @@ test('red settings tile retains the original child deletion picker',()=>{
   const js=read('tutors/next-settings.js');
   assert.match(js,/<span class="medsi-tile-heading">Удалить ребёнка<\/span>/);
   assert.match(js,/openPicker\('Удалить ребёнка', 'deleteChildSelect', 'settingsDeleteChild'\)/);
+});
+
+test('roster status is shown above the corresponding icon instead of a global banner',()=>{
+  const js=read('tutors/next-settings.js'),css=read('tutors/next-settings.css');
+  assert.match(js,/button\.dataset\.tooltip=tooltip/);
+  assert.match(js,/Утреннего отчёта нет/);
+  assert.match(js,/Вечернего отчёта нет/);
+  assert.match(js,/medsi-roster-tooltip-open/);
+  assert.doesNotMatch(js,/medsiReportsFeedback'\)\.textContent=button\.getAttribute\('aria-label'\)/);
+  assert.match(css,/\.medsi-roster-status-icon::after/);
+  assert.match(css,/content:attr\(data-tooltip\)/);
+  assert.match(css,/bottom:calc\(100% \+ 12px\)/);
 });

@@ -1,0 +1,405 @@
+{
+  "baseline": "991b30e",
+  "retiredPublicMethods": [
+    "getAllChatMessages",
+    "listParentChats",
+    "listUnreadParentChats",
+    "listReadParentChats",
+    "hasUnreadParentChats",
+    "getChatMessages",
+    "getParentChatMessages",
+    "getOlderParentChatMessages",
+    "getOlderChatMessages",
+    "setChatMessageReaction",
+    "deleteMessage",
+    "updateMessage",
+    "setEducatorChatPin",
+    "uploadEducatorChatImage",
+    "uploadEducatorVideoThumbnail",
+    "sendEducatorVideoMessage",
+    "uploadParentChatImage",
+    "uploadChatAttachmentForD1",
+    "notifyD1ChatMessage",
+    "markParentMessagesAsReadByEducator",
+    "markParentMessagesAsUnreadByEducator",
+    "deleteChatMessage",
+    "editChatMessage"
+  ],
+  "removedFunctions": [
+    {
+      "name": "getEducatorChatPins_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2234,
+      "end": 2246,
+      "sha256": "17ae406678ce6c8fab71b91657ee4165fbe3fe26dd3d6aa1586d7c7b039095d6"
+    },
+    {
+      "name": "setEducatorChatPin",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2260,
+      "end": 2290,
+      "sha256": "bdbba5c0f793bd8f2cf1750ab6eef8fd2ebf6aaef9b8bbfc737ebb986d40fb34"
+    },
+    {
+      "name": "notifyNewChatMessage_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2902,
+      "end": 2945,
+      "sha256": "23e9316a508f8cd7df36304f13cebdcbd3deeebf99ffde4eea369108166eb49b"
+    },
+    {
+      "name": "getAllChatMessages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3325,
+      "end": 3410,
+      "sha256": "8376c82760fac38c98b746262394df7c1cfda266126a254711a22494a2dd0aac"
+    },
+    {
+      "name": "appendChatMessage_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3454,
+      "end": 3503,
+      "sha256": "a9c0d825a35a89fb46581447ecf845bac4b88d0fdc9617d648830b81a8d705f1"
+    },
+    {
+      "name": "buildVideoPayload_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3515,
+      "end": 3521,
+      "sha256": "af781fe3fa9d5c14280ececac4b10977d9469cb322ea019ca7da1398025a42fd"
+    },
+    {
+      "name": "parseVideoPayload_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3523,
+      "end": 3547,
+      "sha256": "7dece2eaf556d80ab18f8829b367abcb169f7f61504f88af737b98b16e4d0cd0"
+    },
+    {
+      "name": "buildDriveImageUrl_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3549,
+      "end": 3553,
+      "sha256": "0a33d1626baa7681ee828ed09215a187dc105f3a066e0498c908068ff85952f8"
+    },
+    {
+      "name": "buildMessageKey_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3555,
+      "end": 3558,
+      "sha256": "1d45ac693d4c2fdf1aa8473f76189ea30d3d63a6dd48727a9c5fedfbf08d866b"
+    },
+    {
+      "name": "resolveReplyContext_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3560,
+      "end": 3599,
+      "sha256": "3b73f555163bfb021512079ee5ab15702cfdf42bc5b829a8387a1aec923961ea"
+    },
+    {
+      "name": "upsertChatIndexFromMessage_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3751,
+      "end": 3820,
+      "sha256": "c841e8d25c9594060a4580ef02cd5be170383fcc6d0a7dec9298051d2a9ca122"
+    },
+    {
+      "name": "setChatIndexReadFlag_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3822,
+      "end": 3835,
+      "sha256": "fe984fa6fe1ea476e3e3e26cdb0954befd21d0605eb8c281d1853b2e28b7985f"
+    },
+    {
+      "name": "getChatIndexEntryByPhone_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3837,
+      "end": 3857,
+      "sha256": "706df3cc6a8e62dcfeac2d4fc2e6a4fb2205931b0f2daa0ef2070f1289ec3fa8"
+    },
+    {
+      "name": "getChatIndexUnreadFlag_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3859,
+      "end": 3883,
+      "sha256": "380fe8eae88194afb022bf032003ff89f6546c5d3235b7425d10ff30e1ceb268"
+    },
+    {
+      "name": "buildLatestChatIndexItems_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3885,
+      "end": 3916,
+      "sha256": "cfc22ca5a97824f3af5d3591734601e3290d7971190140f06784ff1bb5fb7ecd"
+    },
+    {
+      "name": "getChatProfileByPhone_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4024,
+      "end": 4062,
+      "sha256": "d56358523f55268636206423e3685658b6585047764e2fe5bd2d4b0c5c1ca3cb"
+    },
+    {
+      "name": "listParentChats",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4064,
+      "end": 4115,
+      "sha256": "4ed960e9f2bee766009c81f50e229ed88ca171f56547d57cd0c622d7653e0a96"
+    },
+    {
+      "name": "listUnreadParentChats",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4120,
+      "end": 4172,
+      "sha256": "4f14b864e289f28b61740815665a201f77c8e57292efa33bb4f96ad908646bff"
+    },
+    {
+      "name": "listReadParentChats",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4177,
+      "end": 4229,
+      "sha256": "000d5f6d7a24ed51a1e5884050e3a79c4d80f274adde63771f124828c2863862"
+    },
+    {
+      "name": "hasUnreadParentChats",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4231,
+      "end": 4256,
+      "sha256": "a742e008fa4c4384ef24d54a7bacc1452f049573fb8460cc57349cd2776d2626"
+    },
+    {
+      "name": "buildChatMessageFromRow_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4258,
+      "end": 4306,
+      "sha256": "7cbefd08045f76eaf53221f1965c9c0e740efc436c4f49dba9dbe38d926725ed"
+    },
+    {
+      "name": "getChatRowsForPhone_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4308,
+      "end": 4363,
+      "sha256": "1d43bad1dc701eed226adf61ee37e5b6d057fbccd5128d014f9b88b333a84091"
+    },
+    {
+      "name": "getChatMessages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4365,
+      "end": 4373,
+      "sha256": "7512f54f78df8a2846f051cb380cf54a1008dac077ea83a3f1cb88a64541a127"
+    },
+    {
+      "name": "getChatMessagesCore_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4375,
+      "end": 4412,
+      "sha256": "c944db2339b6374ef963c4daf1fead14797e82f86513784d7b2c03fd315a12ed"
+    },
+    {
+      "name": "getParentChatMessages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4414,
+      "end": 4417,
+      "sha256": "95859b922f9e640cd2cd7775a55b648cf157c65f66098896fd06922ebc7538cc"
+    },
+    {
+      "name": "getOlderParentChatMessages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4419,
+      "end": 4424,
+      "sha256": "131156e9f9bc9546ab520d62293344460a0043da9652530e14485173efc2bc9e"
+    },
+    {
+      "name": "getOlderChatMessages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4426,
+      "end": 4432,
+      "sha256": "739c46f8af4e45c5bc30dad0c8b4a7ffd7d8e92d2ee60e9ca5e7d9e2c71f0306"
+    },
+    {
+      "name": "setChatMessageReaction",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4460,
+      "end": 4501,
+      "sha256": "4deecde801542f4b5f1dd8ec8f808fee4af85f292e9ef172f7c6a302cabf4045"
+    },
+    {
+      "name": "deleteMessage",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4503,
+      "end": 4551,
+      "sha256": "bef91f2385fa2d1f23736186c7c7f62336cc090c306a2cb5becb04ff16507503"
+    },
+    {
+      "name": "updateMessage",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4553,
+      "end": 4604,
+      "sha256": "3cfa93e08dd56919fc61d93ff661e85a16b861c2ff26efab316b9757457d895f"
+    },
+    {
+      "name": "uploadEducatorChatImage",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4680,
+      "end": 4741,
+      "sha256": "58aa24dca6f3ca5a39b139881eebcc68ffcc57dadc57d639f2b55670941c294e"
+    },
+    {
+      "name": "uploadEducatorVideoThumbnail",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4743,
+      "end": 4786,
+      "sha256": "43a4fce588de2fce9f057214337f93877b29d33a64334344cabe5f1797bd8c04"
+    },
+    {
+      "name": "sendEducatorVideoMessage",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4788,
+      "end": 4839,
+      "sha256": "2e4f15d20b85408bd32b9fe0e038943c5b6ea01daca19be3be8e4beda2678084"
+    },
+    {
+      "name": "uploadParentChatImage",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4841,
+      "end": 4902,
+      "sha256": "923ffaec87b6f32a42475e416aacb1d170e1c0b4fe628ac82ba5d0eacaf2124d"
+    },
+    {
+      "name": "uploadChatAttachmentForD1",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4904,
+      "end": 4919,
+      "sha256": "5968f0ba9b5e09810f61833422a70ff60275309b7a84fd01d05a2679898507e1"
+    },
+    {
+      "name": "notifyD1ChatMessage",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4921,
+      "end": 4931,
+      "sha256": "2025d0a473d95383c11fee1ee998a67a8dedcd17961fe4d07482da4b5103bc39"
+    },
+    {
+      "name": "markParentMessagesAsReadByEducator",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 5011,
+      "end": 5030,
+      "sha256": "29eac3b9faaad58939b990f3c383b77cd678fd28a938aaa1424f0a1cf6deb765"
+    },
+    {
+      "name": "markParentMessagesAsUnreadByEducator",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 5032,
+      "end": 5051,
+      "sha256": "8467dd43de7017b0234ff66569ce907d4ae89c6e90634cda0fde0bab9f0e463a"
+    },
+    {
+      "name": "markChatMessagesRead_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 5053,
+      "end": 5055,
+      "sha256": "52f7ac1c5e81d7b940538333c78aba194682435cb223af7d72e84d645df6ee44"
+    },
+    {
+      "name": "markChatMessagesReadValue_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 5057,
+      "end": 5101,
+      "sha256": "d03fd4dcfba2f481a78cdfdd7aa6acc3b728ba7805ee568fb6f1e39ed3d15989"
+    },
+    {
+      "name": "getChatSheet_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 53,
+      "end": 55,
+      "sha256": "b487a91fb058114124296bdb12fc72408b1be42a2facbb99967b573911953ae5"
+    },
+    {
+      "name": "ensureChatSheet_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2120,
+      "end": 2166,
+      "sha256": "e97d5026cfad59f9586f67043c67ddca8d20fcd588307381f299fa6342b43c49"
+    },
+    {
+      "name": "ensureChatIndexSheet_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2168,
+      "end": 2212,
+      "sha256": "db2837ab98ce28f8b5d3996ee5562e99e8da43397d9d5de7374c30dc0e4e9f81"
+    },
+    {
+      "name": "ensureChatPinsSheet_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2216,
+      "end": 2232,
+      "sha256": "7b985633e6abfdefe9718704ab8c397023029ecb0b45f5619e6d3eb9a6ae91c1"
+    },
+    {
+      "name": "removeEducatorChatPin_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2248,
+      "end": 2258,
+      "sha256": "d85ab7bdb95b1777423f5154354209ecee372684a9c03f74432765fcd65cae85"
+    },
+    {
+      "name": "purgeInactiveChatMessages_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 2986,
+      "end": 3025,
+      "sha256": "5df453226c3203338c06ec28b0676ee5fc30e35d289731e91780c400f7f726e4"
+    },
+    {
+      "name": "purgeLegacyChatMessagesForPhone_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3027,
+      "end": 3044,
+      "sha256": "2c6b963d6761bed81d7b61b1629c551e28934f253dd83d304aee98cc6600804f"
+    },
+    {
+      "name": "cleanupInactiveChatMessages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3415,
+      "end": 3417,
+      "sha256": "5fcb3b52b13f000119716fd2cd7e13e413ab6953d1faa8d675e411fe1ef02439"
+    },
+    {
+      "name": "ensureInactiveChatCleanupTrigger_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3419,
+      "end": 3430,
+      "sha256": "3ff846650130e600e08371784efdccd5be07115f890aa25540b798488e759b02"
+    },
+    {
+      "name": "ensureChatCleanupTrigger_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3440,
+      "end": 3452,
+      "sha256": "0468ee5bb1637025165b53ae59aa5fbd343fe338fd367694d874715021a08d13"
+    },
+    {
+      "name": "rebuildChatIndex_",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3641,
+      "end": 3749,
+      "sha256": "d4e85441fdfbe1e8a3cd59ab191e8bfc894d7cce20ffc235beab5a409323c1f2"
+    },
+    {
+      "name": "cleanupExpiredChatImages",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 3918,
+      "end": 3974,
+      "sha256": "04b836089187e7c632a664e4b4113d712d2be1c31a8c6599c5262a33ec247c08"
+    },
+    {
+      "name": "clearGetChatMessagesCache",
+      "originalFile": "apps-script/medsi-bot/Медси бот.js",
+      "start": 4434,
+      "end": 4458,
+      "sha256": "9e6aaaa6ef59abfe14124e9b977274cd8c042e3691b6597e85ebaf0a9873927a"
+    }
+  ],
+  "retainedTriggerStubs": [
+    "cleanupInactiveChatMessages",
+    "cleanupExpiredChatImages"
+  ]
+}

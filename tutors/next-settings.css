@@ -379,3 +379,13 @@ body.medsi-report-library-open { overflow: hidden; }
 @media(prefers-reduced-motion:reduce){
   .medsi-raw-expand::after{transition:none}
 }
+
+/* Report-availability markers use consistent morning/evening colors. */
+.medsi-roster-badge[data-kind="morning"]{
+  background:#fff6dc;border-color:#f3dfa6;color:#a17a28;
+}
+.medsi-roster-badge[data-kind="evening"]{
+  background:#e9f4ff;border-color:#cbe3fa;color:#487ba7;
+}
+.medsi-roster-badge[data-kind="morning"][data-present="0"],
+.medsi-roster-badge[data-kind="evening"][data-present="0"]{opacity:.62}

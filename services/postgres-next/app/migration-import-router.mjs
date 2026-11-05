@@ -21,6 +21,23 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
     if(!tokenMatches(req.get('Authorization')?.replace(/^Bearer\s+/i,''),expected)){
       return res.status(404).end();
     }
+    next();
+  });
+  router.post('/inventory',express.json({limit:'256kb',strict:true}),async(req,res)=>{
+    try{
+      const ids=req.body?.fileIds;
+      if(!Array.isArray(ids)||ids.length>256||new Set(ids).size!==ids.length||
+         ids.some(id=>typeof id!=='string'))throw new Error();
+      const readSource=createSameBucketSourceReader(storage),objects=[];
+      for(const file_id of ids){
+        const {body}=await readSource('s3',file_id,MAX_BYTES);
+        if(body.length<1)throw new Error();
+        objects.push({file_id,bytes:body.length,sha256:createHash('sha256').update(body).digest('hex')});
+      }
+      return res.json({ok:true,objects,vapidPublicKey:String(env.VAPID_PUBLIC_KEY||'')});
+    }catch(_){return res.status(409).json({ok:false,code:'MIGRATION_INVENTORY_REJECTED'});}
+  });
+  router.use((req,res,next)=>{
     if(req.get('X-Medsi-Migration-Freeze')!=='confirmed'||
        req.get('X-Medsi-Migration-Import')!=='confirmed'){
       return res.status(400).json({ok:false,code:'MIGRATION_CONFIRMATION_REQUIRED'});

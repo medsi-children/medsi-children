@@ -182,7 +182,19 @@
   async function request(path,method='GET',body){
     const session=await MedsiEducatorSession.get();
     const response=await fetch(path,{method,headers:{'Content-Type':'application/json','X-Medsi-Chat-Session':session.token},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store'});
-    const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.message||'Не удалось сохранить изменения.');return data;
+    // A gateway may return an empty or non-JSON body after a failed request.
+    // Do not expose the browser's JSON.parse exception or assume a write failed.
+    const responseText=await response.text();
+    let data=null;
+    if(responseText.trim()){
+      try{data=JSON.parse(responseText);}catch(_){/* Upstream returned non-JSON. */}
+    }
+    if(!data||typeof data!=='object'){
+      const status=response.status?(' (HTTP '+response.status+')'):'';
+      throw new Error('Сервер не прислал корректное подтверждение'+status+'. Проверьте, сохранились ли изменения, прежде чем повторять действие.');
+    }
+    if(!response.ok||!data.ok)throw new Error(data.message||'Не удалось сохранить изменения.');
+    return data;
   }
   function inlineReport(value,label,save){
     const wrap=textNode('div','medsi-inline-report','');

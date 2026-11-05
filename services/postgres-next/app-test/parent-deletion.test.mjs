@@ -34,6 +34,17 @@ test('deletion fails closed when cleanup is not explicitly enabled',async()=>{
   await assert.rejects(()=>service.enqueue({phone,operationId}),/temporarily disabled/);
   assert.ok(db.state().profile);
 });
+test('cached educator panels may submit the original delete_ operation IDs',async()=>{
+  const db=database();
+  const service=createParentDeletionService({sql:db.sql,enabled:true,
+    now:()=>1000,removeMedia:async()=>{}});
+  const legacyId='delete_1234567890abcdef1234567890abcdef';
+  const answer=await service.enqueue({phone,operationId:legacyId});
+  assert.equal(answer.ok,true);
+  assert.equal(answer.accepted,true);
+  assert.equal(answer.operationId,legacyId);
+  assert.equal(db.state().profile,null);
+});
 test('staff deletion is idempotent and immediately revokes parent profile',async()=>{
   const db=database();
   const service=createParentDeletionService({sql:db.sql,enabled:true,

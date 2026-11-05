@@ -1,6 +1,7 @@
 
 const PHONE=/^\d{10}$/;
-const OP=/^del_[A-Za-z0-9_-]{12,125}$/;
+// Accept IDs from both current and previously cached educator panels.
+const OP=/^(?:del|delete)_[A-Za-z0-9_-]{12,125}$/;
 const num=n=>BigInt(n);
 const phoneOf=p=>String(p||'').replace(/\D/g,'').slice(-10);
 const MAX_ATTEMPTS=6;

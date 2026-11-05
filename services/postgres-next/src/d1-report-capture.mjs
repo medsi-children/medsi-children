@@ -37,10 +37,18 @@ export function normalizeD1Reports(current,history,profiles,historicalLinks=[]){
   }
   function base(row,historical){
     if(!row||!active.has(row.phone10)||!kinds.has(row.kind)||!text(row.text)||
-       !text(row.publication_id)||!id(row.profile_generation)||!id(row.child_admission_id))invalid();
+       !text(row.publication_id)||!text(row.profile_generation)||!id(row.child_admission_id))invalid();
     const profile=active.get(row.phone10);
-    if(historical ? !authorizedHistory.has(JSON.stringify([row.phone10,row.profile_generation,row.child_admission_id]))
-      : profile.profile_generation!==row.profile_generation||profile.admission_id!==row.child_admission_id)invalid();
+    // The current Worker deliberately stores an empty report generation and
+    // fences publications by child_admission_id. Do not confuse that field with
+    // registration generations or revive a retired Sheets generation fallback.
+    const authorized=historical
+      ? row.profile_generation!==''
+        ? authorizedHistory.has(JSON.stringify([row.phone10,row.profile_generation,row.child_admission_id]))
+        : [...profiles,...historicalLinks].some(link=>link.phone10===row.phone10&&link.admission_id===row.child_admission_id)
+      : profile.admission_id===row.child_admission_id&&
+        (row.profile_generation===''||profile.profile_generation===row.profile_generation);
+    if(!authorized)invalid();
     return {phone10:row.phone10,kind:row.kind,admission_id:row.child_admission_id,
       publication_id:row.publication_id,revision:integer(row.revision),text:row.text};
   }

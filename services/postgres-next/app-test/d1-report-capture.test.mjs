@@ -25,3 +25,14 @@ test('old reports cannot become current and ambiguous history is rejected',()=>{
   assert.throws(()=>normalizeD1Reports([current],[history,history],[profile],[old]),/ambiguous/);
   assert.throws(()=>normalizeD1Reports([current],[{...history,report_date:'2025-02-30'}],[profile],[old]),/ambiguous/);
 });
+
+test('current revision-fenced Worker reports use admission identity with an intentionally empty generation',()=>{
+  const fresh={...current,profile_generation:''};
+  const historical={...history,profile_generation:''};
+  const result=normalizeD1Reports([fresh],[historical],[profile],[old]);
+  assert.equal(result.parent_current_reports[0].admission_id,profile.admission_id);
+  assert.equal(result.parent_report_history[0].admission_id,old.admission_id);
+  assert.throws(()=>normalizeD1Reports([{...fresh,child_admission_id:old.admission_id}],[],[profile],[old]),/ambiguous/);
+  assert.throws(()=>normalizeD1Reports([fresh],[historical],[profile]),/ambiguous/);
+  assert.throws(()=>normalizeD1Reports([{...fresh,profile_generation:'stale'}],[],[profile]),/ambiguous/);
+});

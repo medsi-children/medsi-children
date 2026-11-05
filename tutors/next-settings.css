@@ -300,6 +300,46 @@ body.medsi-report-library-open {overflow:hidden}
 .medsi-roster-form label {min-width:0}
 .medsi-roster-line .medsi-roster-form {width:100%;max-width:100%}
 
+/* Availability bubbles are anchored to the sun/moon buttons, never to the page banner. */
+.medsi-roster-line {position:relative;overflow:visible}
+.medsi-roster-line:hover,.medsi-roster-line:focus-within {z-index:3}
+.medsi-roster-status-icon {position:relative;overflow:visible}
+.medsi-roster-status-icon::after {
+  content:attr(data-tooltip);
+  position:absolute;right:-6px;bottom:calc(100% + 12px);
+  width:max-content;max-width:min(240px,calc(100vw - 36px));
+  padding:9px 12px;border:1px solid #dceaf0;border-radius:11px;
+  background:#fff;color:#315765;box-shadow:0 7px 22px #244f6520;
+  font-family:inherit;font-size:12px;line-height:1.28;font-weight:670;
+  text-align:center;white-space:normal;pointer-events:none;
+  visibility:hidden;opacity:0;transform:translateY(3px);
+  transition:opacity .12s ease,transform .12s ease,visibility .12s ease;
+  z-index:5;
+}
+.medsi-roster-status-icon::before {
+  content:"";position:absolute;right:12px;bottom:calc(100% + 7px);
+  width:10px;height:10px;transform:rotate(45deg);border-right:1px solid #dceaf0;
+  border-bottom:1px solid #dceaf0;background:#fff;
+  pointer-events:none;visibility:hidden;opacity:0;z-index:6;
+}
+.medsi-roster-status-icon.medsi-roster-tooltip-open::after,
+.medsi-roster-status-icon.medsi-roster-tooltip-open::before,
+.medsi-roster-status-icon:focus-visible::after,
+.medsi-roster-status-icon:focus-visible::before {
+  visibility:visible;opacity:1;
+}
+.medsi-roster-status-icon.medsi-roster-tooltip-open::after,
+.medsi-roster-status-icon:focus-visible::after {transform:translateY(0)}
+@media(hover:hover) {
+  .medsi-roster-status-icon:hover::after,.medsi-roster-status-icon:hover::before {
+    visibility:visible;opacity:1;
+  }
+  .medsi-roster-status-icon:hover::after {transform:translateY(0)}
+}
+@media(prefers-reduced-motion:reduce) {
+  .medsi-roster-status-icon::after {transition:none}
+}
+
 @media(max-width:650px) {
   .medsi-setting-grid{gap:9px}
   .medsi-settings-next .medsi-setting-tile{min-height:145px;padding:14px;border-radius:18px;gap:7px}

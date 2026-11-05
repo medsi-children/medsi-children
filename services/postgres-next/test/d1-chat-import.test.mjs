@@ -37,7 +37,7 @@ test('synthetic migration baseline is repeatable and verifies all 26 signed stre
         phone10:source[0].phone10,bytes:23,sha256:'b'.repeat(64)}];
       const admissions=[{admission_id:'stay-1',child_id:'child-1',status:'active'}];
       const profiles=[{phone10:source[0].phone10,parent_name:'Тестовый родитель',child_name:'Тестолина',
-        relationship:'Родитель',child_genitive:'',profile_generation:'generation-1',child_admission_id:''}];
+        relationship:'Родитель',child_genitive:'',profile_generation:'generation-1',child_admission_id:'stay-1'}];
       const links=[{phone10:profiles[0].phone10,profile_generation:'generation-1',admission_id:'stay-1'}];
       const profileOptions={hmacKey,explicitImport:true,freezeConfirmed:true,
         expectedManifest:captureD1ParentProfileManifest(profiles,links,admissions,hmacKey)};

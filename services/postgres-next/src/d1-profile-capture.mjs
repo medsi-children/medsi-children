@@ -8,8 +8,25 @@ const text=value=>typeof value==='string'&&!value.includes('\0');
 const id=value=>text(value)&&value.length>0&&value.trim()===value;
 const invalid=()=>{throw new Error('Invalid or ambiguous parent profile linkage.');};
 
-// Linkage comes from an independently reviewed roster capture. Do not join by
-// child name: different children and admissions can share the same display name.
+// D1 is authoritative for parents, generations and admission links. Sheets is
+// only a report mirror and must never fill in or replace these identity fields.
+export function captureD1ProfileLinks(profiles){
+  if(!Array.isArray(profiles))invalid();
+  const seen=new Set(),links=[];
+  for(const row of profiles){
+    if(!row||!phone(row.phone10)||seen.has(row.phone10)||!id(row.profile_generation)||
+       !text(row.child_admission_id))invalid();
+    seen.add(row.phone10);
+    if(row.child_admission_id!==''){
+      if(!id(row.child_admission_id))invalid();
+      links.push({phone10:row.phone10,profile_generation:row.profile_generation,
+        admission_id:row.child_admission_id});
+    }
+  }
+  return links;
+}
+
+// The reviewed child roster resolves opaque admission IDs, never display names.
 export function normalizeD1ParentProfiles(profiles,links,admissions){
   if(![profiles,links,admissions].every(Array.isArray))invalid();
   const byAdmission=new Map(),byPhone=new Map();
@@ -29,16 +46,23 @@ export function normalizeD1ParentProfiles(profiles,links,admissions){
          .every(field=>text(row[field]))||!id(row.profile_generation))invalid();
     seen.add(row.phone10);
     const link=byPhone.get(row.phone10);
+    if(row.child_admission_id===''){
+      if(link)invalid();
+      return {phone10:row.phone10,parent_name:row.parent_name,child_name:row.child_name,
+        relationship:row.relationship,child_id:'',admission_id:'',
+        profile_generation:row.profile_generation,child_genitive:row.child_genitive,
+        created_at:null,updated_at:null};
+    }
     const admission=byAdmission.get(link?.admission_id);
     if(!link||link.profile_generation!==row.profile_generation||!admission||
        admission.status!=='active'||
-       (row.child_admission_id!==''&&row.child_admission_id!==admission.admission_id))invalid();
+       row.child_admission_id!==admission.admission_id)invalid();
     return {phone10:row.phone10,parent_name:row.parent_name,child_name:row.child_name,
       relationship:row.relationship,child_id:admission.child_id,admission_id:admission.admission_id,
       profile_generation:row.profile_generation,child_genitive:row.child_genitive,
       created_at:null,updated_at:null};
   });
-  if(seen.size!==byPhone.size)invalid();
+  if(profiles.filter(row=>row.child_admission_id!=='').length!==byPhone.size)invalid();
   return normalized;
 }
 
@@ -62,7 +86,7 @@ export async function importD1ParentProfiles(sql,profiles,links,admissions,
     const [roster]=await tx`SELECT a.admission_id,a.child_id FROM public.admissions a
       JOIN public.children c ON c.child_id=a.child_id WHERE a.status='active'`;
     const children=new Map(roster.map(row=>[row.admission_id,row.child_id]));
-    if(rows.some(row=>children.get(row.admission_id)!==row.child_id)){
+    if(rows.some(row=>row.admission_id!==''&&children.get(row.admission_id)!==row.child_id)){
       throw new Error('PostgreSQL roster does not contain the approved admission linkage.');
     }
     if(!existing.length){

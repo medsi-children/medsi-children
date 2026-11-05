@@ -3,8 +3,8 @@ import { join } from 'node:path';
 
 // Prevent the next Timeweb release from reintroducing outbound requests to
 // retired Apps Script / Cloudflare / Google Drive data paths.
-// Legacy server.js is intentionally still present for safe pre-cutover rollback,
-// but the NEXT branch must never call it or direct clients to it.
+// The previous release remains available in Git history and in App 1.0.
+// App 2.0 must not contain a legacy gateway fallback at all.
 const ROOT = new URL('../', import.meta.url);
 const candidates = [
   'index.html','tutors.html','psychology.html','notify-client.js','sw.js'
@@ -31,6 +31,8 @@ for (const file of candidates) {
   }
 }
 const server=readFileSync(new URL('server.js',ROOT),'utf8');
+if(/CHAT_UPSTREAM|APP_SCRIPT_URL|UPLOAD_UPSTREAM|PUSH_UPSTREAM|session-preload/.test(server)||
+   !server.includes('MEDSI_NEXT_MODE_REQUIRED'))errors.push('legacy gateway fallback must not ship in App 2.0');
 const branch=server.split('} else {')[0];
 if (!branch.includes("MEDSI_NEXT_STAND === '1'") ||
     !branch.includes('services/postgres-next/src/connection.mjs') ||

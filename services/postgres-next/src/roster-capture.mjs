@@ -78,26 +78,3 @@ export async function importRosterCapture(sql,children,admissions,
     return {children:storedChildren.length,admissions:storedAdmissions.length,alreadyImported};
   });
 }
-
-// REPORTS!A2:I captured offline: A is the phone, H the admission ID,
-// I the profile generation. C/D are display names, never identity keys.
-export function captureSheetsProfileLinks(rows,admissions){
-  if(!Array.isArray(rows)||!Array.isArray(admissions))invalid();
-  const active=new Set(admissions.filter(row=>row?.status==='active').map(row=>row.admission_id));
-  const links=new Map();
-  for(const row of rows){
-    if(!Array.isArray(row))invalid();
-    if(row.every(cell=>cell===null||cell===undefined||cell===''))continue;
-    if(typeof row[0]!=='string'&&typeof row[0]!=='number')invalid();
-    const raw=String(row[0]).trim();
-    if(!/^\+?[0-9 ()-]+$/.test(raw))invalid();
-    const digits=raw.replace(/\D/g,'');
-    if(!/^(?:[78])?\d{10}$/.test(digits))invalid();
-    const phone10=digits.slice(-10),admission_id=row[7],profile_generation=row[8];
-    if(!id(admission_id)||!id(profile_generation)||!active.has(admission_id))invalid();
-    const prior=links.get(phone10);
-    if(prior&&(prior.admission_id!==admission_id||prior.profile_generation!==profile_generation))invalid();
-    links.set(phone10,{phone10,admission_id,profile_generation});
-  }
-  return [...links.values()];
-}

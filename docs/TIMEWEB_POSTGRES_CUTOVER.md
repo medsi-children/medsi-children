@@ -22,6 +22,15 @@
 
 Проверяемые инструкции провайдера: [автодеплой App Platform](https://timeweb.cloud/docs/apps/deployment), [сети App Platform](https://timeweb.cloud/docs/apps/upravlenie-apps-v-paneli), [подключение PostgreSQL и TLS](https://timeweb.cloud/docs/dbaas/postgresql/connect-to-database).
 
+## Источники истины при переносе (уточнено 5 ноября)
+
+- D1 Cloudflare: родители, регистрации, поколения авторизации, passkeys, чаты, ссылки на вложения, текущие/исторические опубликованные отчёты и их состояния. KV push Worker: действующие подписки и opt-in.
+- Apps Script и Sheets: исходные отчёты, правила распределения, NAME_VARIANTS и служебная принадлежность raw-блоков. Строки родителей в REPORTS — зеркало; их нельзя использовать для замены родительских данных, поколений или admission-связей D1.
+- Незавязанная госпитализация D1 сохраняется незавязанной. Несовпадение с отчётным зеркалом требует разрешения, а не автоматического выбора Sheets.
+- В приложении 2.0 удалён старый HTTP gateway из server.js: без явного режима PostgreSQL процесс завершается. Откат к 1.0 выполняется через существующее приложение и прежний Git-коммит, а не через скрытый fallback.
+- Добавлены read-only адаптер D1/KV с повторной проверкой стабильности и Apps Script sidecar в ops/. Sidecar не входит в автоматический Apps Script release и ещё не устанавливался в действующий проект. Это код захвата, не выполненный перенос.
+- Исходная VAPID-пара уже перенесена в защищённые переменные Timeweb через зашифрованный экспорт из непроизводственной версии Worker; production deployment Cloudflare до/после совпадает. Временные локальные копии ключей удалены.
+
 ## Целевая система
 
 - Существующий Timeweb App Platform и тот же HTTPS-домен для сайта, Node.js API, отчётов, чатов, авторизации, уведомлений и периодических задач.
@@ -41,7 +50,7 @@
 - `services/postgres-next/sql/001_initial.sql`: 27 таблиц и индексы, не выполняется автоматически при запуске сайта.
 - `services/postgres-next/src/connection.mjs`: параметризованные SQL-запросы, преобразование PostgreSQL UPSERT, транзакции, pool, TLS с проверкой CA, корректный rollback.
 - `services/postgres-next/src/schema-cli.mjs`: создаёт структуру **только в пустой БД** при явном подтверждении; на каждом деплое не запускается.
-- `server.js`: при `MEDSI_NEXT_STAND=1` и `MEDSI_NEXT_PG_ENABLED=1` запускает NEXT с PostgreSQL. Если эти флаги отсутствуют — остаётся старый Timeweb gateway. В текущей реализации PostgreSQL NEXT **изолирован** и не считается разрешённым production-backend.
+- `server.js`: при `MEDSI_NEXT_STAND=1` и `MEDSI_NEXT_PG_ENABLED=1` запускает NEXT с PostgreSQL. Если явный режим не задан, процесс завершается без запуска старого gateway. В текущей реализации PostgreSQL NEXT **изолирован** и не считается разрешённым production-backend.
 - `.github/workflows/verify-postgres-next.yml`: Node.js 22 + временная PostgreSQL 18, регрессия NEXT и старого gateway, тесты на фиктивных данных. Если GitHub Actions красный — merge и cutover запрещены.
 
 ## Параметры подключения Timeweb

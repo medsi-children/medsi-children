@@ -388,7 +388,7 @@
       if(!deleteTarget||confirmButton.disabled)return;
       const target=deleteTarget;
       const targetPhone=phone10(target.phone);
-      if(!deletionOperations.has(targetPhone))deletionOperations.set(targetPhone,'delete_'+crypto.randomUUID().replace(/-/g,''));
+      if(!deletionOperations.has(targetPhone))deletionOperations.set(targetPhone,'del_'+crypto.randomUUID().replace(/-/g,''));
       confirmButton.disabled=true;cancelButton.disabled=true;
       try{
         if(typeof transport.parentDelete!=='function')throw new Error('Не загрузилось быстрое удаление. Обновите страницу и попробуйте ещё раз.');

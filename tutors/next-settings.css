@@ -455,9 +455,9 @@ body.medsi-report-library-open { overflow: hidden; }
   padding:19px 21px 21px;border-radius:19px;
   border:1px solid #dfebf1;box-shadow:0 4px 14px #255e710a;background:#fff;
 }
-.medsi-raw-morning{background:#fffdf7;border-left:4px solid #f5c750;border-color:#f1dfac}
-.medsi-raw-evening{background:#f9fcff;border-left:4px solid #83c5fb;border-color:#c7e3fb}
-.medsi-raw-psychology{background:#fffbfd;border-left:4px solid #ef9ec0;border-color:#f1d5e1}
+.medsi-raw-morning{background:#fffdf7;border-color:#f1dfac;border-left:4px solid #f5c750}
+.medsi-raw-evening{background:#f9fcff;border-color:#c7e3fb;border-left:4px solid #83c5fb}
+.medsi-raw-psychology{background:#fffbfd;border-color:#f1d5e1;border-left:4px solid #ef9ec0}
 .medsi-raw-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;position:relative;z-index:1}
 .medsi-raw-heading{min-width:0;flex:1}
 .medsi-raw-heading h3{font-size:19px;font-weight:790;color:#193f4f;margin:0}
@@ -547,7 +547,7 @@ body.medsi-report-library-open { overflow: hidden; }
 .medsi-roster-line-info{min-width:0;display:grid;gap:4px;flex:1}
 .medsi-roster-line-name{
   appearance:none;border:0;background:transparent;color:#345d6a;
-  font:780 17px/1.2 inherit;letter-spacing:-.025em;padding:0;text-align:left;cursor:pointer;
+  font-family:inherit;font-weight:780;font-size:17px;line-height:1.2;letter-spacing:-.025em;padding:0;text-align:left;cursor:pointer;
 }
 .medsi-roster-line-parent{display:flex;align-items:baseline;flex-wrap:wrap;gap:5px 12px;color:#90a1ac;font-size:12px}
 .medsi-roster-line-parent button{appearance:none;border:0;padding:0;background:transparent;color:inherit;font:inherit;cursor:pointer}

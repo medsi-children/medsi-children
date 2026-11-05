@@ -29,7 +29,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261105-roster-tooltips-11/);
+  assert.match(html,/next-settings\.css\?v=20261105-mobile-layout-12/);
   assert.match(html,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });
 
@@ -57,4 +57,12 @@ test('roster status is shown above the corresponding icon instead of a global ba
   assert.match(css,/\.medsi-roster-status-icon::after/);
   assert.match(css,/content:attr\(data-tooltip\)/);
   assert.match(css,/bottom:calc\(100% \+ 12px\)/);
+});
+
+test('mobile child identity stays centered and aliases have compact readable rows',()=>{
+  const css=read('tutors/next-settings.css');
+  assert.match(css,/\.medsi-child-deck-details\{gap:4px;width:100%;max-width:100%;justify-items:center\}/);
+  assert.match(css,/\.medsi-child-deck-detail-row\{gap:7px;width:100%;justify-content:center\}/);
+  assert.match(css,/#medsiNamesPane \{row-gap:9px\}/);
+  assert.match(css,/\.medsi-name-word\{padding:7px 9px;font-size:14px\}/);
 });

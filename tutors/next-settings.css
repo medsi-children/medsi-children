@@ -366,18 +366,20 @@ body.medsi-report-library-open {overflow:hidden}
   .medsi-report-copy{width:35px;height:35px;border-radius:10px}
   .medsi-report-copy svg{width:20px;height:20px}
   .medsi-report-body{font-size:14px;line-height:1.57}
-  .medsi-child-deck-nav{grid-template-columns:35px minmax(0,1fr) 35px;gap:5px;min-height:145px;padding:13px 7px}
-  .medsi-child-nav-arrow{width:34px;height:34px}
-  .medsi-child-nav-arrow svg{width:20px;height:20px}
-  .medsi-child-deck-identity{display:grid;grid-template-columns:1fr;gap:8px;justify-content:center}
-  .medsi-child-deck-name{border-right:0;border-bottom:1px solid #d8e9ee;padding:0 0 7px}
-  .medsi-child-deck-name h3{font-size:clamp(15px,4.3vw,19px);line-height:1.2}
-  .medsi-child-deck-name p{margin-top:3px;font-size:12px}
-  .medsi-child-deck-details{gap:4px;width:100%;max-width:100%;justify-items:center}
-  .medsi-child-deck-detail-row{gap:7px;width:100%;justify-content:center}
+  /* Mobile only: a near-square profile card instead of a narrow horizontal strip. */
+  .medsi-child-deck-nav{display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1 / 1;min-height:320px;gap:0;padding:24px 20px 76px}
+  .medsi-child-nav-arrow{position:absolute;bottom:18px;left:18px;width:43px;height:43px}
+  .medsi-child-nav-next{left:auto;right:18px}
+  .medsi-child-nav-arrow svg{width:22px;height:22px}
+  .medsi-child-deck-identity{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:18px}
+  .medsi-child-deck-name{width:min(100%,275px);border-right:0;border-bottom:1px solid #d8e9ee;padding:0 0 15px}
+  .medsi-child-deck-name h3{font-size:clamp(20px,5.5vw,24px);line-height:1.2}
+  .medsi-child-deck-name p{margin-top:5px;font-size:14px}
+  .medsi-child-deck-details{gap:8px;width:max-content;max-width:100%;margin-inline:auto;justify-items:stretch}
+  .medsi-child-deck-detail-row{display:grid;grid-template-columns:27px minmax(0,1fr);gap:10px;width:100%;align-items:center}
   .medsi-child-deck-detail-icon{width:25px;height:25px;border-radius:8px}
   .medsi-child-deck-detail-icon svg{width:15px;height:15px}
-  .medsi-child-deck-detail-copy{font-size:11px;text-align:center}
+  .medsi-child-deck-detail-copy{font-size:12px;text-align:left}
   .medsi-child-report-section{padding:15px 14px;border-radius:17px}
   .medsi-tutor-reports .medsi-child-report-pill{font-size:12px!important;padding:7px 10px!important;margin-bottom:12px!important}
   .medsi-name-columns,.medsi-name-row{grid-template-columns:minmax(95px,.85fr) minmax(0,1.5fr);gap:9px}

@@ -366,13 +366,14 @@ body.medsi-report-library-open {overflow:hidden}
   .medsi-report-copy{width:35px;height:35px;border-radius:10px}
   .medsi-report-copy svg{width:20px;height:20px}
   .medsi-report-body{font-size:14px;line-height:1.57}
-  /* Mobile only: a near-square profile card instead of a narrow horizontal strip. */
-  .medsi-child-deck-nav{display:flex;flex-direction:column;align-items:center;justify-content:center;aspect-ratio:1 / 1;min-height:320px;gap:0;padding:24px 20px 76px}
-  .medsi-child-nav-arrow{position:absolute;bottom:18px;left:18px;width:43px;height:43px}
-  .medsi-child-nav-next{left:auto;right:18px}
-  .medsi-child-nav-arrow svg{width:22px;height:22px}
-  .medsi-child-deck-identity{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:18px}
-  .medsi-child-deck-name{width:min(100%,275px);border-right:0;border-bottom:1px solid #d8e9ee;padding:0 0 15px}
+  /* A genuinely small, centered square. Width is constrained independently
+     from the full-width report grid; extra parents may increase its height. */
+  .medsi-child-deck-nav{display:flex;flex-direction:column;align-items:center;justify-content:center;justify-self:center;width:min(100%,272px);aspect-ratio:1 / 1;min-height:min-content;gap:0;padding:13px 12px 50px}
+  .medsi-child-nav-arrow{position:absolute;bottom:11px;left:11px;width:37px;height:37px}
+  .medsi-child-nav-next{left:auto;right:11px}
+  .medsi-child-nav-arrow svg{width:20px;height:20px}
+  .medsi-child-deck-identity{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:10px}
+  .medsi-child-deck-name{width:min(100%,236px);border-right:0;border-bottom:1px solid #d8e9ee;padding:0 0 10px}
   .medsi-child-deck-name h3{font-size:clamp(20px,5.5vw,24px);line-height:1.2}
   .medsi-child-deck-name p{margin-top:5px;font-size:14px}
   .medsi-child-deck-details{gap:8px;width:max-content;max-width:100%;margin-inline:auto;justify-items:stretch}

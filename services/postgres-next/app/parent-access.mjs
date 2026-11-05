@@ -4,7 +4,8 @@ const normalizePhone=v=>String(v||'').replace(/\D/g,'').slice(-10);
 // Mirror the existing parent login contract: passkey users enter with
 // their key, other active parents use the existing phone-based recovery.
 // No educator approval, request queue or new staff screen.
-export function createParentAccessService({sql,sessions}) {
+const FIRST_DAY_MS=24*60*60*1000;
+export function createParentAccessService({sql,sessions,now=()=>Date.now()}) {
   if(!sql?.begin||!sessions?.issueParent)throw new Error('Parent access dependencies unavailable.');
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
 
@@ -15,12 +16,16 @@ export function createParentAccessService({sql,sessions}) {
       const [[profile]]=await tx`SELECT phone10,parent_name,child_name,child_id
         FROM parent_profiles WHERE phone10=${phone10}`;
       if(!profile)return null;
-      const [[auth]]=await tx`SELECT user_handle FROM parent_auth_profiles WHERE phone10=${phone10}`;
+      const [[auth]]=await tx`SELECT user_handle,created_at FROM parent_auth_profiles WHERE phone10=${phone10}`;
       const [keys]=auth?.user_handle
         ?await tx`SELECT credential_id,revoked_at FROM parent_passkeys WHERE user_handle=${auth.user_handle}`
         :[[]];
       const activeKey=keys.some(item=>!item.revoked_at||Number(item.revoked_at)===0);
-      if(activeKey)return {passkey:true};
+      // A newly registered family may configure passkeys on other devices for 24 hours.
+      // Enforce grace on the server, never on device clocks or local storage.
+      const createdAt=Number(auth?.created_at||0),currentTime=now();
+      const firstDay=createdAt>0&&createdAt<=currentTime&&currentTime-createdAt<FIRST_DAY_MS;
+      if(activeKey&&!firstDay)return {passkey:true};
       let childName=String(profile.child_name||'');
       if(!childName&&profile.child_id){
         const [[child]]=await tx`SELECT registered_first_name,surname FROM children WHERE child_id=${profile.child_id}`;

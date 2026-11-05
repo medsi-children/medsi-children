@@ -56,3 +56,15 @@ input[type="password"]{width:100%;min-width:0;padding:14px 16px;font-size:1.05re
 body.parent-preview-mode .medsi-push-panel{display:none!important}
 @media(max-width:480px){.parent-preview-banner{border-radius:16px;font-size:.72rem;padding:8px 9px 8px 12px}.parent-preview-banner button{font-size:.72rem;padding:7px 9px}}
 body.parent-preview-mode #logoutBtn{display:none!important}
+
+/* Phone-first sign-in: compact conditional passkey choice after phone lookup. */
+#screenAuth .medsi-auth-continue{width:100%;margin-top:17px;min-height:49px;border-radius:15px;font-weight:750}
+#screenAuth .passkey-back-btn{margin-top:13px}
+.medsi-passkey-prompt{margin:17px 0 0;padding:18px;border-radius:18px;border:1px solid #bbe8e7;background:linear-gradient(155deg,#f0fcfb,#e7f6ff);box-shadow:0 7px 22px rgba(28,117,138,.07)}
+.medsi-passkey-prompt.hidden{display:none!important}
+.medsi-passkey-head{display:flex;align-items:center;gap:9px;color:#195a69;font-size:15px}
+.medsi-passkey-symbol{display:grid;place-items:center;width:29px;height:29px;flex:none;border-radius:10px;background:#d1efed;color:#198c91;font-size:18px}
+.medsi-passkey-prompt p{margin:9px 0 13px;font-size:13px;line-height:1.55;color:#56808a}
+#screenAuth .medsi-passkey-action{width:100%;min-height:44px;margin:0;border-radius:12px;font-size:14px}
+#screenAuth .medsi-passkey-prompt .error{margin:10px 0 0;color:#b45363}
+@media(max-width:560px){.medsi-passkey-prompt{padding:15px;border-radius:16px}}

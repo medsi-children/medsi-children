@@ -149,7 +149,7 @@
         {label:'Отмена', run:async () => { version++; messageTarget = null; waiting = null; return result('Отправка отменена.'); }}
       ]);
     }
-    const reportLabel = kind => ({morning:'Утренний отчёт',evening:'Вечерний отчёт',psychology:'Групповая терапия'})[kind];
+    const reportLabel = kind => ({morning:'Утренний отчёт',evening:'Вечерний отчёт',psychology:'Психотерапия'})[kind];
     const reportKind = value => /утрен|утро/.test(value) ? 'morning' : /вечер/.test(value) ? 'evening' : /психотерап|терапи|группов/.test(value) ? 'psychology' : '';
     function requestReport(kind) {
       waiting = {intent:'reportText',kind,expires:Date.now()+20*60000};
@@ -276,7 +276,7 @@
     available: () => Boolean(window.MedsiTutorAdmin && document.getElementById('tutorAuthGate')?.classList.contains('hidden')),
     multiline:true,
     chatStyle:'.choices{grid-template-columns:1fr}.choices button{font-size:13px;line-height:1.4;min-height:44px;height:auto;white-space:normal;overflow-wrap:anywhere}',
-    prompts:['QR-код', 'Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Групповая терапия', 'Список детей', 'Телефоны родителей'],
+    prompts:['QR-код', 'Написать родителю', 'Телефон родителя', 'Удалить ребёнка', 'Утренний отчёт', 'Вечерний отчёт', 'Психотерапия', 'Список детей', 'Телефоны родителей'],
     conversation: () => ({...create(window.MedsiTutorAdmin), role:'educator', greeting:'Добрый день, я Медси Бот, помогу с любыми задачами.'})
   };
 })();

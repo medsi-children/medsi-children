@@ -162,7 +162,7 @@
     $('title').textContent=title||'Медси Бот';$('meta').textContent=meta||'Что хотите сделать?';animateScreen($(name));window.scrollTo(0,0)
   }
   function showMenu(){if(deletionStatusTimer){clearTimeout(deletionStatusTimer);deletionStatusTimer=null}setScreen('screenChoose','Медси Бот','Что хотите сделать?');refreshUnreadBadge();refreshDeletionJobs();scheduleD1Warm()}
-  function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('reportError').classList.remove('report-validation-warning');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Групповая терапия','Вставьте отчёт по групповой терапии.'];setScreen('screenForm',spec[0],spec[1])}
+  function openReport(type){scheduleD1Warm();$('btnSend').dataset.type=type;$('reportError').classList.add('hidden');$('reportError').classList.remove('report-validation-warning');$('text').value='';const spec=type==='morning'?['Утренний отчёт','Вставьте текст утреннего отчёта.']:type==='evening'?['Вечерний отчёт','Вставьте текст вечернего отчёта.']:['Психотерапия','Вставьте отчёт по групповой терапии.'];setScreen('screenForm',spec[0],spec[1])}
   async function submitReportPayload(type,text,submissionId) {
     if (!tutorToken || !['morning','evening','psychology'].includes(type) || !String(text).trim()) throw new Error('Некорректный отчёт.');
     const validator=window.MedsiReportValidation;
@@ -223,8 +223,8 @@
       const actions=document.createElement('div');actions.className='phone-card-actions';
       const copy=document.createElement('button');copy.type='button';copy.className='btn btn-teal phone-action-btn';copy.textContent='Скопировать';copy.onclick=()=>copyPhone(displayPhone(r.phone),copy);
       const call=document.createElement('a');call.className='btn btn-mint phone-action-btn';call.href='tel:'+String(r.phone||'').replace(/\D+/g,'');call.textContent='Позвонить';
-      const del=document.createElement('button');del.type='button';del.className='phone-delete';del.setAttribute('aria-label','Удалить ребёнка');del.textContent='×';del.onclick=()=>deleteParent(r,card);
-      actions.append(copy,call);card.append(title,del,meta,actions);box.appendChild(card);
+      // Deletion belongs in chats, Settings and the roster.
+      actions.append(copy,call);card.append(title,meta,actions);box.appendChild(card);
     });
   }
   function renderDeletionJobs(rows){

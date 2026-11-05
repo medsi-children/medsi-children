@@ -3,14 +3,14 @@ import assert from 'node:assert/strict';
 import {createParentAccessService} from '../app/parent-access.mjs';
 
 const phone='9991112233';
-function fakeDatabase({hasPasskey=false,profileExists=true}={}) {
+function fakeDatabase({hasPasskey=false,profileExists=true,createdAt=0}={}) {
   const sql={begin:async(_opts,fn)=>fn(async(strings,...values)=>{
     const q=strings.join('?').replace(/\s+/g,' ').trim();
     if(q.includes('FROM parent_profiles'))return [profileExists?[{
       phone10:phone,parent_name:'Мария Тестовая',
       child_name:'Лена Тестовая',child_id:''
     }]:[]];
-    if(q.includes('FROM parent_auth_profiles'))return [[{user_handle:'handle-1'}]];
+    if(q.includes('FROM parent_auth_profiles'))return [[{user_handle:'handle-1',created_at:createdAt}]];
     if(q.includes('FROM parent_passkeys'))return [hasPasskey?[{credential_id:'credential-1',revoked_at:0}]:[]];
     throw new Error('Unexpected test SQL '+q);
   })};
@@ -37,6 +37,20 @@ test('existing Face ID credential prevents phone-based recovery',async()=>{
   const result=await service.request({phone});
   assert.equal(result.code,'PASSKEY_REQUIRED');
   assert.equal(issued,0);
+});
+test('first 24 hours allow phone login even if the new account already has a passkey',async()=>{
+  const day=24*60*60*1000,now=1_900_000_000_000;
+  let issued=0;
+  const create=createdAt=>createParentAccessService({
+    sql:fakeDatabase({hasPasskey:true,createdAt}),
+    sessions:{issueParent:async()=>{issued++;return {token:'signed'}}},now:()=>now
+  });
+  assert.equal((await create(now-12*60*60*1000).request({phone})).status,'APPROVED');
+  assert.equal((await create(now-day+1).request({phone})).status,'APPROVED');
+  assert.equal((await create(now-day).request({phone})).code,'PASSKEY_REQUIRED');
+  assert.equal((await create(now-2*day).request({phone})).code,'PASSKEY_REQUIRED');
+  assert.equal((await create(now+1).request({phone})).code,'PASSKEY_REQUIRED');
+  assert.equal(issued,2);
 });
 test('unknown phone cannot enter another parent profile',async()=>{
   const service=createParentAccessService({sql:fakeDatabase({profileExists:false}),sessions:{

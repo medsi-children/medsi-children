@@ -119,9 +119,23 @@ export function createParentPasskeyService({sql,sessions,env=process.env,now=()=
       return {ok:true,enabled:true};
     });
   }
-  async function authenticationOptions() {
-    const options=await generateAuthenticationOptions({rpID,userVerification:'required'});
-    return {ok:true,...await storeChallenge({purpose:'authentication',challenge:options.challenge}),options};
+  async function authenticationOptions({phone}={}) {
+    const phone10=String(phone||'').replace(/\D/g,'').slice(-10);
+    if(!/^\d{10}$/.test(phone10))throw new Error('Bad parent phone.');
+    const auth=await account(phone10);
+    if(!auth)throw new Error('Ключ доступа для номера не найден.');
+    const keys=await read(async tx=>{
+      const [rows]=await tx`SELECT credential_id,transports_json,revoked_at FROM parent_passkeys
+        WHERE user_handle=${auth.user_handle}`;
+      return rows.filter(row=>!Number(row.revoked_at||0));
+    });
+    if(!keys.length)throw new Error('Ключ доступа для номера не найден.');
+    const options=await generateAuthenticationOptions({
+      rpID,userVerification:'required',
+      allowCredentials:keys.map(row=>({id:row.credential_id,transports:JSON.parse(row.transports_json||'[]')}))
+    });
+    return {ok:true,...await storeChallenge({purpose:'authentication',phone10,
+      userHandle:auth.user_handle,generationId:auth.generation_id,challenge:options.challenge}),options};
   }
   async function authenticationVerify({challengeId,credential}) {
     const challenge=await challengeOf(String(challengeId||''),'authentication');
@@ -134,6 +148,10 @@ export function createParentPasskeyService({sql,sessions,env=process.env,now=()=
       const [profiles]=await tx`SELECT phone10,user_handle,generation_id FROM parent_auth_profiles`;
       const profile=profiles.find(row=>row.user_handle===key.user_handle);
       if(!profile)return null;
+      // Prevent a passkey from a different account opening a different phone profile.
+      if(challenge.phone10!==profile.phone10||
+         challenge.user_handle!==key.user_handle||
+         challenge.generation_id!==profile.generation_id)return null;
       return {...key,profile};
     });
     if(!accountRow)throw new Error('Ключ недоступен. Войдите по номеру телефона.');

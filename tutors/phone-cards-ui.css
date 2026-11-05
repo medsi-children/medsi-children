@@ -6,3 +6,9 @@
 #screenPhones .medsi-phone-delete-mini{color:#c76272!important;border-color:rgba(199,98,114,.24)!important;background:#fffafb!important;position:static!important;transform:none!important}#screenPhones .medsi-phone-delete-mini svg{stroke-width:2.1!important}
 @media(min-width:561px){#screenPhones .medsi-phone-call-mini{position:relative!important;display:block!important;padding:0!important}#screenPhones .medsi-phone-call-mini svg{display:block!important;position:absolute!important;left:50%!important;top:50%!important;width:24px!important;height:24px!important;margin:0!important;transform:translate(-50%,-50%)!important;translate:none!important}}
 @media(max-width:560px){#screenPhones .phone-card{padding-right:101px!important}#screenPhones .medsi-phone-mini{width:39px!important;min-width:39px!important;max-width:39px!important;height:39px!important;min-height:39px!important;max-height:39px!important}}
+
+/* Calls only; removal is available in chats and roster. */
+#screenPhones .phone-card{padding-right:70px!important;min-height:94px!important}
+#screenPhones .phone-card-actions.medsi-phone-mini-actions{right:13px!important}
+#screenPhones .phone-delete{display:none!important}
+@media(max-width:560px){#screenPhones .phone-card{padding-right:65px!important}}

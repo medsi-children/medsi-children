@@ -12,11 +12,11 @@
     "verify:bot": "node scripts/verify-smart-bot.mjs && node --check parents/bot-chat-runtime.js",
     "verify": "npm run verify:syntax && npm run verify:server && npm run verify:source-control && npm run verify:chat && npm run verify:bot && npm run verify:reports && npm run verify:identity && npm run verify:reliability && npm run verify:recovery && npm run verify:auth",
     "verify:identity": "node --test services/postgres-next/app-test/identity-continuity.test.mjs services/postgres-next/app-test/parent-access.test.mjs",
-    "verify:reports": "node --test tests/frontend-report-validation.test.cjs tests/raw-report-cleanup.test.cjs tests/raw-report-canonicalization.test.cjs",
+    "verify:reports": "node --test tests/frontend-report-validation.test.cjs tests/raw-report-cleanup.test.cjs tests/raw-report-canonicalization.test.cjs tests/educator-roster-ui.test.cjs tests/psychology-format.test.cjs",
     "verify:syntax": "node scripts/verify-syntax.mjs",
     "verify:reliability": "node --test services/postgres-next/app-test/parent-deletion.test.mjs services/postgres-next/app-test/push-continuity.test.mjs services/postgres-next/app-test/report-publications.test.mjs",
     "verify:recovery": "node --test tests/parent-recovery.test.cjs",
-    "verify:auth": "node --test tests/parent-passkey-offer.test.cjs services/postgres-next/app-test/session-auth.test.mjs",
+    "verify:auth": "node --test tests/parent-passkey-offer.test.cjs services/postgres-next/app-test/session-auth.test.mjs tests/auth-phone-first.test.cjs",
     "verify:postgres-next": "npm --prefix services/postgres-next run check",
     "build": "node --check server.js && node --check services/postgres-next/app/stand-server.mjs && node --check services/postgres-next/src/connection.mjs"
   },

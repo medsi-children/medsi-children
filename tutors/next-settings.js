@@ -1,8 +1,7 @@
 (function () {
   'use strict';
 
-  // Loaded only from the isolated feature branch. Existing production logic
-  // remains in tutors/full-web.js and retains ownership of user actions.
+  // Production educator settings. Existing full-web.js handles shared actions.
   const dialog = document.getElementById('tutorSettingsDialog');
   const settingsBody = dialog && dialog.querySelector('.tutor-settings-body');
   if (!dialog || !settingsBody || document.getElementById('medsiSettingsNext')) return;
@@ -162,11 +161,13 @@
         <button type="button" id="medsiTabRaw" role="tab" aria-selected="true" aria-controls="medsiRawPane">Исходные отчёты</button>
         <button type="button" id="medsiTabChildren" role="tab" aria-selected="false" aria-controls="medsiChildrenPane">Отчёты по детям</button>
         <button type="button" id="medsiTabNames" role="tab" aria-selected="false" aria-controls="medsiNamesPane">Варианты имён</button>
+        <button type="button" id="medsiTabRoster" role="tab" aria-selected="false" aria-controls="medsiRosterPane">Дети и родители</button>
       </div>
       <p id="medsiReportsFeedback" class="medsi-reports-feedback" role="status"></p>
       <div id="medsiRawPane" role="tabpanel" aria-labelledby="medsiTabRaw" class="medsi-reports-content"></div>
       <div id="medsiChildrenPane" role="tabpanel" aria-labelledby="medsiTabChildren" class="medsi-reports-content hidden"></div>
       <div id="medsiNamesPane" role="tabpanel" aria-labelledby="medsiTabNames" class="medsi-reports-content hidden"></div>
+        <div id="medsiRosterPane" role="tabpanel" aria-labelledby="medsiTabRoster" class="medsi-reports-content hidden"></div>
     </div>`;
   document.body.append(library);
 
@@ -175,7 +176,7 @@
   let reportData = null;
   let refreshController = null;
 
-  function reportTypeLabel(type) { return type==='morning'?'Утренний отчёт':type==='evening'?'Вечерний отчёт':'Групповая терапия'; }
+  function reportTypeLabel(type) { return type==='morning'?'Утренний отчёт':type==='evening'?'Вечерний отчёт':'Психотерапия'; }
   function textNode(tag,className,value){const el=document.createElement(tag);el.className=className||'';el.textContent=String(value??'');return el;}
   const reportText=value=>String(value||'').trim()||'Отчёта пока нет.';
   async function request(path,method='GET',body){
@@ -224,20 +225,29 @@
   async function showTab(kind){
     if(activeTab==='names'&&kind!=='names'&&!await leaveNames())return;
     activeTab=kind;
-    for(const [name,id,pane] of [['raw','medsiTabRaw','medsiRawPane'],['children','medsiTabChildren','medsiChildrenPane'],['names','medsiTabNames','medsiNamesPane']]){
+    for(const [name,id,pane] of [['raw','medsiTabRaw','medsiRawPane'],['children','medsiTabChildren','medsiChildrenPane'],['names','medsiTabNames','medsiNamesPane'],['roster','medsiTabRoster','medsiRosterPane']]){
       byId(id).setAttribute('aria-selected',String(kind===name));byId(pane).classList.toggle('hidden',kind!==name);
     }
     if(kind==='names')await refreshNames();
+    if(kind==='roster')await refreshRoster();
   }
   byId('medsiTabRaw').addEventListener('click',()=>showTab('raw'));
   byId('medsiTabChildren').addEventListener('click',()=>showTab('children'));
   byId('medsiTabNames').addEventListener('click',()=>showTab('names'));
+  byId('medsiTabRoster').addEventListener('click',()=>showTab('roster'));
   function renderRaw(data){
     const root=byId('medsiRawPane');root.replaceChildren();
     for(const kind of ['morning','evening','psychology']){
       const entry=data.raw?.[kind]||{},card=textNode('article','medsi-raw-report medsi-raw-'+kind,'');
       card.append(textNode('h3','',reportTypeLabel(kind)),textNode('p','medsi-report-date',entry.reportDate?'Дата: '+entry.reportDate:'Публикации пока нет'));
-      if(entry.publicationId)card.append(inlineReport(entry.rawText,reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())})));
+      if(entry.publicationId){
+        card.classList.add('medsi-raw-collapsed');
+        card.append(inlineReport(entry.rawText,reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())})));
+        const toggle=textNode('button','medsi-raw-expand','Показать полностью');
+        toggle.type='button';toggle.setAttribute('aria-expanded','false');
+        toggle.onclick=()=>{const open=card.classList.toggle('medsi-raw-expanded');toggle.textContent=open?'Свернуть':'Показать полностью';toggle.setAttribute('aria-expanded',String(open));};
+        card.append(toggle);
+      }
       else card.append(textNode('div','medsi-report-body','Отчёта пока нет.'));
       root.append(card);
     }
@@ -256,6 +266,108 @@
       }
       card.append(left,right);root.append(card);
     }
+  }
+
+  let rosterData=null;
+  function rosterEdit(fields,onSave){
+    const form=textNode('form','medsi-roster-form','');
+    const inputs={};
+    for(const field of fields){
+      const label=textNode('label','',field.label),input=document.createElement('input');
+      input.type='text';input.value=field.value;input.maxLength=130;input.required=true;label.append(input);form.append(label);inputs[field.id]=input;
+    }
+    const buttons=textNode('div','medsi-roster-actions',''),save=textNode('button','medsi-inline-save','Сохранить'),
+      cancel=textNode('button','medsi-inline-cancel','Отмена');
+    save.type='submit';cancel.type='button';
+    cancel.onclick=()=>renderRoster(rosterData);
+    buttons.append(cancel,save);form.append(buttons);
+    form.onsubmit=async event=>{
+      event.preventDefault();save.disabled=true;cancel.disabled=true;
+      try{
+        await onSave(Object.fromEntries(Object.entries(inputs).map(([key,input])=>[key,input.value.trim()])));
+        await refreshRoster();refreshLibrary();
+        byId('medsiReportsFeedback').textContent='Данные сохранены.';
+      }catch(error){
+        byId('medsiReportsFeedback').textContent=error.message||'Не удалось сохранить.';
+        save.disabled=false;cancel.disabled=false;
+      }
+    };
+    return form;
+  }
+  function renderRoster(data){
+    const pane=byId('medsiRosterPane');pane.replaceChildren();
+    const counts=data?.counts||{};
+    pane.append(textNode('p','medsi-roster-overview',
+      'Сейчас в отделении: '+(counts.activeChildren||0)+' детей · '+(counts.activeParentProfiles||0)+' профилей родителей'));
+    pane.append(textNode('p','medsi-roster-hint',
+      'Отметки показывают наличие текущих отчётов в базе. Если обоих нет — проверьте ситуацию перед удалением. История сообщений удаляется только после отдельного подтверждения.'));
+    const children=Array.isArray(data?.children)?data.children:[];
+    if(!children.length)pane.append(textNode('p','medsi-reports-empty','Активных госпитализаций пока нет.'));
+    for(const child of children){
+      const card=textNode('article','medsi-roster-card','');
+      const head=textNode('div','medsi-roster-head',''),titleBox=textNode('div','medsi-roster-title-box','');
+      titleBox.append(textNode('h3','',([child.firstName,child.surname].filter(Boolean).join(' ')||'Без имени')),
+        textNode('p','',child.parents.length+' '+(child.parents.length===1?'профиль родителя':'профилей родителей')));
+      const editChild=textNode('button','medsi-roster-edit','Изменить имя');editChild.type='button';
+      editChild.onclick=()=>{head.replaceChildren(rosterEdit([
+        {id:'firstName',label:'Имя ребёнка',value:child.firstName},{id:'surname',label:'Фамилия ребёнка',value:child.surname}
+      ],values=>request('/lab/admin/roster/edit','POST',{
+        kind:'child',childId:child.childId,admissionId:child.admissionId,
+        ...values,expectedFirstName:child.firstName,expectedSurname:child.surname
+      })))};
+      head.append(titleBox,editChild);card.append(head);
+      const badges=textNode('div','medsi-roster-status','');
+      for(const [label,present] of [['Утро',child.morning],['Вечер',child.evening]]){
+        const badge=textNode('span','medsi-roster-badge',(present?'✓ ':'— ')+label);
+        badge.dataset.present=present?'1':'0';badges.append(badge);
+      }
+      card.append(badges);
+      const parents=textNode('div','medsi-roster-parents','');
+      if(!child.parents.length)parents.append(textNode('p','medsi-roster-empty-parent','Нет привязанных родителей.'));
+      for(const parent of child.parents){
+        const line=textNode('div','medsi-roster-parent',''),
+          info=textNode('div','medsi-roster-parent-info',''),
+          buttons=textNode('div','medsi-roster-parent-actions','');
+        info.append(textNode('strong','',parent.parentName||'Родитель'),
+          textNode('span','',[parent.relationship||'Родитель',parent.phone].filter(Boolean).join(' · ')));
+        const edit=textNode('button','medsi-roster-edit','Изменить');edit.type='button';
+        edit.onclick=()=>line.replaceChildren(rosterEdit([
+          {id:'parentName',label:'Имя родителя',value:parent.parentName},
+          {id:'relationship',label:'Кем приходится ребёнку',value:parent.relationship||'Родитель'}
+        ],values=>request('/lab/admin/roster/edit','POST',{
+          kind:'parent',phone10:parent.phone10,childId:child.childId,admissionId:child.admissionId,
+          ...values,expectedParentName:parent.parentName,expectedRelationship:parent.relationship
+        })));
+        const del=textNode('button','medsi-roster-delete','Удалить');del.type='button';
+        del.onclick=async()=>{
+          const label=[parent.parentName,child.firstName,child.surname].filter(Boolean).join(' / ');
+          if(!window.confirm('Удалить профиль '+label+'?\\n\\nЭто действие удалит переписку и доступ этого родителя. Если у ребёнка есть другие родители, их профили сохранятся.'))return;
+          del.disabled=true;
+          try{
+            const operationId='del_'+(crypto.randomUUID?crypto.randomUUID().replace(/-/g,''):String(Date.now())+Math.random().toString(36).slice(2));
+            const answer=await request('/lab/parent-delete','POST',{phone:parent.phone,operationId});
+            if(answer.accepted!==true)throw new Error(answer.message||'Удаление не принято сервером.');
+            await refreshRoster();refreshLibrary();
+            byId('medsiReportsFeedback').textContent='Удаление профиля принято в обработку.';
+          }catch(error){del.disabled=false;byId('medsiReportsFeedback').textContent=error.message||'Не удалось удалить профиль.';}
+        };
+        buttons.append(edit,del);line.append(info,buttons);parents.append(line);
+      }
+      card.append(parents);pane.append(card);
+    }
+    const unlinked=Array.isArray(data?.unlinked)?data.unlinked:[];
+    if(unlinked.length){
+      const group=textNode('section','medsi-roster-unlinked','');
+      group.append(textNode('h3','','Профили без активной госпитализации'),
+        textNode('p','', 'Эти профили не учитываются в списке детей, находящихся сейчас в отделении.'));
+      for(const parent of unlinked)group.append(textNode('div','medsi-roster-orphan',
+        [parent.parentName||'Родитель',parent.childName||'Ребёнок не привязан',parent.phone].join(' · ')));
+      pane.append(group);
+    }
+  }
+  async function refreshRoster(){
+    try{rosterData=await request('/lab/admin/roster');if(activeTab==='roster')renderRoster(rosterData);}
+    catch(error){byId('medsiReportsFeedback').textContent=error.message||'Не удалось загрузить список детей и родителей.';}
   }
   function nameToken(row,name,canonical){
     const token=textNode('span','medsi-name-token'+(canonical?' medsi-name-canonical':''),'');token.dataset.tone=String(Math.max(0,row.variants.indexOf(name)-1)%4);
@@ -367,7 +479,7 @@
   }
   byId('medsiOpenReportLibrary').addEventListener('click', openLibrary);
   byId('medsiReportsBack').addEventListener('click', closeLibrary);
-  byId('medsiReportsRefresh').addEventListener('click', async()=>{if(!await leaveNames())return;namesLoaded=false;if(activeTab==='names')await refreshNames();await refreshLibrary();});
+  byId('medsiReportsRefresh').addEventListener('click', async()=>{if(!await leaveNames())return;namesLoaded=false;if(activeTab==='names')await refreshNames();if(activeTab==='roster')await refreshRoster();await refreshLibrary();});
   library.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); closeLibrary(); }
   });

@@ -1,3 +1,7 @@
+function migrationFreezeResponse(request,env={}) {
+  if(env.MEDSI_MIGRATION_FREEZE!=='1'||!['POST','PUT','PATCH','DELETE'].includes(request?.method))return null;
+  return json({ok:false,code:'MIGRATION_WRITE_FREEZE'},503,{'retry-after':'120','cache-control':'no-store'});
+}
 // Identity grammar matches Apps Script medsi-contacts.js and parent-relationships.js.
 function normRu(value) { return String(value || '').trim().toLowerCase().replace(/ё/g, 'е'); }
 function capWord(value) { const word=String(value || ''); return word.charAt(0).toUpperCase()+word.slice(1).toLowerCase(); }
@@ -2138,12 +2142,15 @@ async function mutateMessage(request, env, kind, rawKey, auth) {
 
 export default {
   async scheduled(controller, env, ctx) {
+    if (env.MEDSI_MIGRATION_FREEZE === '1') return;
     if (controller.cron !== '* * * * *') ctx.waitUntil(captureScheduledReportHistory(env));
     ctx.waitUntil(drainReportQueue(env));
     ctx.waitUntil(drainParentDeletionQueue(env));
   },
   async fetch(request, env, ctx) {
     if (request.method === 'OPTIONS') return json({ ok: true });
+    const migrationFreeze=migrationFreezeResponse(request,env);
+    if(migrationFreeze)return migrationFreeze;
     const url = new URL(request.url);
     if (request.method === 'GET' && url.pathname.startsWith('/media/')) {
       return serveMedia(env, decodeURIComponent(url.pathname.slice('/media/'.length)));

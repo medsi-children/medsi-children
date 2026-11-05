@@ -1,5 +1,10 @@
 import webpush from 'web-push';
 
+function migrationFreezeResponse(request,env={}) {
+  if(env.MEDSI_MIGRATION_FREEZE!=='1'||!['POST','PUT','PATCH','DELETE'].includes(request?.method))return null;
+  return jsonResponse({ok:false,code:'MIGRATION_WRITE_FREEZE'},503);
+}
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
@@ -480,6 +485,8 @@ export default {
     const url = new URL(request.url);
 
     if (request.method === 'OPTIONS') return jsonResponse({ ok: true });
+    const migrationFreeze=migrationFreezeResponse(request,env);
+    if(migrationFreeze)return migrationFreeze;
 
     if (request.method === 'GET' && url.pathname === '/') {
       return jsonResponse({ ok: true, service: 'medsi-push-worker' });

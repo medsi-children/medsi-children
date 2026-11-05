@@ -15,7 +15,7 @@
     "sync:report-rules": "node scripts/sync-report-rules.mjs",
     "verify:reports": "node --test tests/frontend-report-validation.test.cjs tests/raw-report-cleanup.test.cjs tests/raw-report-canonicalization.test.cjs tests/report-history-refresh.test.cjs tests/apps-script-report-trigger-locks.test.cjs tests/report-pipeline-contract.test.cjs tests/report-scheduler.test.cjs",
     "verify:syntax": "node scripts/verify-syntax.mjs",
-    "verify:reliability": "node --test tests/push-recovery.test.cjs tests/platform-reliability.test.cjs tests/apps-script-chat-retirement.test.cjs tests/report-state-d1-migration.test.cjs tests/report-state-apps-script-cutover.test.cjs tests/report-generations-migration.test.cjs tests/report-publication-fencing.test.cjs",
+    "verify:reliability": "node --test tests/push-recovery.test.cjs tests/migration-freeze.test.cjs tests/platform-reliability.test.cjs tests/apps-script-chat-retirement.test.cjs tests/report-state-d1-migration.test.cjs tests/report-state-apps-script-cutover.test.cjs tests/report-generations-migration.test.cjs tests/report-publication-fencing.test.cjs",
     "verify:recovery": "node --test tests/parent-recovery.test.cjs",
     "verify:auth": "node --test tests/parent-passkeys.test.cjs tests/parent-passkey-offer.test.cjs",
     "verify:postgres-next": "npm --prefix services/postgres-next run check",

@@ -361,7 +361,10 @@
   }
   function renderRoster(data){
     const pane=byId('medsiRosterPane');pane.replaceChildren();
-    const children=Array.isArray(data?.children)?data.children:[];
+    // The parent directory displays only active children with at least one linked parent.
+    // Deleting the final parent profile removes the entire directory row on refresh;
+    // clinical child and admission records remain governed by their own lifecycle.
+    const children=Array.isArray(data?.children)?data.children.filter(child=>Array.isArray(child.parents)&&child.parents.length>0):[];
     if(!children.length){pane.append(textNode('p','medsi-reports-empty','В отделении пока нет активных детей.'));return;}
     for(const child of children){
       const parents=Array.isArray(child.parents)?child.parents:[];
@@ -402,28 +405,39 @@
         actions.append(button);
       }
       const del=textNode('button','medsi-roster-line-delete','');
-      del.type='button';del.setAttribute('aria-label','Удалить профиль');del.title='Удалить профиль родителя';
+      del.type='button';del.setAttribute('aria-label','Удалить ребёнка из справочника');del.title='Удалить ребёнка из справочника';
       del.innerHTML=deleteIcon;
       del.onclick=async()=>{
-        if(!parents.length){byId('medsiReportsFeedback').textContent='У ребёнка нет профиля родителя для удаления.';return;}
-        let parent=parents[0];
-        if(parents.length>1){
-          const choice=window.prompt('Выберите номер родителя для удаления:\n'+parents.map((p,i)=>(i+1)+'. '+(p.parentName||'Родитель')).join('\n'));
-          if(choice===null)return;
-          const index=Number(choice)-1;
-          if(!Number.isInteger(index)||index<0||index>=parents.length){byId('medsiReportsFeedback').textContent='Неверный номер родителя.';return;}
-          parent=parents[index];
-        }
-        const label=[parent.parentName,child.firstName,child.surname].filter(Boolean).join(' / ');
-        if(!window.confirm('Удалить профиль '+label+'?\n\nБудут удалены переписка и доступ выбранного родителя. Другие родители ребёнка сохранятся.'))return;
+        if(!parents.length)return;
+        const childLabel=[child.firstName,child.surname].filter(Boolean).join(' ');
+        const parentList=parents.map(p=>p.parentName||p.phone||'Родитель').join(', ');
+        if(!window.confirm('Удалить ребёнка '+childLabel+' из справочника родителей?\n\nБудут отозваны доступ и переписки '+parents.length+' родительских профилей: '+parentList+'.\n\nЭто действие необратимо.'))return;
         del.disabled=true;
+        let accepted=0;
         try{
-          const uuid=window.crypto&&typeof window.crypto.randomUUID==='function'?window.crypto.randomUUID().replace(/-/g,''):Date.now().toString(36)+Math.random().toString(36).slice(2);
-          const answer=await request('/lab/parent-delete','POST',{phone:parent.phone,operationId:'del_'+uuid});
-          if(answer.accepted!==true)throw new Error(answer.message||'Удаление не принято сервером.');
-          await refreshRoster();refreshLibrary();
-          byId('medsiReportsFeedback').textContent='Удаление профиля принято в обработку.';
-        }catch(error){del.disabled=false;byId('medsiReportsFeedback').textContent=error.message||'Не удалось удалить профиль.';}
+          // The existing server API deletes one parent profile per request.
+          // Enqueue every linked profile before showing the row as removed.
+          for(const parent of parents){
+            const uuid=window.crypto&&typeof window.crypto.randomUUID==='function'
+              ?window.crypto.randomUUID().replace(/-/g,'')
+              :Date.now().toString(36)+Math.random().toString(36).slice(2);
+            const answer=await request('/lab/parent-delete','POST',{
+              phone:parent.phone,operationId:'del_'+uuid
+            });
+            if(answer?.accepted!==true)throw new Error(answer?.message||'Сервер не принял удаление профиля.');
+            accepted++;
+          }
+          await refreshRoster();
+          await refreshLibrary();
+          byId('medsiReportsFeedback').textContent='Профили удалены из справочника. Очистка истории поставлена в очередь.';
+        }catch(error){
+          del.disabled=false;
+          await refreshRoster();
+          const reason=String(error?.message||'Ошибка удаления');
+          byId('medsiReportsFeedback').textContent=
+            'Удаление завершено частично ('+accepted+' из '+parents.length+'). '+reason+
+            ' Проверьте оставшиеся профили перед повторной попыткой.';
+        }
       };
       actions.append(del);
       card.append(info,actions);pane.append(card);

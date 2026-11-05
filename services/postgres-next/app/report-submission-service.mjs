@@ -1,5 +1,6 @@
 import {planLegacyReport} from './report-engine.mjs';
 import {createReportPublicationStore} from './report-publications.mjs';
+import {findLegacyReportReceipt} from './legacy-report-receipts.mjs';
 
 export function createReportSubmissionService(sql) {
   if(!sql?.begin)throw new Error('PostgreSQL query client required.');
@@ -46,6 +47,16 @@ export function createReportSubmissionService(sql) {
   }
   async function submit({kind,rawText,submissionId,authorId,submittedAt=Date.now()}){
     if(!['morning','evening','psychology'].includes(kind))throw new Error('Unsupported report kind.');
+    if(!/^[A-Za-z0-9_-]{8,128}$/.test(String(submissionId||''))||typeof rawText!=='string'||
+       !rawText.trim()||rawText.length>240000)throw new Error('Invalid report submission.');
+    const legacy=await sql.begin({isolation:'snapshotReadOnly'},tx=>findLegacyReportReceipt(tx,submissionId));
+    if(legacy){
+      // The active Cloudflare enqueue handler trims the incoming source text.
+      if(legacy.row.report_type!==kind||legacy.row.report_text!==rawText.trim())
+        throw new Error('Submission ID already belongs to a different report.');
+      if(legacy.row.status==='failed')throw new Error('LEGACY_REPORT_REVIEW_REQUIRED');
+      return {...legacy.result,ok:true,status:'duplicate',legacy:true};
+    }
     const snapshot=await planningSnapshot(kind);
     const plan=planLegacyReport({kind,rawText,...snapshot});
     // Full roster and ownership are rechecked by the serializable
@@ -61,6 +72,10 @@ export function createReportSubmissionService(sql) {
     const id=String(submissionId||'');
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(id))throw new Error('Invalid submission identifier.');
     return sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
+      const legacy=await findLegacyReportReceipt(tx,id);
+      if(legacy)return legacy.row.status==='completed'
+        ? {status:'completed',result:legacy.result}
+        : {status:'failed',result:null,message:'Старая отправка не завершилась. Требуется проверка воспитателя.'};
       const [[row]]=await tx`SELECT submission_id,kind,publication_id,revision
         FROM report_submissions WHERE submission_id=${id}`;
       return row

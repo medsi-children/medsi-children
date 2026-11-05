@@ -71,6 +71,7 @@ export function createReportPublicationStore(sql) {
         kind, submissionId, authorId, submittedAt, rawText, normalizedText,
         recipients, reportDate, payloadHash
       } = payload;
+      if(input.correctionOf!==undefined&&!ID_RE.test(String(input.correctionOf)))throw new Error('Invalid correction publication.');
       const ownerReads = input?.ownerReads || {};
       const ownerWrites = input?.ownerWrites || {};
       const ownershipKeys = Object.keys(ownerWrites);
@@ -113,6 +114,13 @@ export function createReportPublicationStore(sql) {
         const [[head]] = await tx`
           SELECT publication_id, revision, submitted_at
           FROM report_publication_head WHERE kind = ${kind}`;
+        let publicationReportDate=reportDate;
+        if(input.correctionOf){
+          if(!head||head.publication_id!==input.correctionOf)throw new Error('Report changed; reload before editing.');
+          const [[original]]=await tx`SELECT report_date FROM raw_reports WHERE publication_id=${input.correctionOf}`;
+          if(!original?.report_date)throw new Error('Report source unavailable.');
+          publicationReportDate=original.report_date;
+        }
         if (head && submittedAt <= Number(head.submitted_at)) {
           // Superseded reports do not write raw/current/history or queue push.
           return { status: 'superseded', submissionId };
@@ -137,7 +145,7 @@ export function createReportPublicationStore(sql) {
 
         await tx.upsert`INSERT INTO raw_reports
           (publication_id, kind, report_date, raw_text, normalized_text, author_id, submitted_at, revision)
-          VALUES (${publicationId}, ${kind}, ${reportDate}, ${rawText}, ${normalizedText},
+          VALUES (${publicationId}, ${kind}, ${publicationReportDate}, ${rawText}, ${normalizedText},
                   ${authorId}, ${timeParam}, ${revisionParam})`;
 
         const notifications = [];
@@ -147,7 +155,7 @@ export function createReportPublicationStore(sql) {
           const text = row.text;
           const version = safeTextVersion(kind, admissionId, text);
           const [[prior]] = await tx`
-            SELECT admission_id, version, read_version, text
+            SELECT admission_id, version, read_version, text, updated_at
             FROM parent_current_reports WHERE phone10 = ${phone10} AND kind = ${kind}`;
           const unchanged = prior && prior.version === version && prior.admission_id === admissionId;
           const readVersion = unchanged ? String(prior.read_version || '') : '';
@@ -160,10 +168,10 @@ export function createReportPublicationStore(sql) {
           if (text.trim()) {
             await tx.upsert`INSERT INTO parent_report_history
               (phone10, kind, report_date, admission_id, publication_id, revision, text, captured_at)
-              VALUES (${phone10}, ${kind}, ${reportDate}, ${admissionId},
+              VALUES (${phone10}, ${kind}, ${publicationReportDate}, ${admissionId},
                       ${publicationId}, ${revisionParam}, ${text}, ${timeParam})`;
           }
-          if (!unchanged && text.trim() && kind !== 'psychology') {
+          if (!unchanged && text.trim() && kind !== 'psychology'&&(!input.correctionOf||submittedAt-Number(prior?.updated_at||0)>30*60*1000)) {
             const eventId = 'report_' + sha(publicationId + ':' + phone10);
             const notificationJson = JSON.stringify({
               title: 'Медси Бот',

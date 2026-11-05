@@ -9,7 +9,7 @@
     const actions=make('div','tutor-start-actions');
     actions.append(card('chat','💬 Чат с родителями','Написать родителю и ответить на вопросы.','chat'));
     const reports=make('div','tutor-start-grid');reports.append(card('morning','☀️ Утренний отчёт','Отправить утренний отчёт.','morning'),card('evening','🌙 Вечерний отчёт','Отправить вечерний отчёт.','evening'));
-    const secondary=make('div','tutor-start-grid');secondary.append(card('therapy','🧠 Психотерапия','Отправить отчёт по психотерапии.','psychology'),card('phones','📞 Телефоны','Дать ребёнку позвонить родителю.','phones'));
+    const secondary=make('div','tutor-start-grid');secondary.append(card('therapy','🧠 Групповая терапия','Отправить отчёт по групповой терапии.','psychology'),card('phones','📞 Телефоны','Дать ребёнку позвонить родителю.','phones'));
     actions.append(reports,secondary);scene.append(brand,actions);frame.append(scene);root.append(frame);document.body.append(root);
     let ready=false,pending='';
     function hide(){root.classList.add('hidden');setTimeout(()=>{if(root.classList.contains('hidden'))root.style.display='none'},180)}

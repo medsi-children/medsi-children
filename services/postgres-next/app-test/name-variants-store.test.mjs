@@ -18,6 +18,10 @@ function fixture(){
     const next=new Map(data);
     const tx=async(strings,...params)=>{
       const q=strings.join(' ').replace(/\s+/g,' ').trim();
+      if(q.startsWith('LOCK'))return [[]];
+      if(q.includes('FROM report_ownership'))return [[]];
+      if(q.startsWith('INSERT INTO report_ownership'))return [[]];
+      if(q==='DELETE FROM name_variants'){next.clear();return [[]];}
       if(q.startsWith('SELECT'))return [[...next.values()]];
       if(q.startsWith('INSERT')){next.set(params[0],{base_key:params[0],preferred_name:params[1],variants_json:params[2]});return [[]]}
       if(q.startsWith('DELETE')){next.delete(params[0]);return [[]]}
@@ -38,4 +42,14 @@ test('cannot claim an alias already mapped to a different preferred name',async(
   assert.equal(data.size,2);
   const list=await store.list();
   assert.equal(list.items.length,2);
+});
+
+test('draft name list saves atomically and rejects stale versions and new overlap',async()=>{
+ const {sql,data}=fixture(),store=createNameVariantsStore(sql),before=await store.list();
+ const next={revision:before.revision,items:[{previousBaseKey:'катя',preferredName:'Катя',variants:['Екатерина','Катюша']},{preferredName:'Миша',variants:['Михаил']}]};
+ await store.replaceAll(next);assert.equal(data.size,2);assert.match(data.get('катя').variants_json,/Катюша/);
+ await assert.rejects(()=>store.replaceAll(next),/revision/);
+ const current=await store.list();
+ await assert.rejects(()=>store.replaceAll({revision:current.revision,items:[{preferredName:'Лена',variants:['Тестуля']},{preferredName:'Оля',variants:['Тестуля']}]}),/overlapping/);
+ assert.equal(data.size,2);
 });

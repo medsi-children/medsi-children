@@ -64,7 +64,7 @@
   function showGate(checking){
     const gate=$('tutorAuthGate');gate.classList.remove('hidden');gate.classList.toggle('checking',!!checking);
     $('authChecking').classList.toggle('hidden',!checking);$('authForm').classList.toggle('hidden',!!checking);
-    if(!checking)setTimeout(()=>$('tutorLogin').focus(),30);
+    if(!checking)setTimeout(()=>{const active=document.activeElement;if(!$('tutorAuthGate').classList.contains('hidden')&&!$('authForm').contains(active))$('tutorLogin').focus();},30);
   }
   function hideGate(){$('tutorAuthGate').classList.add('hidden');$('tutorAuthGate').classList.remove('checking')}
   function setCheckingText(text){$('authCheckingText').textContent=text}

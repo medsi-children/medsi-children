@@ -120,6 +120,10 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(!await educator(req,res))return;
     return dashboard.readForEducator();
   }));
+  router.post('/admin/reports/raw',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return reports.submit({...req.body,rawText:req.body.text,authorId:'educator_edit',correctionOf:req.body.publicationId});
+  }));
   router.post('/admin/reports/edit',run(async(req,res)=>{
     if(!await educator(req,res))return;
     if(!reportEdits?.update)throw new Error('Report edit service unavailable.');
@@ -128,6 +132,10 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
   router.get('/admin/name-variants',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return nameVariants.list();
+  }));
+  router.put('/admin/name-variants',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return nameVariants.replaceAll(req.body);
   }));
   router.post('/admin/name-variants',run(async(req,res)=>{
     if(!await educator(req,res))return;

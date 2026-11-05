@@ -115,3 +115,75 @@ body.medsi-report-library-open { overflow: hidden; }
   .medsi-setting-tile:hover { transform:none; }
 }
 
+/* Reports and names: clear desktop alignment and compact direct editing. */
+.medsi-reports-header{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);}
+.medsi-reports-header h2{text-align:center;font-size:clamp(21px,3vw,30px);}
+.medsi-reports-back{justify-self:start;}.medsi-reports-refresh{justify-self:end;}
+.medsi-tile-reports{background:linear-gradient(135deg,#bceafc,#8bd7ee);border-color:#80c9e2;color:#14536f;}
+.medsi-tile-push{background:linear-gradient(135deg,#ffedc3,#ffd58c);border-color:#f1bf6d;color:#805321;}
+.medsi-tile-push[data-enabled="1"]{background:linear-gradient(135deg,#bcf0d6,#8bd9ba);border-color:#72c7a5;color:#155c40;}
+.medsi-tile-parent{background:linear-gradient(135deg,#e4d6ff,#cbb9f1);border-color:#b9a2e2;color:#54417e;}
+.medsi-tile-delete{background:linear-gradient(135deg,#ffe0df,#f4b9bf);border-color:#e8a4ac;color:#853f4c;}
+.medsi-setting-tile{box-shadow:0 6px 18px #24516d12;}
+.medsi-report-clickable{cursor:text;border-radius:10px;transition:background .16s,box-shadow .16s;padding:8px;margin:-8px;}
+.medsi-report-clickable:hover{background:#eef8f9;}.medsi-report-clickable:focus-visible{outline:2px solid #64b7bf;outline-offset:3px;}
+.medsi-inline-form{display:grid;gap:9px;}.medsi-inline-form textarea{width:100%;box-sizing:border-box;min-height:140px;resize:vertical;border:1px solid #7fbfc7;border-radius:12px;background:#faffff;padding:12px;font:inherit;line-height:1.6;color:#244d55;}
+.medsi-inline-actions,.medsi-dialog-actions{display:flex;gap:9px;justify-content:flex-end;align-items:center;flex-wrap:wrap;}
+.medsi-inline-save,.medsi-inline-cancel{border:0;border-radius:12px;padding:10px 16px;font:700 13px/1.3 inherit;cursor:pointer;}
+.medsi-inline-save{background:#24796e;color:#fff;box-shadow:0 3px 9px #24796e20;}.medsi-inline-save:disabled{opacity:.45;cursor:default;box-shadow:none;}
+.medsi-inline-cancel{background:#eaf1f3;color:#527780;}.medsi-inline-save:hover:not(:disabled){background:#18695f;}
+.medsi-names-toolbar{display:flex;align-items:center;gap:14px;padding:0 10px 10px;}
+.medsi-name-columns{display:grid;grid-template-columns:minmax(120px,.9fr) minmax(0,2fr);gap:22px;flex:1;color:#6b8a91;font-size:12px;font-weight:750;letter-spacing:.025em;}
+.medsi-name-row{display:grid;grid-template-columns:minmax(120px,.9fr) minmax(0,2fr);gap:22px;align-items:start;background:#fff;border:1px solid #dfecef;border-radius:17px;padding:15px 18px;box-shadow:0 2px 7px #2e687408;}
+.medsi-name-left,.medsi-name-right{display:flex;flex-wrap:wrap;align-items:center;gap:8px;min-width:0;}
+.medsi-name-right{padding-right:0;}.medsi-name-token{display:inline-flex;flex-direction:column;gap:5px;max-width:100%;vertical-align:top;}
+.medsi-name-word{appearance:none;border:0;border-radius:10px;background:#eef4f7;color:#446975;padding:7px 10px;cursor:text;font:600 14px/1.3 inherit;transition:transform .15s,background .15s,box-shadow .15s;}
+.medsi-name-canonical .medsi-name-word{background:#d9efec;color:#176f62;font-weight:800;}
+.medsi-name-word:hover{transform:translateY(-2px);background:#e0edf3;box-shadow:0 3px 8px #36718815;}.medsi-name-canonical .medsi-name-word:hover{background:#c7e7e1;}
+.medsi-name-token input{box-sizing:border-box;width:130px;max-width:100%;padding:7px 9px;border:1px solid #88bfb8;border-radius:9px;font:600 14px inherit;color:#245b57;background:#f7fffd;}
+.medsi-token-actions{display:flex;gap:6px;justify-content:center;}.medsi-token-actions button{appearance:none;display:grid;place-items:center;border:0;border-radius:7px;width:27px;height:25px;cursor:pointer;font-size:16px;}
+.medsi-token-remove{background:#fff0f0;color:#ba5361;}.medsi-token-accept{background:#dcf3e9;color:#267c59;}.medsi-token-remove svg{width:15px;height:15px;}
+.medsi-name-plus{display:inline-grid;place-items:center;flex:none;appearance:none;border:1px solid #d2e6e7;width:27px;height:27px;border-radius:50%;background:#edf7f6;color:#368b80;font:500 20px/1 inherit;cursor:pointer;align-self:center;transition:transform .15s,background .15s;}
+.medsi-name-plus:hover{transform:scale(1.09);background:#d8efea;}.medsi-name-plus-main{width:40px;height:40px;background:#287c70;color:white;border:0;font-size:27px;box-shadow:0 4px 13px #287c7022;}
+.medsi-names-footer{position:sticky;bottom:0;display:flex;align-items:center;justify-content:space-between;gap:12px;background:#f4f9fbef;backdrop-filter:blur(12px);padding:16px 6px;color:#7b969c;font-size:12px;border-top:1px solid #dfecef;}
+.medsi-name-dialog{box-sizing:border-box;max-width:min(600px,calc(100vw - 32px));width:600px;border:1px solid #d9e8e9;border-radius:24px;padding:26px;background:#fbfefe;color:#235960;box-shadow:0 20px 80px #153d4530;}
+.medsi-name-dialog::backdrop{background:#153f4960;backdrop-filter:blur(4px);}.medsi-name-dialog h3{margin:0 0 20px;font-size:22px;letter-spacing:-.4px;}.medsi-name-dialog p{font-size:14px;line-height:1.6;}
+.medsi-name-dialog-fields{display:grid;grid-template-columns:1fr 1.4fr;gap:16px;margin-bottom:18px;}.medsi-name-dialog label{display:grid;align-content:start;gap:9px;font-size:12px;font-weight:700;color:#62828a;}
+.medsi-name-dialog input,.medsi-name-dialog textarea{box-sizing:border-box;width:100%;min-width:0;border:1px solid #cfdfdf;background:white;border-radius:12px;padding:11px;font:14px/1.5 inherit;color:#235960;resize:vertical;}
+.medsi-name-dialog input:focus,.medsi-name-dialog textarea:focus{outline:2px solid #94d1c8;outline-offset:2px;}
+@media(max-width:600px){.medsi-name-columns,.medsi-name-row{grid-template-columns:minmax(95px,.85fr) minmax(0,1.5fr);gap:12px;}.medsi-name-row{padding:12px;}.medsi-name-word{font-size:13px;padding:7px 8px;}.medsi-name-dialog-fields{grid-template-columns:1fr;}.medsi-reports-header h2{font-size:20px;}.medsi-names-toolbar{padding-left:5px;}.medsi-name-token input{width:105px;}}
+@media(prefers-reduced-motion:reduce){.medsi-name-word,.medsi-name-plus,.medsi-report-clickable{transition:none;}.medsi-name-word:hover,.medsi-name-plus:hover{transform:none;}}
+/* Match the existing Medsi dashboard: cyan, morning gold, evening sky, therapy pink. */
+.medsi-tutor-reports{background:radial-gradient(circle at top left,#24d3da0d,transparent 38%),#f7fbfc;color:var(--fg,#11424a);}
+.medsi-reports-header h2{color:#138f9b;}.medsi-reports-back,.medsi-reports-refresh{color:#16a5b0;border-color:#beecef;}
+.medsi-reports-switch{background:#e7f5f7;}.medsi-reports-switch button[aria-selected="true"]{color:#159eaa;box-shadow:0 3px 12px #24d3da15;}
+.medsi-tile-reports{background:linear-gradient(135deg,#ffe7a4,#ffd06a);border-color:#f5cd76;color:#805620;}
+.medsi-tile-push,.medsi-tile-push[data-enabled="1"]{background:linear-gradient(135deg,#bdf4f6,#7ce0e7);border-color:#83dbe2;color:#147b89;}
+.medsi-tile-parent{background:linear-gradient(135deg,#d7eaff,#a7cef9);border-color:#a6caf0;color:#356b9e;}
+.medsi-tile-delete{background:linear-gradient(135deg,#ffe1e9,#f3bed0);border-color:#ecb2c5;color:#a05473;}
+.medsi-tile-icon{background:#ffffffa8;}.medsi-setting-tile:hover{box-shadow:0 8px 20px #24b9cb16;}
+.medsi-name-row{border-color:#d9f0f2;box-shadow:0 3px 12px #24d3da07;}.medsi-name-canonical .medsi-name-word{background:#c4f3f5;color:#138591;}
+.medsi-name-canonical .medsi-name-word:hover{background:#ade9ef;}
+.medsi-name-token:not(.medsi-name-canonical)[data-tone="0"] .medsi-name-word{background:#ffe7b7;color:#92651b;}
+.medsi-name-token:not(.medsi-name-canonical)[data-tone="1"] .medsi-name-word{background:#d7eaff;color:#3d72a9;}
+.medsi-name-token:not(.medsi-name-canonical)[data-tone="2"] .medsi-name-word{background:#fbdce7;color:#a45476;}
+.medsi-name-token:not(.medsi-name-canonical)[data-tone="3"] .medsi-name-word{background:#e8ddfa;color:#7960a1;}
+.medsi-name-word:hover{filter:saturate(1.12);box-shadow:0 3px 9px #21b8c41a;}
+.medsi-name-plus,.medsi-name-plus-main{position:relative;background:#fff;color:#16b8c0;border:1px solid #bcecef;font-size:0;line-height:0;box-shadow:0 3px 12px #20bacb12;}
+.medsi-name-plus::before,.medsi-name-plus::after{content:'';position:absolute;top:50%;left:50%;width:10px;height:1.5px;border-radius:2px;background:currentColor;transform:translate(-50%,-50%);}
+.medsi-name-plus::after{transform:translate(-50%,-50%) rotate(90deg);}.medsi-name-plus-main::before,.medsi-name-plus-main::after{width:16px;height:2px;}
+.medsi-name-plus:hover,.medsi-name-plus-main:hover{background:#effcfd;}.medsi-name-token input{border-color:#80d8e0;color:#177a87;background:#fcffff;}
+.medsi-inline-save{background:linear-gradient(135deg,#4dd4e6,#24bdce);color:#125564;box-shadow:0 3px 9px #24bdce22;}.medsi-inline-save:hover:not(:disabled){background:linear-gradient(135deg,#66dfeb,#35c9d9);}
+.medsi-names-footer{background:#f7fbfcf0;border-color:#d5eef1;}.medsi-name-dialog{color:#175d6a;}.medsi-name-dialog input:focus,.medsi-name-dialog textarea:focus{outline-color:#82dde5;}
+.medsi-child-report-card{border-color:#cceef1;box-shadow:0 5px 18px #24b9cb0d;}.medsi-child-details{background:linear-gradient(145deg,#e0f9fb,#f1fbff);border-color:#d3eff2;}
+.medsi-child-name{color:#1499a7;}.medsi-child-meta{color:#648c98;}.medsi-child-parent{border-color:#c7e7ec;}.medsi-parent-name{color:#3b7181;}.medsi-parent-phone{color:#6192a5;}
+.medsi-child-report-view{display:grid;align-content:start;gap:13px;background:#fff;}.medsi-child-report-version{display:grid;gap:14px;}
+.medsi-child-report-section{border-radius:15px;padding:16px 18px;border:1px solid #e8edf3;}
+.medsi-child-report-section-morning{background:linear-gradient(130deg,#fffaed,#fffdf8);border-color:#f5e5bc;}
+.medsi-child-report-section-evening{background:linear-gradient(130deg,#f0f7ff,#fbfdff);border-color:#d9e8fa;}
+.medsi-child-report-view .medsi-child-report-section h5{display:inline-flex;align-items:center;gap:7px;margin:0 0 12px;font-size:11px;letter-spacing:.035em;border-radius:8px;padding:5px 9px;}
+.medsi-child-report-section-morning h5{color:#9b701c;background:#ffedbf;}.medsi-child-report-section-evening h5{color:#4b80b7;background:#dbecff;}
+.medsi-child-report-section-morning h5::before{content:'☀';font-size:16px;line-height:1;}.medsi-child-report-section-evening h5::before{content:'☾';font-size:17px;line-height:1;}
+.medsi-child-report-section .medsi-report-body{color:#315a68;}.medsi-report-clickable:hover{background:#e6f9fc;}
+.medsi-raw-morning{border-left-color:#ffbf3a;}.medsi-raw-evening{border-left-color:#5fa8f0;}.medsi-raw-psychology{border-left-color:#e98ba7;}
+@media(max-width:600px){.medsi-child-report-section{padding:14px;}.medsi-child-details{padding:18px;}}

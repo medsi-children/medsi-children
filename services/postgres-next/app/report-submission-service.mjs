@@ -46,7 +46,7 @@ export function createReportSubmissionService(sql) {
       };
     });
   }
-  async function submit({kind,rawText,submissionId,authorId,submittedAt=Date.now()}){
+  async function submit({kind,rawText,submissionId,authorId,submittedAt=Date.now(),correctionOf}){
     if(!['morning','evening','psychology'].includes(kind))throw new Error('Unsupported report kind.');
     if(!/^[A-Za-z0-9_-]{8,128}$/.test(String(submissionId||''))||typeof rawText!=='string'||
        !rawText.trim()||rawText.length>240000)throw new Error('Invalid report submission.');
@@ -65,7 +65,7 @@ export function createReportSubmissionService(sql) {
     const result=await publisher.publishPrepared({
       kind,rawText,normalizedText:plan.normalizedText,
       recipients:plan.recipients,ownerReads:plan.ownerReads,ownerWrites:plan.ownerWrites,
-      submissionId,authorId,submittedAt
+      submissionId,authorId,submittedAt,correctionOf
     });
     return {ok:true,...result,validation:plan.validation};
   }

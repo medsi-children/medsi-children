@@ -28,6 +28,7 @@ export function createEducatorReportEditsStore(sql) {
           SELECT publication_id, revision, text FROM parent_current_reports
           WHERE phone10=${phone10} AND kind=${kind} AND admission_id=${admissionId} FOR UPDATE`;
         if (!current) throw new Error('Distributed report not found.');
+        if(input.expectedText!==undefined&&input.expectedText!==current.text)throw new Error('Report changed; reload before editing.');
         const version = createHash('sha256').update(kind+'\u0000'+admissionId+'\u0000'+text,'utf8').digest('hex');
         const now = BigInt(Date.now());
         await tx`UPDATE parent_current_reports SET text=${text}, version=${version}, read_version=${''}, updated_at=${now}

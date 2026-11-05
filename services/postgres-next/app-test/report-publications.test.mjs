@@ -52,6 +52,7 @@ function fakeDb(profiles) {
       const snapshot = clone();
       const tx = async (strings, ...values) => {
         const source = strings.join(' ? ').replace(/\s+/g, ' ').trim();
+        if(source.includes('FROM raw_reports'))return snapshot.raw.has(values[0])?[[snapshot.raw.get(values[0])]]:[[]];
         if (source.includes('FROM report_submissions')) return snapshot.submissions.has(values[0])
           ? [[snapshot.submissions.get(values[0])]] : [[]];
         if (source.includes('FROM parent_profiles')) return [snapshot.profiles];
@@ -69,13 +70,13 @@ function fakeDb(profiles) {
             snapshot.ownership.set(values[0], values[1]);
             break;
           case 'raw_reports':
-            snapshot.raw.set(values[0], { kind: values[1], raw_text: values[3], normalized_text: values[4] });
+            snapshot.raw.set(values[0], { kind: values[1], report_date:values[2], raw_text: values[3], normalized_text: values[4] });
             break;
           case 'parent_current_reports':
             snapshot.current.set(values[0] + '/' + values[1], {
               phone10: values[0], admission_id: values[2], publication_id: values[3],
               revision: fromUInt(values[4]), text: values[5], version: values[6],
-              read_version: values[7]
+              read_version: values[7], updated_at:fromUInt(values[8])
             });
             break;
           case 'parent_report_history':
@@ -216,4 +217,15 @@ test('ownership records are fenced and committed atomically with a publication',
     ownerWrites:{[key]:'another-owner'}
   })), /ownership changed/);
   assert.equal(state.ownership.get(key),ownerWrites[key]);
+});
+
+test('raw correction redistributes, retains report date and suppresses a recent duplicate push',async()=>{
+ const {sql,state}=fakeDb([{phone10:'9000000001',admission_id:'admission_001'},{phone10:'9000000002',admission_id:'admission_002'}]);
+ const store=createReportPublicationStore(sql),first=await store.publishPrepared(sample());
+ const corrected=await store.publishPrepared(sample({submissionId:'correction_test_001',submittedAt:now-1000,correctionOf:first.publicationId,
+ rawText:'Ребёнок А: уточнение',normalizedText:'Ребёнок А: уточнение',recipients:[recipient('9000000001','admission_001','Уточнение А'),recipient('9000000002','admission_002','Уточнение Б')]}));
+ assert.equal(corrected.notificationsQueued,0);assert.equal(state.push.size,2);
+ assert.equal(state.current.get('9000000001/morning').text,'Уточнение А');
+ assert.equal(state.raw.get(corrected.publicationId).report_date,state.raw.get(first.publicationId).report_date);
+ await assert.rejects(()=>store.publishPrepared(sample({submissionId:'correction_test_002',submittedAt:now,correctionOf:first.publicationId})),/Report changed/);
 });

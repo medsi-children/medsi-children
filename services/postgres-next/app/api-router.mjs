@@ -5,7 +5,7 @@ import {createHash} from 'node:crypto';
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
 export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
-  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
+  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
   router.use(express.json({limit:'1mb'}));
@@ -122,10 +122,12 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
   }));
   router.get('/admin/roster',run(async(req,res)=>{
     if(!await educator(req,res))return;
+    if(typeof roster?.list!=='function')throw new Error('Roster unavailable.');
     return roster.list();
   }));
   router.post('/admin/roster/edit',run(async(req,res)=>{
     if(!await educator(req,res))return;
+    if(typeof roster?.update!=='function')throw new Error('Roster unavailable.');
     return roster.update(req.body||{});
   }));
   router.post('/admin/reports/raw',run(async(req,res)=>{

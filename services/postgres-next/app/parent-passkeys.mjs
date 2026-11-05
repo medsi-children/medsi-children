@@ -148,11 +148,13 @@ export function createParentPasskeyService({sql,sessions,env=process.env,now=()=
       const [profiles]=await tx`SELECT phone10,user_handle,generation_id FROM parent_auth_profiles`;
       const profile=profiles.find(row=>row.user_handle===key.user_handle);
       if(!profile)return null;
+      const [[display]]=await tx`SELECT parent_name,child_name FROM parent_profiles WHERE phone10=${profile.phone10}`;
+      if(!display)return null;
       // Prevent a passkey from a different account opening a different phone profile.
       if(challenge.phone10!==profile.phone10||
          challenge.user_handle!==key.user_handle||
          challenge.generation_id!==profile.generation_id)return null;
-      return {...key,profile};
+      return {...key,profile,parentName:display.parent_name,childName:display.child_name};
     });
     if(!accountRow)throw new Error('Ключ недоступен. Войдите по номеру телефона.');
     const verified=await verifyAuthenticationResponse({
@@ -178,6 +180,7 @@ export function createParentPasskeyService({sql,sessions,env=process.env,now=()=
     });
     const session=await sessions.issueParent(accountRow.profile.phone10);
     return {ok:true,status:'APPROVED',phone:'8'+accountRow.profile.phone10,
+      parentName:String(accountRow.parentName||''),childName:String(accountRow.childName||''),
       parentSession:session.token,d1Session:{ok:true,...session}};
   }
   return {hasPasskey,registrationOptions,registrationVerify,authenticationOptions,authenticationVerify};

@@ -250,9 +250,11 @@
           $('phoneErrorAuth').textContent='Этот номер не найден среди активных родителей.';
           $('phoneErrorAuth').classList.remove('hidden');return;
         }
+        // If the backend changes how it packages a passkey requirement,
+        // handle both status and code before the generic failure branch.
+        if(res&&(res.status==='PASSKEY_REQUIRED'||res.code==='PASSKEY_REQUIRED')){restoreButton();safeRemove(REAUTH_KEY);showPasskeyRequired(data.phone);return}
         if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');
         if(res.status==='NOT_FOUND'){shouldCreate=true;continue}
-        if(res.status==='PASSKEY_REQUIRED'||res.code==='PASSKEY_REQUIRED'){restoreButton();safeRemove(REAUTH_KEY);showPasskeyRequired(data.phone);return}
         restoreButton();
         if(!pendingVisible){show('screenAuthPending');pendingVisible=true}
         shouldCreate=false;

@@ -10,6 +10,8 @@ test('sign-in starts with a phone number and only prompts passkey when the backe
   assert.match(html,/id="passkeyRequiredPanel"[^>]*class="[^"]*hidden/);
   assert.doesNotMatch(html,/id="showPhoneAuthBtn"|id="phoneAuthFallback"/);
   assert.match(js,/showPasskeyRequired\(data\.phone\)/);
+  const flow=js.slice(js.indexOf('async function runReauthorizationFlow'));
+  assert.ok(flow.indexOf("res.code==='PASSKEY_REQUIRED'")<flow.indexOf("if(!res||res.ok===false)"),'passkey is handled before generic error');
   assert.match(js,/authentication\/options/);
   assert.match(js,/\{phone:chosen\}/);
 });

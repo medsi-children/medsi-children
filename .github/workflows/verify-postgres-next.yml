@@ -77,6 +77,12 @@ jobs:
         run: |
           docker exec "$PG_CONTAINER" createdb -U medsi_ci medsi_chat_import
           PGDATABASE=medsi_chat_import node --test services/postgres-next/test/d1-chat-import.test.mjs
+      - name: Rehearse complete atomic import on PostgreSQL 18
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+        run: |
+          docker exec "$PG_CONTAINER" createdb -U medsi_ci medsi_full_import
+          PGDATABASE=medsi_full_import node --test services/postgres-next/test/full-import.test.mjs
       - name: Existing NEXT report logic and app regressions
         run: |
           npm test --prefix services/postgres-next

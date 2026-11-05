@@ -29,17 +29,28 @@ test('psychology normalizes an abort during body reading for idempotent recovery
   const x=psychology(async(_,options)=>({ok:true,text:()=>new Promise((resolve,reject)=>options.signal.addEventListener('abort',()=>reject(new DOMException('Aborted','AbortError')),{once:true}))}));
   await assert.rejects(x.context.window.test.callApi('appendReport',[],5),{message:'TIMEOUT'});
 });
-test('session bridge preserves cancellation when redirecting a Google request',async()=>{
-  let received;
-  const window={fetch:async(url,options)=>{received={url,options};return {}}};
-  vm.runInNewContext(read('chat-overlay/session-client.js'),{window,Set,JSON});
+test('session guard refuses retired upstream requests and preserves native local fetch',async()=>{
+  const calls=[];
+  const window={
+    location:{href:'https://medsi.example.invalid/tutors'},
+    fetch:async(url,options)=>{calls.push({url,options});return {ok:true}}
+  };
+  vm.runInNewContext(read('chat-overlay/session-client.js'),{window,URL,JSON,Promise,Error});
   const controller=new AbortController();
-  await window.fetch('https://script.google.com/macros/s/synthetic/exec',{body:JSON.stringify({action:'api',method:'verifyTutorSession',args:[]}),signal:controller.signal});
-  assert.equal(received.url,'/__session/apps-script');
-  assert.equal(received.options.signal,controller.signal);
+  await assert.rejects(window.fetch('https://script.google.com/macros/s/synthetic/exec',{
+    body:JSON.stringify({action:'api',method:'verifyTutorSession',args:[]}),
+    signal:controller.signal
+  }),/LEGACY_UPSTREAM_DISABLED/);
+  await assert.rejects(window.fetch('https://medsi-chat-worker.medsi-children.workers.dev/lab/profile'),/LEGACY_UPSTREAM_DISABLED/);
+  await assert.rejects(window.fetch('https://drive.google.com/thumbnail?id=fake'),/LEGACY_UPSTREAM_DISABLED/);
+  assert.equal(calls.length,0);
+  await window.fetch('/__session/api',{signal:controller.signal});
+  assert.equal(calls[0].url,'/__session/api');
+  assert.equal(calls[0].options.signal,controller.signal);
   controller.abort();
-  assert.equal(received.options.signal.aborted,true);
+  assert.equal(calls[0].options.signal.aborted,true);
 });
+
 function worker(){const context={Response,console};vm.createContext(context);vm.runInContext(read('services/cloudflare/chat-worker/src/index.js').replace('export default {','const worker = {'),context);return context;}
 test('malformed or truncated reconciliation cannot touch D1',async()=>{
   const x=worker();let reads=0;

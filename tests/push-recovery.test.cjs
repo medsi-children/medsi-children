@@ -7,12 +7,14 @@ const path=require('node:path');
 const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
 function worker(send){
   const entries=new Map();
-  const context={Response,URL,TextEncoder,crypto:webcrypto,webpush:{setVapidDetails(){},sendNotification:send}};
+  const context={Response,URL,TextEncoder,crypto:webcrypto,
+    webpush:{setVapidDetails(){},sendNotification:send}};
   vm.createContext(context);
-  vm.runInContext(read('services/cloudflare/push-worker/src/index.js').replace("import webpush from 'web-push';",'').replace('export default {','const worker = {'),context);
+  vm.runInContext(read('services/cloudflare/push-worker/src/index.js')
+    .replace("import webpush from 'web-push';",'').replace('export default {','globalThis.worker = {'),context);
   context.verifyParentSession=async()=>true;
   const env={VAPID_PUBLIC_KEY:'test',VAPID_PRIVATE_KEY:'test',VAPID_SUBJECT:'test',PUSH_SUBSCRIPTIONS:{get:async key=>entries.get(key)||null,put:async(k,v)=>entries.set(k,v),list:async({prefix})=>({keys:[...entries.keys()].filter(k=>k.startsWith(prefix)).map(name=>({name}))})}};
-  return {context,env,entries};
+  return {context,env,entries,worker:context.worker};
 }
 function sub(endpoint){return {role:'parent',phone10:'9990000011',enabled:true,subscription:{endpoint,keys:{auth:'synthetic',p256dh:'synthetic'}}};}
 test('expired endpoints are inactive; real delivery failures retain specific safe causes',async()=>{
@@ -34,6 +36,15 @@ test('an explicit off switch is recorded as a fact and never attempted during se
   assert.equal(JSON.parse(x.entries.get(key)).disabledReason,'user_disabled');
   const result=await x.context.sendNotificationToSubscribers(x.env,'parent','9990000011',{});
   assert.equal(result.total,0);assert.equal(result.failed,0);assert.equal(sends,0);
+});
+test('migration freeze blocks push writes while leaving health reads and preflight available',async()=>{
+  const x=worker(async()=>{}),env={...x.env,MEDSI_MIGRATION_FREEZE:'1'};
+  const post=await x.worker.fetch(new Request('https://push.example/subscribe',{method:'POST'}),env);
+  assert.equal(post.status,503);assert.equal((await post.json()).code,'MIGRATION_WRITE_FREEZE');
+  const get=await x.worker.fetch(new Request('https://push.example/'),env);
+  assert.equal(get.status,200);
+  const options=await x.worker.fetch(new Request('https://push.example/subscribe',{method:'OPTIONS'}),env);
+  assert.equal(options.status,200);assert.equal(x.entries.size,0);
 });
 test('a dead endpoint cannot be silently marked enabled again',async()=>{
   const x=worker(async()=>{});const endpoint='https://push.example/dead';

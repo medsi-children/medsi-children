@@ -12,9 +12,9 @@ function apps(){
   fs.readdirSync(path.join(root,'apps-script/medsi-bot')).filter(f=>f.endsWith('.js')).forEach(f=>vm.runInContext(read('apps-script/medsi-bot/'+f),x));
   return x;
 }
-const manifest=JSON.parse(read('archive/apps-script-legacy-chat/manifest.json'));
+const manifest=JSON.parse(read('tests/fixtures/apps-script-legacy-chat/manifest.json'));
 test('archived historical implementations match their recorded baseline digests',()=>{
-  const old={};vm.createContext(old);vm.runInContext(read('archive/apps-script-legacy-chat/retired-chat.js'),old);
+  const old={};vm.createContext(old);vm.runInContext(read('tests/fixtures/apps-script-legacy-chat/retired-chat.js'),old);
   for(const item of manifest.removedFunctions){
     assert.equal(crypto.createHash('sha256').update(old[item.name].toString()).digest('hex'),item.sha256,item.name);
   }

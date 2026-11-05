@@ -29,8 +29,8 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261105-settings-complete-9/);
-  assert.match(html,/next-settings\.js\?v=20261105-settings-complete-9/);
+  assert.match(html,/next-settings\.css\?v=20261105-settings-complete-10/);
+  assert.match(html,/next-settings\.js\?v=20261105-settings-complete-10/);
 });
 
 test('deleting the final linked parent removes the child directory row',()=>{

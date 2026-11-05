@@ -7,6 +7,7 @@
   const INTRO_VISIBLE_MS = 5000;
   const ENABLED_VISIBLE_MS = 5000;
   const STATUS_VISIBLE_MS = 3600;
+  const BROWSER_UNSUBSCRIBE_TIMEOUT_MS = 1500;
 
   const state = {
     identity: loadIdentity(),
@@ -26,7 +27,8 @@
     lastSyncAt: 0,
     recoveryTimer: null,
     recoveryAttempts: 0,
-    actionBusy: false
+    actionBusy: false,
+    browserUnsubscribePromise: null
   };
 
   function onlyDigits(value) {
@@ -331,6 +333,15 @@
   }
 
   async function subscribe() {
+    if (state.browserUnsubscribePromise) {
+      const settled = await waitForBrowserUnsubscribe(state.browserUnsubscribePromise);
+      if (!settled) {
+        setStatus('Браузер ещё завершает отключение. Попробуйте включить уведомления через несколько секунд.');
+        updateButton({ reveal: true });
+        return;
+      }
+      state.browserUnsubscribePromise = null;
+    }
     if (!isSupported()) {
       setStatus('На этом устройстве уведомления недоступны.');
       return;
@@ -384,14 +395,36 @@
     if (state.syncPromise) { try { await state.syncPromise; } catch (_) {} }
     const subscription = await getSubscription();
     if (subscription) {
-      // Remove the browser subscription first, then remove the same endpoint
-      // from the server. Android can resolve unsubscribe asynchronously; doing
-      // this in this order prevents a quick re-enable from racing the delete.
-      try { await subscription.unsubscribe(); } finally { await deleteSubscriptionInApp(subscription); }
+      // Some browsers leave unsubscribe() pending indefinitely. Keep the
+      // pending operation observable, but let server-side disable complete so
+      // the settings control cannot remain stuck in its disabled state.
+      const browserRemoval = Promise.resolve().then(() => subscription.unsubscribe());
+      state.browserUnsubscribePromise = browserRemoval;
+      browserRemoval.then(() => {
+        if (state.browserUnsubscribePromise === browserRemoval) state.browserUnsubscribePromise = null;
+      }, () => {
+        if (state.browserUnsubscribePromise === browserRemoval) state.browserUnsubscribePromise = null;
+      });
+      const browserRemoved = await waitForBrowserUnsubscribe(browserRemoval);
+      await deleteSubscriptionInApp(subscription);
+      setStatus(browserRemoved
+        ? 'Уведомления отключены.'
+        : 'Уведомления отключены. Браузер завершает удаление подписки.');
+    } else {
+      setStatus('Уведомления отключены.');
     }
-
-    setStatus('Уведомления отключены.');
     updateButton({ reveal: true });
+  }
+
+  async function waitForBrowserUnsubscribe(promise) {
+    let timer;
+    const timeout = new Promise(resolve => {
+      timer = setTimeout(() => resolve(false), BROWSER_UNSUBSCRIBE_TIMEOUT_MS);
+    });
+    const settled = Promise.resolve(promise).then(() => true, () => true);
+    const result = await Promise.race([settled, timeout]);
+    clearTimeout(timer);
+    return result;
   }
 
   function setStatus(text) {

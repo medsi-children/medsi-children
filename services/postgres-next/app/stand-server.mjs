@@ -35,6 +35,7 @@ import {createParentDeletionService} from './parent-deletion.mjs';
 import {createMediaService} from './media-service.mjs';
 import {createNextLabRouter} from './api-router.mjs';
 import {createLegacyBridge} from './legacy-bridge.mjs';
+import {createMigrationImportRouter} from './migration-import-router.mjs';
 import {schemaMatches} from '../src/schema-contract.mjs';
 
 const ROOT=fileURLToPath(new URL('../../../',import.meta.url));
@@ -111,10 +112,10 @@ export function createNextServices({sql,env=process.env}) {
   const push=createPushService({sql,env});
   const parentRegistration=createParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});
+  const storage=require('../../../lib/s3-storage.js');
   const parentDeletion=createParentDeletionService({sql,
     enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1',
     removeMedia:async key=>{
-      const storage=require('../../../lib/s3-storage.js');
       if(!storage.configured)throw new Error('Private S3 storage is not configured.');
       await storage.removeObject(key);
     }
@@ -125,11 +126,11 @@ export function createNextServices({sql,env=process.env}) {
        'registrationOptions','registrationVerify'].map(method=>[method,
       async()=>{throw new Error('Passkeys unavailable until origin and RP ID are configured.');}]));
   const media=createMediaService({sql,sessions,secret:env.NEXT_SESSION_SECRET,
-    storage:require('../../../lib/s3-storage.js')});
+    storage});
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   const dbSchemaHealth=()=>checkNextTestSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,
-    nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media};
+    nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
 
 function handler(fn) {
@@ -189,6 +190,7 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     chatOperations:services.chatOperations,reportSubmission:services.reports,
     parentRegistration:services.parentRegistration,parentAccess:services.parentAccess
   });
+  app.use('/__migration/import',createMigrationImportRouter({sql:services.sql,storage:services.storage,env}));
   app.post(['/__session/api','/__session/apps-script'],express.text({type:'*/*',limit:'64kb'}),handler(async req=>{
     let payload;
     try{payload=JSON.parse(String(req.body||''));}catch(_){throw new Error('Invalid legacy payload.');}

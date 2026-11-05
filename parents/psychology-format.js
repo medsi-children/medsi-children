@@ -31,7 +31,7 @@
   // Only use explicit transitions; do not rewrite or invent clinical observations.
   function expandNarrativeTopic(data){
     const topic=data.meta.find(item=>item.title==='Тема групповой психотерапии');
-    if(!topic||!topic.body||data.sections.length)return data;
+    if(!topic||!topic.body)return data;
     const quoted=topic.body.match(/^([«"][^»"\n]{3,160}[»"])[.!?]?\s+([\s\S]+)$/);
     if(!quoted)return data;
     const narrative=quoted[2].trim();
@@ -39,7 +39,7 @@
     const fragments=narrative.split(/(?<=[.!?])\s+(?=(?:Сначала\b|Затем\b|Основная часть\s*:|Активно участвовали\b|Групповое занятие в целом\b))/i).map(x=>x.trim()).filter(Boolean);
     if(fragments.length<2)return data;
     topic.body=quoted[1];
-    let thenCount=0;
+    let thenCount=0,insertAt=0;
     for(const fragment of fragments){
       let heading='Ход занятия',body=fragment;
       if(/^Сначала\b/i.test(fragment))heading='Начало занятия';
@@ -49,7 +49,7 @@
         heading=thenCount++===0?'Разминка':'Практическая часть';
       }else if(/^Активно участвовали\b/i.test(fragment))heading='Наблюдения за участниками';
       else if(/^Групповое занятие в целом\b/i.test(fragment))heading='Итог занятия';
-      data.sections.push({number:'',title:heading,parts:bodyParts(body)});
+      data.sections.splice(insertAt++,0,{number:'',title:heading,parts:bodyParts(body)});
     }
     return data;
   }

@@ -243,9 +243,9 @@
       if(entry.publicationId){
         card.classList.add('medsi-raw-collapsed');
         card.append(inlineReport(entry.rawText,reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())})));
-        const toggle=textNode('button','medsi-raw-expand','Показать полностью');
-        toggle.type='button';toggle.setAttribute('aria-expanded','false');
-        toggle.onclick=()=>{const open=card.classList.toggle('medsi-raw-expanded');toggle.textContent=open?'Свернуть':'Показать полностью';toggle.setAttribute('aria-expanded',String(open));};
+        const toggle=textNode('button','medsi-raw-expand','');
+        toggle.type='button';toggle.setAttribute('aria-label','Развернуть отчёт');toggle.setAttribute('aria-expanded','false');
+        toggle.onclick=()=>{const open=card.classList.toggle('medsi-raw-expanded');toggle.setAttribute('aria-label',open?'Свернуть отчёт':'Развернуть отчёт');toggle.setAttribute('aria-expanded',String(open));};
         card.append(toggle);
       }
       else card.append(textNode('div','medsi-report-body','Отчёта пока нет.'));
@@ -299,15 +299,13 @@
     const counts=data?.counts||{};
     pane.append(textNode('p','medsi-roster-overview',
       'Сейчас в отделении: '+(counts.activeChildren||0)+' детей · '+(counts.activeParentProfiles||0)+' профилей родителей'));
-    pane.append(textNode('p','medsi-roster-hint',
-      'Отметки показывают наличие текущих отчётов в базе. Если обоих нет — проверьте ситуацию перед удалением. История сообщений удаляется только после отдельного подтверждения.'));
+    
     const children=Array.isArray(data?.children)?data.children:[];
     if(!children.length)pane.append(textNode('p','medsi-reports-empty','Активных госпитализаций пока нет.'));
     for(const child of children){
       const card=textNode('article','medsi-roster-card','');
       const head=textNode('div','medsi-roster-head',''),titleBox=textNode('div','medsi-roster-title-box','');
-      titleBox.append(textNode('h3','',([child.firstName,child.surname].filter(Boolean).join(' ')||'Без имени')),
-        textNode('p','',child.parents.length+' '+(child.parents.length===1?'профиль родителя':'профилей родителей')));
+      titleBox.append(textNode('h3','',([child.firstName,child.surname].filter(Boolean).join(' ')||'Без имени')));
       const editChild=textNode('button','medsi-roster-edit','Изменить имя');editChild.type='button';
       editChild.onclick=()=>{head.replaceChildren(rosterEdit([
         {id:'firstName',label:'Имя ребёнка',value:child.firstName},{id:'surname',label:'Фамилия ребёнка',value:child.surname}
@@ -319,7 +317,7 @@
       const badges=textNode('div','medsi-roster-status','');
       for(const [label,present] of [['Утро',child.morning],['Вечер',child.evening]]){
         const badge=textNode('span','medsi-roster-badge',(present?'✓ ':'— ')+label);
-        badge.dataset.present=present?'1':'0';badges.append(badge);
+        badge.dataset.present=present?'1':'0';badge.dataset.kind=label==='Утро'?'morning':'evening';badges.append(badge);
       }
       card.append(badges);
       const parents=textNode('div','medsi-roster-parents','');

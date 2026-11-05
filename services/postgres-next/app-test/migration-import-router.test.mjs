@@ -46,3 +46,22 @@ test('protected inventory reads existing S3 objects without freeze, SQL writes o
  assert.equal(invalid.status,409);
  });
 });
+
+test('explicit baseline import works only in isolated mode and does not claim source freeze',async()=>{
+ const {POSTGRES_STREAMS}=await import('../src/postgres-manifests.mjs');
+ const {generateManifest,signManifestEnvelope}=await import('../app/migration-audit.mjs');
+ const token='synthetic-token-'.repeat(4),audit='synthetic-audit-key-'.repeat(4);
+ const streams=Object.fromEntries(POSTGRES_STREAMS.map(k=>[k,[]]));
+ const envelope=signManifestEnvelope('synthetic_baseline_001',[...POSTGRES_STREAMS.map(k=>generateManifest(k,[],audit)),generateManifest('s3_objects',[],audit)],audit);
+ let transactions=0;const sql=()=>{};sql.begin=async(_,fn)=>{transactions++;const tx=async strings=>strings[0].startsWith('SELECT')?[[]]:[];tx.identifier=x=>x;return fn(tx)};
+ const body=JSON.stringify({streams,envelope,s3Objects:[],preliminary:true});
+ const headers={authorization:`Bearer ${token}`,'content-type':'application/json','x-medsi-migration-mode':'baseline','x-medsi-migration-import':'confirmed'};
+ const env={MEDSI_MIGRATION_IMPORT_TOKEN:token,MEDSI_MIGRATION_AUDIT_KEY:audit};
+ await withServer(createMigrationImportRouter({sql,storage:{configured:true},env}),async url=>{
+ assert.equal((await fetch(url,{method:'POST',headers,body})).status,400);assert.equal(transactions,0);
+ });
+ await withServer(createMigrationImportRouter({sql,storage:{configured:true},env:{...env,MEDSI_NEXT_STAND:'1'}}),async url=>{
+ const result=await fetch(url,{method:'POST',headers,body});assert.equal(result.status,200);
+ assert.equal((await result.json()).mode,'baseline');assert.equal(transactions,1);
+ });
+});

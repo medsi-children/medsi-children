@@ -43,7 +43,8 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
     }
   });
   router.use((req,res,next)=>{
-    if(req.get('X-Medsi-Migration-Freeze')!=='confirmed'||
+    const baseline=req.get('X-Medsi-Migration-Mode')==='baseline'&&env.MEDSI_NEXT_STAND==='1';
+    if((!baseline&&req.get('X-Medsi-Migration-Freeze')!=='confirmed')||
        req.get('X-Medsi-Migration-Import')!=='confirmed'){
       return res.status(400).json({ok:false,code:'MIGRATION_CONFIRMATION_REQUIRED'});
     }
@@ -53,9 +54,15 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
     const hmacKey=env.MEDSI_MIGRATION_AUDIT_KEY;
     try{
       const body=req.body;
-      if(!body||body.preliminary===true||typeof body!=='object'||!body.streams||!Array.isArray(body.s3Objects)||
+      const baseline=req.get('X-Medsi-Migration-Mode')==='baseline'&&env.MEDSI_NEXT_STAND==='1';
+      if(!body||(!baseline&&body.preliminary===true)||typeof body!=='object'||!body.streams||!Array.isArray(body.s3Objects)||
          !body.envelope||!storage?.configured||typeof sql!=='function'){
         return res.status(400).json({ok:false,code:'MIGRATION_PACKAGE_INVALID'});
+      }
+      for(const row of body.streams.parent_passkeys||[]){
+        const value=row.public_key;
+        if(value?.type==='Buffer'&&Array.isArray(value.data)&&value.data.length>0&&value.data.length<4096&&
+          value.data.every(b=>Number.isInteger(b)&&b>=0&&b<=255))row.public_key=Buffer.from(value.data);
       }
       const readSource=createSameBucketSourceReader(storage);
       const inventory=[];
@@ -71,9 +78,9 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
       }
       const s3Manifest=generateManifest('s3_objects',inventory,hmacKey);
       const result=await importFullCapture(sql,body.streams,body.envelope,s3Manifest,
-        {hmacKey,explicitImport:true,freezeConfirmed:true});
+        {hmacKey,explicitImport:true,freezeConfirmed:!baseline,baselineImport:baseline});
       return res.json({ok:true,alreadyImported:result.alreadyImported,
-        streams:result.streams,s3Objects:inventory.length});
+        streams:result.streams,s3Objects:inventory.length,mode:baseline?'baseline':'frozen'});
     }catch(_){
       return res.status(409).json({ok:false,code:'MIGRATION_IMPORT_REJECTED'});
     }

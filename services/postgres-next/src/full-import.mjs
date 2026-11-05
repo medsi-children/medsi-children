@@ -32,8 +32,8 @@ function validateRows(stream,rows){
 // S3 objects remain in the existing bucket; destinationS3 is a fresh read-only
 // inventory, not the source manifest copied without checking the objects.
 export async function importFullCapture(sql,streams,sourceEnvelope,destinationS3,
-  {hmacKey,explicitImport,freezeConfirmed}={}){
-  if(explicitImport!==true||freezeConfirmed!==true)
+  {hmacKey,explicitImport,freezeConfirmed,baselineImport=false}={}){
+  if(explicitImport!==true||(freezeConfirmed!==true&&baselineImport!==true))
     throw new Error('Explicit frozen full import required.');
   if(!streams||Object.keys(streams).length!==POSTGRES_STREAMS.length||
       POSTGRES_STREAMS.some(name=>!Object.hasOwn(streams,name)))

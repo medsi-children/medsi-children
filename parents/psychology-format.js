@@ -51,6 +51,24 @@
       else if(/^Групповое занятие в целом\b/i.test(fragment))heading='Итог занятия';
       data.sections.splice(insertAt++,0,{number:'',title:heading,parts:bodyParts(body)});
     }
+    // Later sections may contain several stages in one paragraph as well.
+    const splitSections=[];
+    for(const section of data.sections){
+      if(section.title!=='Основная часть'||section.parts.length!==1||section.parts[0].type!=='p'){
+        splitSections.push(section);continue;
+      }
+      const original=section.parts[0].text;
+      const pieces=original.split(/(?<=[.!?])\s+(?=(?:Затем\b|Активно участвовали\b|Групповое занятие в целом\b))/i).map(x=>x.trim()).filter(Boolean);
+      if(pieces.length<2){splitSections.push(section);continue}
+      section.parts=bodyParts(pieces.shift());
+      splitSections.push(section);
+      for(const piece of pieces){
+        const heading=/^Активно участвовали\b/i.test(piece)?'Наблюдения за участниками':
+          /^Групповое занятие в целом\b/i.test(piece)?'Итоги':'Практическая часть';
+        splitSections.push({number:'',title:heading,parts:bodyParts(piece)});
+      }
+    }
+    data.sections=splitSections;
     return data;
   }
   function plainParts(v){

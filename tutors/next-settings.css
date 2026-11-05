@@ -389,3 +389,109 @@ body.medsi-report-library-open { overflow: hidden; }
 }
 .medsi-roster-badge[data-kind="morning"][data-present="0"],
 .medsi-roster-badge[data-kind="evening"][data-present="0"]{opacity:.62}
+
+/* Design study: quiet white canvas, pastel utility cards, distinct tab icons.
+   Intentionally scoped to educator settings/reports, without affecting data flows. */
+.medsi-tutor-reports{
+  background:#f8fafc!important;
+  background-image:none!important;
+  color:#183f4d;
+}
+.medsi-reports-shell{max-width:1000px;gap:14px}
+.medsi-reports-header h2{color:#164a59;font-size:clamp(21px,3vw,29px)}
+.medsi-reports-back,.medsi-reports-refresh{
+  background:#fff;border:1px solid #dcebef;color:#168b99;
+  box-shadow:none;border-radius:13px;
+}
+.medsi-reports-switch{
+  background:#edf4f7;gap:5px;padding:6px;
+  border:1px solid #e5eff3;border-radius:18px;
+}
+.medsi-reports-switch button{
+  display:flex;align-items:center;justify-content:center;gap:9px;
+  min-height:52px;padding:10px 8px;border-radius:12px;
+  font-size:13px;font-weight:650;color:#67838c;
+  overflow-wrap:normal;
+}
+.medsi-reports-switch button svg{
+  flex:none;width:20px;height:20px;fill:none;stroke:currentColor;
+  stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;
+}
+.medsi-reports-switch button[aria-selected="true"]{
+  background:#fff;color:#158e9b;box-shadow:0 2px 7px #194e6010;
+}
+.medsi-reports-switch button:focus-visible{outline:2px solid #4ebcc6;outline-offset:1px}
+.medsi-raw-report,.medsi-child-report-card{
+  border:1px solid #dceaf0;border-radius:18px;box-shadow:0 4px 15px #184a5810;
+}
+.medsi-raw-report{padding:20px 21px}
+.medsi-raw-report h3{display:flex;align-items:center;gap:9px;font-size:18px;color:#173e4e}
+.medsi-raw-report h3::before{content:"";display:grid;place-items:center;width:32px;height:32px;flex:none;border-radius:10px;font-size:22px}
+.medsi-raw-morning{background:#fffdf7;border-left:4px solid #f7c64f}
+.medsi-raw-evening{background:#f9fcff;border-left:4px solid #8dc8ff}
+.medsi-raw-psychology{background:#fffbfd;border-left:4px solid #f0adc5}
+.medsi-raw-morning h3::before{content:"☀️";background:#fff0c8}
+.medsi-raw-evening h3::before{content:"🌙";background:#e4f2ff}
+.medsi-raw-psychology h3::before{content:"🧠";background:#fce8f0}
+.medsi-report-date{color:#78939b;margin:4px 0 14px}
+.medsi-raw-expand{border-radius:10px;background:#fff9ed;border-color:#f3e1b7}
+.medsi-raw-morning .medsi-raw-expand{background:#fff8e8;border-color:#f4e1b3}
+.medsi-raw-evening .medsi-raw-expand{background:#eef7ff;border-color:#d4e9fa}
+.medsi-raw-evening .medsi-raw-expand::after{border-color:#3a9bc7}
+.medsi-raw-psychology .medsi-raw-expand{background:#fff1f6;border-color:#f5dce6}
+.medsi-raw-psychology .medsi-raw-expand::after{border-color:#bb6f8f}
+.medsi-child-details{background:#f5fafb;box-shadow:none}
+.medsi-child-name{color:#194959}
+.medsi-child-report-section-morning{background:#fffaf0;border-color:#f5e7c6}
+.medsi-child-report-section-evening{background:#f2f8ff;border-color:#dfeafa}
+.medsi-name-row{background:#fff;border:1px solid #e1edf1;border-radius:11px;box-shadow:none}
+.medsi-name-word{background:#f3f7f9;border:1px solid transparent}
+.medsi-name-canonical .medsi-name-word{background:#e4f7f7;color:#177d88}
+.medsi-name-token:not(.medsi-name-canonical) .medsi-name-word{
+  background:#f1f5f8!important;color:#476d79!important;
+}
+.medsi-name-token .medsi-name-word:hover{background:#e5f3f6!important;box-shadow:none}
+.medsi-names-footer{background:#f8fafcee;backdrop-filter:blur(6px)}
+.medsi-roster-card{border:1px solid #dfeaf0;background:#fff;box-shadow:none}
+.medsi-roster-parent{background:#f6fafb}
+.medsi-roster-badge[data-kind="morning"]{background:#fff2d3;color:#a47719;border-color:#f4dda8}
+.medsi-roster-badge[data-kind="evening"]{background:#e5f3ff;color:#3f7eae;border-color:#cfe4f8}
+/* Settings: four pastel tiles. The notification card is green only when enabled. */
+.medsi-settings-next .medsi-setting-grid{gap:11px}
+.medsi-settings-next .medsi-setting-tile{
+  min-height:142px;padding:17px;border-radius:19px;
+  border:1px solid #e1eaee!important;
+  box-shadow:0 3px 11px #24495d0c!important;
+}
+.medsi-settings-next .medsi-tile-reports{
+  background:#e5f5fc!important;color:#256f94!important;
+}
+.medsi-settings-next .medsi-tile-parent{
+  background:#f0ebfb!important;color:#68589a!important;
+}
+.medsi-settings-next .medsi-tile-delete{
+  background:#fbeaf0!important;color:#9d526b!important;
+}
+.medsi-settings-next .medsi-tile-push[data-enabled="0"]{
+  background:#fff2dc!important;color:#986a27!important;border-color:#f4e6cb!important;
+}
+.medsi-settings-next .medsi-tile-push[data-enabled="1"]{
+  background:#e4f7eb!important;color:#347c59!important;border-color:#cce9d8!important;
+}
+.medsi-settings-next .medsi-tile-icon{
+  background:#ffffffa6!important;border:1px solid #ffffffc9!important;
+  box-shadow:none;width:39px;height:39px;
+}
+.medsi-settings-next .medsi-tile-heading{font-size:16px}
+.medsi-settings-next .medsi-tile-sub{color:inherit!important;opacity:.72;font-size:12px}
+.medsi-settings-next .medsi-setting-tile:hover{
+  box-shadow:0 5px 16px #24495d18!important;
+}
+@media(max-width:600px){
+  .medsi-reports-switch{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .medsi-reports-switch button{font-size:12px;gap:7px;min-height:47px;padding:8px 6px}
+  .medsi-reports-switch button svg{width:18px;height:18px}
+  .medsi-raw-report{padding:16px}
+  .medsi-settings-next .medsi-setting-tile{min-height:130px;padding:13px}
+  .medsi-settings-next .medsi-tile-heading{font-size:14px}
+}

@@ -30,3 +30,11 @@ test('missing sources, inconsistent publication head and absent freeze block pac
   assert.throws(()=>buildCapturePackage(changed,options),/inconsistent/);
   assert.throws(()=>buildCapturePackage(fixture(),{...options,freezeConfirmed:false}),/Frozen/);
 });
+test('preflight cannot produce a signed import and archives Apps Script state without runnable jobs',()=>{
+ const input=fixture();input.appsScriptProperties={REPORT_POST_COMMIT_REQUEST:'synthetic-pending-state'};
+ const result=buildCapturePackage(input,{hmacKey:options.hmacKey,preflight:true});
+ assert.equal(result.preliminary,true);assert.equal(result.envelope,null);
+ assert.equal(result.streams.background_jobs.length,1);assert.equal(result.streams.background_jobs[0].status,'archived');
+ input.appsScriptProperties={MEDSI_TUTOR_ACCESS_PASSWORD:'must-not-capture'};
+ assert.throws(()=>buildCapturePackage(input,{hmacKey:options.hmacKey,preflight:true}),/incomplete/);
+});

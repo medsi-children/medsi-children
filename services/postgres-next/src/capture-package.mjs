@@ -1,3 +1,4 @@
+import {createHmac} from 'node:crypto';
 import {D1_SOURCE_TABLES} from './cloudflare-capture.mjs';
 import {normalizeRosterCapture} from './roster-capture.mjs';
 import {normalizeD1ParentProfiles,captureD1ProfileLinks} from './d1-profile-capture.mjs';
@@ -16,9 +17,9 @@ const invalid=()=>{throw new Error('Source package incomplete or inconsistent.')
 // Assemble normalized source-specific captures. No network calls and no output
 // of private rows. Only the final frozen package is eligible for SQL import.
 export function buildCapturePackage({captureId,cloudflare,roster,reportBaseline,mediaMapping,
-  historicalLinks=[],sourceVapidPublicKey,targetVapidPublicKey},
-  {hmacKey,freezeConfirmed}={}){
-  if(freezeConfirmed!==true)throw new Error('Frozen source package required.');
+  historicalLinks=[],sourceVapidPublicKey,targetVapidPublicKey,appsScriptProperties},
+  {hmacKey,freezeConfirmed,preflight=false}={}){
+  if(freezeConfirmed!==true&&preflight!==true)throw new Error('Frozen source package required.');
   const tables=cloudflare?.tables;
   if(!tables||Object.keys(tables).length!==D1_SOURCE_TABLES.length||
      D1_SOURCE_TABLES.some(name=>!Array.isArray(tables[name])))invalid();
@@ -58,11 +59,20 @@ export function buildCapturePackage({captureId,cloudflare,roster,reportBaseline,
       phone10:row.phone10,subscription_json:row.subscriptionJson,enabled:row.enabled,
       disabled_reason:row.disabledReason,updated_at:String(row.updatedAt)}))};
   streams.background_jobs.push(...ownership.background_jobs);
+  if(appsScriptProperties!==undefined){
+    if(!appsScriptProperties||typeof appsScriptProperties!=='object'||Array.isArray(appsScriptProperties))invalid();
+    for(const [key,value] of Object.entries(appsScriptProperties)){
+      if(!/^(RAW_REPORT_|REPORT_ADMISSION_|REPORT_SUBMISSION_|REPORT_INACTIVITY_|REPORT_PUBLICATION_|REPORT_CURRENT_D1_|REPORT_HISTORY_|REPORT_DISTRIBUTION_|REPORT_POST_COMMIT_|REPORT_MAINTENANCE_|REPORT_PSYCHOLOGY_|REPORT_STATE_D1_|REPORTS_D1_)/.test(key)||typeof value!=='string')invalid();
+      const payload_json=JSON.stringify({source:'apps-script-property',key,value});
+      streams.background_jobs.push({job_id:'legacy-apps-script:'+createHmac('sha256',hmacKey).update(key).digest('hex'),
+        job_type:'legacy_state_archive',payload_json,status:'archived',attempts:'0',next_attempt_at:null,created_at:null});
+    }
+  }
   if(new Set(streams.background_jobs.map(row=>row.job_id)).size!==streams.background_jobs.length||
      Object.keys(streams).length!==POSTGRES_STREAMS.length||POSTGRES_STREAMS.some(name=>!Object.hasOwn(streams,name)))invalid();
-  const envelope=signManifestEnvelope(captureId,[...POSTGRES_STREAMS.map(name=>generateManifest(name,streams[name],hmacKey)),
+  const envelope=preflight?null:signManifestEnvelope(captureId,[...POSTGRES_STREAMS.map(name=>generateManifest(name,streams[name],hmacKey)),
     generateManifest('s3_objects',media.s3Objects,hmacKey)],hmacKey);
-  return {streams,envelope,s3Objects:media.s3Objects,summary:{parents:parents.length,
+  return {streams,envelope,preliminary:preflight,s3Objects:media.s3Objects,summary:{parents:parents.length,
     messages:streams.chat_messages.length,quarantinedReports:ownership.background_jobs.length,
     archivedReportReceipts:tables.report_submission_queue.length}};
 }

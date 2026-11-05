@@ -16,7 +16,7 @@ export async function uploadFullCapture(path,{env=process.env,fetcher=fetch}={})
   try{contents=await file.readFile('utf8');}finally{await file.close();}
   let packageData;
   try{packageData=JSON.parse(contents);}catch(_){throw new Error('Capture package is malformed.');}
-  if(!packageData?.streams||!packageData?.envelope||!Array.isArray(packageData?.s3Objects))
+  if(packageData?.preliminary===true||!packageData?.streams||!packageData?.envelope||!Array.isArray(packageData?.s3Objects))
     throw new Error('Capture package is incomplete.');
   const response=await fetcher(IMPORT_URL,{method:'POST',headers:{authorization:'Bearer '+token,
     'content-type':'application/json','x-medsi-migration-freeze':'confirmed',

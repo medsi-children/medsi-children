@@ -28,6 +28,7 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
       const ids=req.body?.fileIds;
       if(!Array.isArray(ids)||ids.length>256||new Set(ids).size!==ids.length||
          ids.some(id=>typeof id!=='string'))throw new Error();
+      if(!storage?.configured)throw Object.assign(new Error(),{code:'S3_NOT_CONFIGURED'});
       const readSource=createSameBucketSourceReader(storage),objects=[];
       for(const file_id of ids){
         const {body}=await readSource('s3',file_id,MAX_BYTES);
@@ -35,7 +36,11 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
         objects.push({file_id,bytes:body.length,sha256:createHash('sha256').update(body).digest('hex')});
       }
       return res.json({ok:true,objects,vapidPublicKey:String(env.VAPID_PUBLIC_KEY||'')});
-    }catch(_){return res.status(409).json({ok:false,code:'MIGRATION_INVENTORY_REJECTED'});}
+    }catch(error){
+      const allowed=new Set(['S3_NOT_CONFIGURED','AccessDenied','NoSuchKey','NoSuchBucket','InvalidAccessKeyId','SignatureDoesNotMatch','CredentialsProviderError','RequestTimeout']);
+      const reason=allowed.has(error?.name)?error.name:allowed.has(error?.code)?error.code:'UNAVAILABLE';
+      return res.status(409).json({ok:false,code:'MIGRATION_INVENTORY_REJECTED',reason});
+    }
   });
   router.use((req,res,next)=>{
     if(req.get('X-Medsi-Migration-Freeze')!=='confirmed'||
@@ -48,7 +53,7 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
     const hmacKey=env.MEDSI_MIGRATION_AUDIT_KEY;
     try{
       const body=req.body;
-      if(!body||typeof body!=='object'||!body.streams||!Array.isArray(body.s3Objects)||
+      if(!body||body.preliminary===true||typeof body!=='object'||!body.streams||!Array.isArray(body.s3Objects)||
          !body.envelope||!storage?.configured||typeof sql!=='function'){
         return res.status(400).json({ok:false,code:'MIGRATION_PACKAGE_INVALID'});
       }

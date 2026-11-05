@@ -78,7 +78,7 @@ export function createMigrationImportRouter({sql,env=process.env,storage}){
       }
       const s3Manifest=generateManifest('s3_objects',inventory,hmacKey);
       const result=await importFullCapture(sql,body.streams,body.envelope,s3Manifest,
-        {hmacKey,explicitImport:true,freezeConfirmed:!baseline,baselineImport:baseline});
+        {hmacKey,explicitImport:true,freezeConfirmed:!baseline,baselineImport:baseline,previousEnvelope:baseline?undefined:body.previousEnvelope});
       return res.json({ok:true,alreadyImported:result.alreadyImported,
         streams:result.streams,s3Objects:inventory.length,mode:baseline?'baseline':'frozen'});
     }catch(_){

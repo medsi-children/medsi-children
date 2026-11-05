@@ -64,6 +64,15 @@ test('full capture: signed atomic import, exact retry and rejection of tampering
     const [raw]=await conn.sql`SELECT * FROM raw_reports`;
     const [push]=await conn.sql`SELECT * FROM push_outbox`;
     assert.equal(raw.length,0);assert.equal(push.length,0);
+    const newer={...streams,children:[{...streams.children[0],surname:'Updated'},
+      {child_id:'fictional_added',registered_first_name:'Second',surname:'Synthetic',created_at:'2000'}]};
+    const nextEnvelope=signManifestEnvelope('synthetic_capture_002',[...POSTGRES_STREAMS.map(name=>generateManifest(name,newer[name],key)),s3],key);
+    await assert.rejects(()=>importFullCapture(conn.sql,newer,nextEnvelope,s3,options),/populated/);
+    await assert.rejects(()=>importFullCapture(faulty,newer,nextEnvelope,s3,{...options,previousEnvelope:source}),/Synthetic interruption/);
+    const [afterFailedDelta]=await conn.sql`SELECT * FROM children`;
+    assert.equal(afterFailedDelta.length,1);assert.equal(afterFailedDelta[0].surname,'Synthetic');
+    assert.deepEqual(await importFullCapture(conn.sql,newer,nextEnvelope,s3,{...options,previousEnvelope:source}),{alreadyImported:false,streams:25});
+    assert.deepEqual(await importFullCapture(conn.sql,newer,nextEnvelope,s3,{...options,previousEnvelope:source}),{alreadyImported:true,streams:25});
     await conn.sql`UPDATE children SET surname=${'Changed'} WHERE child_id=${'fictional_child'}`;
     await assert.rejects(()=>importFullCapture(conn.sql,streams,source,s3,options),/populated/);
   }finally{await conn.driver.close();}

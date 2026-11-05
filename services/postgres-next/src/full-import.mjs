@@ -7,6 +7,10 @@ const columns=new Map([...SCHEMA_SQL.matchAll(/CREATE TABLE IF NOT EXISTS\s+([a-
   .map(match=>[match[1],[...match[2].matchAll(/^\s*([a-z_][a-z_0-9]*)\s+(TEXT|BIGINT|BOOLEAN|BYTEA)\b/gm)]
     .map(col=>({name:col[1],type:col[2]}))]));
 
+const primaryKeys=new Map(SCHEMA_SQL.split('CREATE TABLE IF NOT EXISTS ').slice(1).map(block=>[
+  block.slice(0,block.indexOf(' ')),block.split('PRIMARY KEY (')[1].split(')')[0].split(',').map(k=>k.trim())
+]));
+
 function validateRows(stream,rows){
   if(!Array.isArray(rows))throw new Error('Missing import stream.');
   const fields=columns.get(stream);
@@ -32,7 +36,7 @@ function validateRows(stream,rows){
 // S3 objects remain in the existing bucket; destinationS3 is a fresh read-only
 // inventory, not the source manifest copied without checking the objects.
 export async function importFullCapture(sql,streams,sourceEnvelope,destinationS3,
-  {hmacKey,explicitImport,freezeConfirmed,baselineImport=false}={}){
+  {hmacKey,explicitImport,freezeConfirmed,baselineImport=false,previousEnvelope}={}){
   if(explicitImport!==true||(freezeConfirmed!==true&&baselineImport!==true))
     throw new Error('Explicit frozen full import required.');
   if(!streams||Object.keys(streams).length!==POSTGRES_STREAMS.length||
@@ -49,22 +53,50 @@ export async function importFullCapture(sql,streams,sourceEnvelope,destinationS3
     // precede this snapshot or wait; an error rolls back the entire import.
     for(const name of POSTGRES_STREAMS)
       await tx`LOCK TABLE public.${tx.identifier(name)} IN ACCESS EXCLUSIVE MODE`;
-    const saved=[];
+    const saved=[],existingRows=new Map();
     let populated=false;
     for(const name of POSTGRES_STREAMS){
       const [rows]=await tx`SELECT * FROM public.${tx.identifier(name)}`;
+      existingRows.set(name,rows);
       populated ||= rows.length>0;
       saved.push(generateManifest(name,rows,hmacKey));
     }
+    const unchanged=new Set(),insertRows=new Map(POSTGRES_STREAMS.map(name=>[name,streams[name]]));
     if(populated){
       const current=signManifestEnvelope(sourceEnvelope.captureId,[...saved,destinationS3],hmacKey);
-      if(!evaluateMigrationGate(sourceEnvelope,current,{hmacKey}).ready)
+      if(evaluateMigrationGate(sourceEnvelope,current,{hmacKey}).ready)
+        return {alreadyImported:true,streams:POSTGRES_STREAMS.length};
+      if(freezeConfirmed!==true||baselineImport||!previousEnvelope)
         throw new Error('Destination is populated and differs from capture.');
-      return {alreadyImported:true,streams:POSTGRES_STREAMS.length};
+      const priorS3=previousEnvelope.manifests?.find(m=>m.stream==='s3_objects');
+      const priorActual=signManifestEnvelope(previousEnvelope.captureId,[...saved,priorS3],hmacKey);
+      if(!evaluateMigrationGate(previousEnvelope,priorActual,{hmacKey}).ready)
+        throw new Error('Destination changed since the approved baseline.');
+      // Apply only changed rows under the same locks. No full reload and no
+      // overwrite of any independent writes in the destination is permitted.
+      for(const name of POSTGRES_STREAMS){
+        if(saved.find(m=>m.stream===name).digest===manifests.find(m=>m.stream===name).digest){unchanged.add(name);continue;}
+        const keys=primaryKeys.get(name);
+        if(!keys?.length)throw new Error('Reconciliation primary key is unavailable.');
+        const id=row=>JSON.stringify(keys.map(k=>row[k]));
+        const previous=new Map(existingRows.get(name).map(row=>[id(row),row]));
+        const wanted=new Map(streams[name].map(row=>[id(row),row]));
+        for(const [key,row] of previous){
+          const next=wanted.get(key);
+          if(next&&generateManifest(name,[row],hmacKey).digest===generateManifest(name,[next],hmacKey).digest){wanted.delete(key);continue;}
+          const chunks=['DELETE FROM public.',' WHERE '],values=[tx.identifier(name)];
+          keys.forEach((field,index)=>{values.push(tx.identifier(field),row[field]);chunks.push(' = ',index===keys.length-1?'':' AND ');});
+          await tx(chunks,...values);
+        }
+        // Only changed or new rows are inserted by the shared loop below.
+        insertRows.set(name,[...wanted.values()]);
+      }
     }
+
     for(const name of POSTGRES_STREAMS){
+      if(unchanged.has(name))continue;
       const fields=columns.get(name).map(col=>col.name);
-      for(const row of streams[name]){
+      for(const row of insertRows.get(name)){
         const chunks=['INSERT INTO public.'],values=[tx.identifier(name)];
         chunks.push(' (');
         fields.forEach((field,index)=>{values.push(tx.identifier(field));chunks.push(index===fields.length-1?') VALUES (':',');});

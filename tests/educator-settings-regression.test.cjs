@@ -23,5 +23,5 @@ test('child picker has no duplicate close button and still invokes legacy deleti
 });
 
 test('settings script cache version is refreshed',()=>{
-  assert.match(page,/next-settings\.js\?v=20261105-settings-complete-10/);
+  assert.match(page,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });

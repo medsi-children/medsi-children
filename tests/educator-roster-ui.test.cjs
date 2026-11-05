@@ -29,7 +29,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261106-compact-square-14/);
+  assert.match(html,/next-settings\.css\?v=20261106-tight-square-15/);
   assert.match(html,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });
 
@@ -61,8 +61,8 @@ test('roster status is shown above the corresponding icon instead of a global ba
 
 test('mobile child identity stays centered and aliases have compact readable rows',()=>{
   const css=read('tutors/next-settings.css');
-  assert.match(css,/\.medsi-child-deck-details\{gap:8px;width:max-content;max-width:100%;margin-inline:auto;justify-items:stretch\}/);
-  assert.match(css,/\.medsi-child-deck-detail-row\{display:grid;grid-template-columns:27px minmax\(0,1fr\);gap:10px;width:100%;align-items:center\}/);
+  assert.match(css,/\.medsi-child-deck-details\{gap:5px;width:max-content;max-width:100%;margin-inline:auto;justify-items:stretch\}/);
+  assert.match(css,/\.medsi-child-deck-detail-row\{display:grid;grid-template-columns:23px minmax\(0,1fr\);gap:7px;width:100%;align-items:center\}/);
   assert.match(css,/#medsiNamesPane \{row-gap:9px\}/);
   assert.match(css,/\.medsi-name-word\{padding:7px 9px;font-size:14px\}/);
 });
@@ -70,9 +70,9 @@ test('mobile child identity stays centered and aliases have compact readable row
 test('mobile child profile uses a compact centered square and bottom arrows without changing desktop',()=>{
   const css=read('tutors/next-settings.css');
   assert.match(css,/@media\(max-width:650px\)/);
-  assert.match(css,/justify-self:center;width:min\(100%,272px\);aspect-ratio:1 \/ 1;min-height:min-content/);
-  assert.match(css,/\.medsi-child-nav-arrow\{position:absolute;bottom:11px;left:11px;width:37px;height:37px\}/);
-  assert.match(css,/\.medsi-child-nav-next\{left:auto;right:11px\}/);
-  assert.match(css,/\.medsi-child-deck-identity\{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:10px\}/);
+  assert.match(css,/justify-self:center;width:min\(100%,224px\);aspect-ratio:1 \/ 1;min-height:min-content/);
+  assert.match(css,/\.medsi-child-nav-arrow\{position:absolute;bottom:9px;left:9px;width:34px;height:34px\}/);
+  assert.match(css,/\.medsi-child-nav-next\{left:auto;right:9px\}/);
+  assert.match(css,/\.medsi-child-deck-identity\{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:7px\}/);
   assert.match(css,/\.medsi-child-deck-nav \{\s*display:grid;grid-template-columns:48px/);
 });

@@ -1,9 +1,0 @@
-# Этот файл публикуется автоматически из GitHub после успешной проверки исходников.
-name = "medsi-chat-gateway"
-main = "src/index.js"
-compatibility_date = "2026-06-23"
-workers_dev = true
-
-[[services]]
-binding = "BACKEND"
-service = "medsi-chat-worker"

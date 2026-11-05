@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import fs from 'node:fs';
 import {mergeLegacyNameRows,orderLegacyNameVariants} from '../app/name-variants-order.mjs';
 import {normalizeReportBaseline,captureSheetsNameVariants} from '../src/report-baseline.mjs';
-const source=fs.readFileSync(new URL('../../../apps-script/medsi-bot/Медси бот.js',import.meta.url),'utf8');
+const source=fs.readFileSync(new URL('../legacy-report-source/Медси бот.js',import.meta.url),'utf8');
 const fn=source.slice(source.indexOf('function addNameVariantRow_('),source.indexOf('// Do not access SpreadsheetApp',source.indexOf('function addNameVariantRow_(')));
 function evaluate(rows){
  const ctx=vm.createContext({normalizeName_:s=>String(s).trim().toLowerCase().replace(/ё/g,'е'),dict:{},canon:{}});

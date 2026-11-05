@@ -6,8 +6,7 @@ on:
       - medsi-bot-main
   push:
     branches:
-      - feature/timeweb-postgres-cutover
-      - chore/post-cutover-cleanup-20261105
+      - medsi-bot-main
   workflow_dispatch:
 
 permissions:
@@ -101,6 +100,6 @@ jobs:
         run: |
           test -f services/postgres-next/sql/001_initial.sql
           test -f tutors/next-settings.js
-          test -f apps-script/medsi-bot/report-parser.js
-          test -f apps-script/medsi-bot/report-distribution.js
+          test -f services/postgres-next/legacy-report-source/report-parser.js
+          test -f services/postgres-next/legacy-report-source/report-distribution.js
           ! grep -R "timeweb-next" services/postgres-next/src

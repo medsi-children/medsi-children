@@ -5,7 +5,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const source = fs.readFileSync(
-  path.join(__dirname, '..', 'apps-script', 'medsi-bot', 'Медси бот.js'),
+  path.join(__dirname, '..', 'services', 'postgres-next', 'legacy-report-source', 'Медси бот.js'),
   'utf8'
 );
 
@@ -22,9 +22,9 @@ function rawReportTools() {
     }
   };
   vm.createContext(context);
-  vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot/report-rules.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(path.join(__dirname, '../services/postgres-next/legacy-report-source/report-rules.js'), 'utf8'), context);
   for (const file of ['report-names.js', 'report-parser.js']) {
-    vm.runInContext(fs.readFileSync(path.join(__dirname, '../apps-script/medsi-bot', file), 'utf8'), context);
+    vm.runInContext(fs.readFileSync(path.join(__dirname, '../services/postgres-next/legacy-report-source', file), 'utf8'), context);
   }
   vm.runInContext(source, context);
   return context;

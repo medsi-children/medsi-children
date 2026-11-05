@@ -1,7 +1,0 @@
-# Только конфигурация для ручного применения D1-миграций.
-# Это не конфигурация публикации Cloudflare Worker.
-[[d1_databases]]
-binding = "CHAT_DB"
-database_name = "medsi-chat-production"
-database_id = "e031e5cb-2242-45a7-9c6e-40034ac8cf14"
-migrations_dir = "migrations"

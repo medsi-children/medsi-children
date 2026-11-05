@@ -233,7 +233,7 @@ body.medsi-report-library-open {overflow:hidden}
 .medsi-name-row:nth-of-type(4n+4) .medsi-name-word{background:#e1f0fd;color:#467aab}
 .medsi-name-row:nth-of-type(4n+5) .medsi-name-word{background:#dcf5eb;color:#337e67}
 .medsi-name-word:hover {filter:brightness(.97)}
-.medsi-name-token input {width:128px;max-width:100%;padding:8px 9px;background:#fff;border:1px solid #a6d4da;border-radius:9px;color:#275566;font:650 13px/1.3 inherit}
+.medsi-name-token input {width:128px;max-width:100%;padding:8px 9px;background:#fff;border:1px solid #a6d4da;border-radius:9px;color:#275566;font-family:inherit;font-weight:650;font-size:13px;line-height:1.3}
 .medsi-token-actions {display:flex;justify-content:center;gap:5px}
 .medsi-token-actions button {appearance:none;display:grid;place-items:center;width:26px;height:26px;border:0;border-radius:8px;cursor:pointer;font-size:15px}
 .medsi-token-remove{background:#fde8eb;color:#b8586f}

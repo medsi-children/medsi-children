@@ -1,41 +1,24 @@
-# Релизы и секреты
+# Медси Бот 2.0 — релизы, GitHub и архивы
 
-## GitHub Secrets
+Дата обновления: 2026-11-05.
 
-Значения добавляются только в GitHub Secrets. Их нельзя отправлять в чат,
-записывать в код, Issues, PR или Actions-логи.
+## Production
+- GitHub: `medsi-bot-main` — default branch и код Timeweb App Platform 2.0.
+- Backend: Node.js / PostgreSQL 18 / существующий Timeweb S3. Домен `медси-бот.рф` и `www.медси-бот.рф` направлены на App 2.0 по последнему отчёту миграции. Прямые проверки и публикации должны подтверждаться оператором.
+- Изменения `medsi-bot-main` могут автоматически развертываться в Timeweb App Platform 2.0. Не коммитить в неё заведомо неработающую сборку; запускать `npm run verify`, `npm run verify:postgres-next` и проверки доступа.
+- GitHub workflow `verify.yml` проверяет исходники на PR и изменениях default branch; `verify-postgres-next.yml` использует одноразовую PostgreSQL 18 и синтетические данные.
 
-| Secret | Использование |
-| --- | --- |
-| `CLOUDFLARE_ACCOUNT_ID` | repository secret для ручного workflow применения D1-миграций |
-| `CLOUDFLARE_API_TOKEN` | environment secret в `cloudflare-production` для ручного workflow применения D1-миграций |
+## Legacy integrations — не публиковать
+Старые GitHub Actions для выката Apps Script и Cloudflare Workers / D1 убраны из default branch, но могут оставаться в исторической `timeweb-next`: **не пушить эту ветку для релиза**, пока не установлено, что нельзя вызвать повторный запуск старых систем.
 
-## Script Properties
+Сами Google Sheets, Apps Script, Cloudflare D1, KV и Workers **не удалены** и могут быть нужны для сверки пропущенных после 2026-11-05 ~17:43/17:50 MSK изменений и для отката. Перед выключением нужна реальная сверка и процедура сохранения дельты.
 
-Настройки и Script Properties активного Apps Script проверяются непосредственно
-в Google Apps Script. В `apps-script/medsi-bot/script-properties.example.json`
-есть только названия требуемых настроек. Секреты, ID таблиц и учётные данные
-нельзя записывать в GitHub.
+## Исторические исходники
+Старые UI, код Apps Script и Workers, D1 миграции и прежние процессы сохраняются в Git history, исторических ветках `archive/timeweb-next-2026-11-05`, `archive/timeweb-production-2026-11-05`, а также пока в активном дереве для старых тестов. Папка `archive/` убрана из default branch, но доступна в истории — не использовать её для runtime.
 
-## Что делает каждый workflow
+Шесть необходимых модулей распределения отчётов побайтово сохранены в `services/postgres-next/legacy-report-source/`, загружаются локально `report-engine.mjs`. Вызовы Google Apps Script для выполнения отчётного движка не используются.
 
-- `verify.yml` — только проверки; не выпускает ничего.
-- `release-apps-script.yml` — после прямого изменения Apps Script в
-  `timeweb-next` и успешной проверки обновляет его существующее веб-приложение.
-- `release-cloudflare-workers.yml` — после прямого изменения Worker в
-  `timeweb-next` и успешной проверки выпускает только изменённый Worker.
-- `deploy-cloudflare.yml` — единственный оставшийся workflow для production D1-миграций. Он запускается вручную, требует явного подтверждения и использует защищённое окружение `cloudflare-production` с обязательным reviewer.
+Работы по окончательному удалению `apps-script/medsi-bot/`, `services/cloudflare/`, старых тестов и устаревших веток завершать после замены регрессионных проверок и сверки данных. См. `docs/POST_CUTOVER_CLEANUP.md`.
 
-Для автоматической публикации Apps Script нужны repository secrets
-`APPS_SCRIPT_ID`, `CLASPRC_JSON` и environment secret
-`APPS_SCRIPT_DEPLOYMENT_ID` в `apps-script-auto`. Для Workers нужны repository
-secret `CLOUDFLARE_ACCOUNT_ID` и environment secret `CLOUDFLARE_API_TOKEN` в
-`cloudflare-auto`. Секреты `cloudflare-production` нужны только для ручных
-D1-миграций.
-
-На момент настройки для `timeweb-next` не обнаружены branch protection rules или
-repository rulesets: API вернул 404/пустой список. Автоматические workflow не
-меняют эти правила и не включают auto-merge. Если нужна технически enforced
-обязательная проверка и человеческий review, владелец должен настроить их в
-Settings → Branches; CI `verify` сейчас запускается на PR, но не является
-обязательным правилом merge.
+## Секреты
+Хранить только в менеджерах секретов Timeweb / других одобренных сервисов. Не переносить реальные отчёты, сообщения, фотографии или секреты в Git, Issues, Actions, логи или чат. Архивные ветки не являются защищённым секретным хранилищем.

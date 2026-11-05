@@ -4,7 +4,7 @@ on:
   pull_request:
   push:
     branches:
-      - timeweb-next
+      - medsi-bot-main
 
 permissions:
   contents: read

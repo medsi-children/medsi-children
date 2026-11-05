@@ -1,9 +1,13 @@
 name: Verify Timeweb PostgreSQL NEXT (isolated)
 
 on:
+  pull_request:
+    branches:
+      - medsi-bot-main
   push:
     branches:
       - feature/timeweb-postgres-cutover
+      - chore/post-cutover-cleanup-20261105
   workflow_dispatch:
 
 permissions:

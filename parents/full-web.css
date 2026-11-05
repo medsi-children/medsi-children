@@ -68,3 +68,30 @@ body.parent-preview-mode #logoutBtn{display:none!important}
 #screenAuth .medsi-passkey-action{width:100%;min-height:44px;margin:0;border-radius:12px;font-size:14px}
 #screenAuth .medsi-passkey-prompt .error{margin:10px 0 0;color:#b45363}
 @media(max-width:560px){.medsi-passkey-prompt{padding:15px;border-radius:16px}}
+
+/* Design study: match educator menu without touching report or authentication logic. */
+html,body{background:#f8fafc!important;background-image:none!important}
+.card{border-color:#e1edf1;box-shadow:0 7px 24px #19445a0b}
+#screenChoose .menu-card{
+  border:1px solid #ffffff9c!important;border-radius:19px!important;
+  box-shadow:0 6px 17px #254a651a!important;
+  isolation:isolate;
+}
+#screenChoose .menu-card::before{
+  background:linear-gradient(125deg,#ffffff25,transparent 55%);
+}
+#screenChoose .menu-card::after{
+  content:"";position:absolute;inset:auto -10% -40% 38%;height:70%;
+  background:linear-gradient(150deg,#ffffff20,#ffffff0b);
+  border-radius:55% 40% 0 0;pointer-events:none;
+}
+#screenChoose .menu-card-primary{background:linear-gradient(120deg,#42cfae,#15b8c5)!important}
+#screenChoose .menu-card-morning{background:linear-gradient(120deg,#ffce55,#ffb53d)!important}
+#screenChoose .menu-card-evening{background:linear-gradient(120deg,#83c7ff,#4e9ced)!important}
+#screenChoose .menu-card-therapy{background:linear-gradient(120deg,#f6a2bb,#e67c9f)!important}
+#screenChoose .menu-card-schedule{background:linear-gradient(120deg,#bd9cf1,#9c83e2)!important}
+#screenChoose .menu-card-title{color:#fff;text-shadow:none}
+#screenChoose .menu-card-text{color:#fff;opacity:.94;font-weight:600}
+#screenChoose .menu-card:focus-visible{outline:3px solid #4db6c4;outline-offset:3px}
+#screenChoose .menu-card:active{transform:scale(.995)}
+@media(prefers-reduced-motion:reduce){#screenChoose .menu-card{transition:none}}

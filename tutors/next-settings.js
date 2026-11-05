@@ -307,11 +307,26 @@
     names.append(textNode('h3','',child.childName||'Без имени'),textNode('p','',child.surname||''));
     identity.append(names);
     const details=textNode('div','medsi-child-deck-details','');
-    for(const parent of child.parents||[]){
-      const parentLine=textNode('p','',[(parent.relationship||'Родитель')+':',parent.parentName||'—',parent.phone||''].filter(Boolean).join(' '));
-      details.append(parentLine);
+    const detailIcon={
+      parent:icon('<circle cx="12" cy="7" r="3.5"/><path d="M5 21v-2a7 7 0 0 1 14 0v2"/>'),
+      child:icon('<circle cx="12" cy="12" r="8"/><path d="M9 11h.01M15 11h.01M9 15c2 2 4 2 6 0"/>'),
+      phone:icon('<path d="M7 3 4 5c-1 2 2 8 6 12s10 7 12 6l2-3-6-4-3 3c-4-2-7-5-9-9l3-3-2-4Z"/>')
+    };
+    const detailRow=(symbol,label,value)=>{
+      const line=textNode('div','medsi-child-deck-detail-row',''),mark=textNode('span','medsi-child-deck-detail-icon','');
+      mark.innerHTML=detailIcon[symbol];
+      const copy=textNode('span','medsi-child-deck-detail-copy','');
+      if(label)copy.append(textNode('span','',label+' '));
+      copy.append(textNode('strong','',value||'—'));
+      line.append(mark,copy);return line;
+    };
+    const linkedParents=Array.isArray(child.parents)?child.parents:[];
+    for(const parent of linkedParents){
+      details.append(detailRow('parent',(parent.relationship||'Родитель')+':',parent.parentName||'—'));
+      if(parent.phone)details.append(detailRow('phone','',parent.phone));
     }
-    if(!details.children.length)details.append(textNode('p','','Родитель не привязан'));
+    details.append(detailRow('child','Ребёнок:',child.childName||'—'));
+    if(!linkedParents.length)details.append(detailRow('parent','','Родитель не привязан'));
     identity.append(details);
     navigation.append(previous,identity,next);
     pane.append(navigation);
@@ -323,7 +338,12 @@
       for(const kind of ['morning','evening']){
         const current=view.reports?.[kind]||'';
         const section=textNode('section','medsi-child-report-section medsi-child-report-section-'+kind,'');
-        section.append(textNode('h5','',reportTypeLabel(kind)));
+        const heading=textNode('h5','medsi-child-report-pill',''),symbol=textNode('span','medsi-child-report-pill-icon','');
+        symbol.innerHTML=kind==='morning'
+          ?icon('<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>')
+          :icon('<path d="M20.5 15.5A9 9 0 0 1 8.5 3.5a9 9 0 1 0 12 12Z"/>');
+        heading.append(symbol,document.createTextNode(reportTypeLabel(kind)));
+        section.append(heading);
         section.append(inlineReport(current,reportTypeLabel(kind),text=>request('/lab/admin/reports/edit','POST',{
           phone10:view.phone10,admissionId:child.admissionId,kind,text,expectedText:current
         })));
@@ -365,7 +385,7 @@
     // Deleting the final parent profile removes the entire directory row on refresh;
     // clinical child and admission records remain governed by their own lifecycle.
     const children=Array.isArray(data?.children)?data.children.filter(child=>Array.isArray(child.parents)&&child.parents.length>0):[];
-    if(!children.length){pane.append(textNode('p','medsi-reports-empty','В отделении пока нет активных детей.'));return;}
+    if(!children.length){pane.append(textNode('p','medsi-reports-empty','В справочнике пока нет родительских профилей.'));return;}
     for(const child of children){
       const parents=Array.isArray(child.parents)?child.parents:[];
       const card=textNode('article','medsi-roster-line',''),info=textNode('div','medsi-roster-line-info','');

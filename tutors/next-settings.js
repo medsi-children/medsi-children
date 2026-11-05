@@ -34,8 +34,8 @@
       </button>
       <button type="button" id="medsiDeleteParentCard" class="medsi-setting-tile medsi-tile-delete">
         <span class="medsi-tile-icon">${deleteIcon}</span>
-        <span class="medsi-tile-heading">Дети и родители</span>
-        <span class="medsi-tile-sub">Профили и управление</span>
+        <span class="medsi-tile-heading">Удалить ребёнка</span>
+        <span class="medsi-tile-sub">Выбрать профиль для удаления</span>
       </button>
     </div>
     <p id="medsiSettingFeedback" class="medsi-setting-feedback" role="status"></p>
@@ -131,7 +131,7 @@
   }
   byId('medsiParentPreviewCard').addEventListener('click', () =>
     openPicker('Родительская панель', 'previewChildSelect', 'previewParentButton'));
-  byId('medsiDeleteParentCard').addEventListener('click', () => { activeTab='roster'; openLibrary(); });
+  byId('medsiDeleteParentCard').addEventListener('click', () => openPicker('Удалить ребёнка', 'deleteChildSelect', 'settingsDeleteChild'));
   byId('medsiSettingPickerBack').addEventListener('click', closePicker);
   for (const id of ['previewChildSelect', 'deleteChildSelect']) {
     const select = byId(id);

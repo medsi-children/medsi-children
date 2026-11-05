@@ -32,3 +32,10 @@ test('Apps Script capture rejects missing sheets and source drift, always releas
 test('Apps Script capture refuses reads before freeze approval',()=>{
   assert.throws(()=>fixture().run({...request,freezeConfirmed:false}),/Explicit frozen/);
 });
+
+test('preliminary capture explicitly marks a read-only copy and still checks drift',()=>{
+  const f=fixture();
+  const result=f.run({captureId:'preliminary_capture_001',preliminary:true});
+  assert.equal(result.preliminary,true);assert.equal(f.writes(),0);assert.equal(f.released(),1);
+  assert.throws(()=>fixture({drift:true}).run({captureId:'preliminary_capture_001',preliminary:true}),/capture failed/);
+});

@@ -11,9 +11,9 @@ function integer(value){
   return String(value);
 }
 
-export function captureSheetsNameVariants(rows){
+export function captureSheetsNameVariants(rows,{legacyOrder}={}){
   if(!Array.isArray(rows))invalid();
-  const owners=new Set();
+  const owners=new Set(),baseKeys=new Set();
   const groups=[];
   for(const row of rows){
     if(!Array.isArray(row))invalid();
@@ -21,14 +21,18 @@ export function captureSheetsNameVariants(rows){
     if(!required(row[0])||!(row[1]==null||str(row[1])))invalid();
     const variants=String(row[1]??'').split(/[,;\n]/).map(value=>value.trim()).filter(Boolean);
     const normalized=normalizeVariantRow({preferredName:row[0],variants});
+    if(baseKeys.has(normalized.baseKey))invalid();
+    baseKeys.add(normalized.baseKey);
     for(const name of normalized.variants){
       const key=name.toLocaleLowerCase('ru').replace(/ё/g,'е');
-      if(owners.has(key))invalid();
+      if(owners.has(key)&&!legacyOrder)invalid();
       owners.add(key);
     }
     groups.push({base_key:normalized.baseKey,preferred_name:normalized.preferredName,
       variants_json:JSON.stringify(normalized.variants),updated_at:null});
   }
+  if(legacyOrder&&(!Array.isArray(legacyOrder)||legacyOrder.length!==groups.length||
+    groups.some((row,i)=>row.base_key!==legacyOrder[i])))invalid();
   return groups;
 }
 
@@ -42,7 +46,8 @@ function unique(rows,key,convert){
   });
 }
 
-export function normalizeReportBaseline({nameRows,raw,heads,submissions,ownership}={}){
+export function normalizeReportBaseline({nameRows,raw,heads,submissions,ownership,legacyNameVariantOrder}={}){
+  if(!Array.isArray(ownership))invalid();
   const rawReports=unique(raw,'publication_id',row=>{
     if(!kinds.has(row.kind)||!required(row.raw_text)||!str(row.normalized_text)||
        !required(row.author_id)||typeof row.report_date!=='string'||
@@ -68,14 +73,14 @@ export function normalizeReportBaseline({nameRows,raw,heads,submissions,ownershi
        (head.revision===row.revision&&head.publication_id!==row.publication_id))invalid();
   }
   return {
-    name_variants:captureSheetsNameVariants(nameRows),
+    name_variants:captureSheetsNameVariants(nameRows,{legacyOrder:legacyNameVariantOrder}),
     raw_reports:rawReports,
     report_publication_head:reportHeads,
     report_submissions:unique(submissions,'submission_id',row=>{
       if(typeof row.payload_hash!=='string'||!/^[a-f0-9]{64}$/.test(row.payload_hash))invalid();
       return {submission_id:row.submission_id,payload_hash:row.payload_hash,...linked(row)};
     }),
-    report_ownership:unique(ownership,'owner_key',row=>{
+    report_ownership:unique([...(ownership||[]),...(legacyNameVariantOrder?[{owner_key:'MIGRATION_NAME_VARIANT_ORDER_V1',record_json:JSON.stringify({baseKeys:legacyNameVariantOrder}),updated_at:'0'}]:[])],'owner_key',row=>{
       if(!str(row.record_json))invalid();
       let record;
       try{record=JSON.parse(row.record_json);}catch(_){invalid();}

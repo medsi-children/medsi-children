@@ -1,3 +1,4 @@
+import {orderLegacyNameVariants} from './name-variants-order.mjs';
 import {planLegacyReport} from './report-engine.mjs';
 import {createReportPublicationStore} from './report-publications.mjs';
 import {findLegacyReportReceipt} from './legacy-report-receipts.mjs';
@@ -35,7 +36,7 @@ export function createReportSubmissionService(sql) {
       });
       return {
         profiles,
-        nameVariants:variants.map(v=>{
+        nameVariants:orderLegacyNameVariants(variants,ownership).map(v=>{
           let values;
           try { values=JSON.parse(v.variants_json||'[]'); } catch (_) { values=[]; }
           if(!Array.isArray(values))values=[];

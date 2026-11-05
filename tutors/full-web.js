@@ -38,8 +38,8 @@
     return 'report_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
   }
   function parentDeletionId(){
-    if(window.crypto&&typeof window.crypto.randomUUID==='function')return 'delete_'+window.crypto.randomUUID().replace(/-/g,'');
-    return 'delete_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
+    if(window.crypto&&typeof window.crypto.randomUUID==='function')return 'del_'+window.crypto.randomUUID().replace(/-/g,'');
+    return 'del_'+Date.now().toString(36)+'_'+Math.random().toString(36).slice(2,12);
   }
   async function callApi(method,args,timeoutMs){
     const readOnly=/^(get|list|verify|check)/i.test(String(method||''));

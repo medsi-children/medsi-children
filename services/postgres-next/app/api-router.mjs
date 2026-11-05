@@ -17,6 +17,13 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
       if(!res.headersSent&&result!==undefined)return res.json(result);
     }catch(error) {
       const safe=String(error?.message||'');
+      if(safe==='Parent deletion temporarily disabled until migration audit.'){
+        if(!res.headersSent)return res.status(423).json({
+          ok:false,code:'PARENT_DELETION_DISABLED',
+          message:'Удаление временно отключено до завершения проверки переноса данных.'
+        });
+        return;
+      }
       // Never echo internal/PostgreSQL exception bodies or medical report contents.
       const known=/^(Invalid |Unsupported |Bad |Forbidden|Unauthorized|Only own |Reply target|Chat is closed|Message not found|Subscription belongs|Report blocked|Parent roster changed|Report ownership changed)/.test(safe);
       if(!res.headersSent)return res.status(known?400:503).json({

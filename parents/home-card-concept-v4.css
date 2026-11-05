@@ -1,0 +1,46 @@
+/* MEDSI parent home — matching educator concept v4 backgrounds ONLY. Release 20261105.
+   No text, font, emoji, layout, dimensions, padding, or event changes.
+   Uses the exact approved v4 SVG wave paths.
+   Scope excludes parent reports, chat, schedules, registration and all other parent screens. */
+body[data-screen="screenChoose"] #screenChoose .menu-card{
+  isolation:isolate;
+  box-shadow:0 8px 17px rgba(45,113,145,.11)!important;
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card::after{
+  content:"";
+  position:absolute;
+  inset:auto 0 -1px 0;
+  height:53%;
+  pointer-events:none;
+  z-index:0;
+  background-image:var(--medsi-home-wave);
+  background-position:center bottom;
+  background-repeat:no-repeat;
+  background-size:100% 100%;
+  opacity:.85;
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card-primary::after{
+  height:61%;
+  opacity:.9;
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card-primary{
+  background-image:linear-gradient(128deg,#56dfbf,#15bfca)!important;
+  --medsi-home-wave:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20560%20190%22%20preserveAspectRatio%3D%22none%22%3E%3Cpath%20fill%3D%22%23ccfff0%22%20fill-opacity%3D%220.39%22%20d%3D%22M0%20190%20C76%20183%20113%20126%20192%20148%20C267%20169%20302%20119%20370%20107%20C445%2094%20492%20135%20560%2070%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20fill-opacity%3D%220.25%22%20d%3D%22M0%20190%20C99%20173%20147%20181%20223%20168%20C302%20154%20327%20143%20403%20146%20C470%20149%20502%20124%20560%20103%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%220.29%22%20stroke-width%3D%221.2%22%20d%3D%22M0%20190%20C76%20183%20113%20126%20192%20148%20C267%20169%20302%20119%20370%20107%20C445%2094%20492%20135%20560%2070%22%2F%3E%3C%2Fsvg%3E");
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card-morning{
+  background-image:linear-gradient(128deg,#ffe071,#ffb82f)!important;
+  --medsi-home-wave:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20560%20190%22%20preserveAspectRatio%3D%22none%22%3E%3Cpath%20fill%3D%22%23ffef9e%22%20fill-opacity%3D%220.32%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20fill-opacity%3D%220.23%22%20d%3D%22M0%20190%20C128%20190%20200%20187%20276%20182%20C365%20177%20447%20158%20560%20145%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%220.22%22%20stroke-width%3D%221.2%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%22%2F%3E%3C%2Fsvg%3E");
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card-evening{
+  background-image:linear-gradient(128deg,#96ccff,#4097ef)!important;
+  --medsi-home-wave:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20560%20190%22%20preserveAspectRatio%3D%22none%22%3E%3Cpath%20fill%3D%22%23c7e5ff%22%20fill-opacity%3D%220.32%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20fill-opacity%3D%220.23%22%20d%3D%22M0%20190%20C128%20190%20200%20187%20276%20182%20C365%20177%20447%20158%20560%20145%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%220.22%22%20stroke-width%3D%221.2%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%22%2F%3E%3C%2Fsvg%3E");
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card-therapy{
+  background-image:linear-gradient(128deg,#ffb4c7,#e36e9d)!important;
+  --medsi-home-wave:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20560%20190%22%20preserveAspectRatio%3D%22none%22%3E%3Cpath%20fill%3D%22%23ffe0ee%22%20fill-opacity%3D%220.32%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20fill-opacity%3D%220.23%22%20d%3D%22M0%20190%20C128%20190%20200%20187%20276%20182%20C365%20177%20447%20158%20560%20145%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%220.22%22%20stroke-width%3D%221.2%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%22%2F%3E%3C%2Fsvg%3E");
+}
+body[data-screen="screenChoose"] #screenChoose .menu-card-schedule{
+  background-image:linear-gradient(128deg,#e99af0,#a47de8)!important;
+  --medsi-home-wave:url("data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20560%20190%22%20preserveAspectRatio%3D%22none%22%3E%3Cpath%20fill%3D%22%23f3c8fc%22%20fill-opacity%3D%220.32%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22%23fff%22%20fill-opacity%3D%220.23%22%20d%3D%22M0%20190%20C128%20190%20200%20187%20276%20182%20C365%20177%20447%20158%20560%20145%20L560%20190Z%22%2F%3E%3Cpath%20fill%3D%22none%22%20stroke%3D%22%23fff%22%20stroke-opacity%3D%220.22%22%20stroke-width%3D%221.2%22%20d%3D%22M0%20190%20C110%20189%20167%20176%20227%20172%20C342%20164%20398%20114%20470%20112%20C506%20110%20535%20117%20560%20103%22%2F%3E%3C%2Fsvg%3E");
+}
+/* Card titles, descriptions, emoji glyphs, grid sizing and QR remain owned by existing styles. */

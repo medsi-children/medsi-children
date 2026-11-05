@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { createHash, randomUUID } from 'node:crypto';
 import vm from 'node:vm';
 
-// Reuse the EXACT tested Apps Script parsing/distribution/ownership algorithms.
+// Bundle the EXACT tested historical parsing/distribution/ownership algorithms locally.
 // Fixed own-repository files only; no user-provided code is evaluated.
 // This is an isolated adapter, not a Google Apps Script execution dependency.
 const SOURCE_FILES = [
@@ -10,7 +10,7 @@ const SOURCE_FILES = [
   'report-admissions.js', 'report-distribution.js', 'Медси бот.js'
 ];
 const sourceCode = SOURCE_FILES.map(file => readFileSync(
-  new URL('../../../apps-script/medsi-bot/' + file, import.meta.url), 'utf8'
+  new URL('../legacy-report-source/' + file, import.meta.url), 'utf8'
 ));
 const PHONE = /^\d{10}$/;
 const MISSING = 'Пока ещё нет отчёта 🙏';

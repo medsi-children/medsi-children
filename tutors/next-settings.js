@@ -452,9 +452,18 @@
         headers: { 'X-Medsi-Chat-Session': session.token },
         cache: 'no-store', signal: controller.signal
       });
-      const data = await response.json().catch(() => null);
+      const raw = await response.text();
+      let data = null;
+      if (raw.trim()) {
+        try { data = JSON.parse(raw); } catch (_) { /* Unexpected response format. */ }
+      }
       if (!response.ok || !data || data.ok !== true) {
-        throw new Error((data && data.message) || 'Не удалось загрузить отчёты.');
+        const detail = data && typeof data.message === 'string' ? data.message : '';
+        const status = 'HTTP ' + response.status;
+        const cause = !raw.trim() ? 'Пустой ответ сервера' :
+          !data ? 'Ответ сервера не в формате JSON' :
+          'Сервер отклонил запрос';
+        throw new Error(detail || (cause + ' (' + status + ').'));
       }
       if (!opened || refreshController !== controller) return;
       reportData = data;
@@ -464,7 +473,8 @@
     } catch (error) {
       if (controller.signal.aborted) return;
       if (!opened) return;
-      feedback.textContent = 'Не удалось загрузить отчёты. Проверьте соединение и повторите.';
+      console.warn('MEDSI_REPORT_DASHBOARD_LOAD_FAILED', {message:String(error?.message||'Unknown'),endpoint:'/lab/admin/reports/dashboard'});
+      feedback.textContent = 'Не удалось загрузить исходные отчёты: '+String(error?.message||'Ошибка соединения')+' Попробуйте обновить раздел.';
     } finally {
       if (refreshController === controller) refreshController = null;
     }

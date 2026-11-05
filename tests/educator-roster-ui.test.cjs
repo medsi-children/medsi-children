@@ -11,3 +11,22 @@ test('roster is available and phone/new-message screens cannot delete a profile'
   assert.doesNotMatch(phones,/card\.append\(title,del,meta,actions\)/);
   assert.doesNotMatch(newChat,/card\.append\(name,del,info\)/);
 });
+
+
+test('approved minimalist educator settings preserve reports, compact roster and child carousel',()=>{
+  const js=read('tutors/next-settings.js'),css=read('tutors/next-settings.css'),html=read('tutors.html');
+  assert.match(js,/Дети и родители/);
+  assert.match(js,/medsi-child-deck-nav/);
+  assert.match(js,/childPageIndex/);
+  assert.match(js,/medsi-roster-line-actions/);
+  assert.match(js,/medsi-raw-wave/);
+  assert.match(js,/formatDisplayDate/);
+  assert.match(js,/medsi-report-copy/);
+  assert.doesNotMatch(js,/Групп имён:/);
+  assert.match(css,/medsi-setting-tile/);
+  assert.match(css,/aspect-ratio:auto!important/);
+  assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
+  assert.match(css,/medsi-roster-status-icon/);
+  assert.match(html,/next-settings\.css\?v=20261105-settings-release-7/);
+  assert.match(html,/next-settings\.js\?v=20261105-settings-release-7/);
+});

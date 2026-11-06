@@ -294,3 +294,56 @@ test('schema health is separate from DB connectivity and never exposes SQL error
     });
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+
+test('canonical report routes on Timeweb accept one write and return a PostgreSQL receipt',async()=>{
+  const calls=[];
+  const services=fakeServices();
+  services.sessions.verifyWorker=async token=>token==='fake-educator-session'
+    ? {role:'educator',exp:Date.now()+3600000}:null;
+  services.reports={
+    submit:async input=>{
+      calls.push(input);
+      return {ok:true,status:'published',publicationId:'synthetic-publication'};
+    },
+    status:async id=>({status:'completed',result:{ok:true,publicationId:'synthetic-publication',submissionId:id}})
+  };
+  const app=createNextStandApp(services,{env});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const base='http://127.0.0.1:'+server.address().port;
+  const session={'X-Medsi-Chat-Session':'fake-educator-session'};
+  try{
+    const payload={text:'Вымышленный текст терапии',reportType:'psychology',
+      submissionId:'synthetic_timeweb_report_001'};
+    let res=await fetch(base+'/lab/report-submit',{
+      method:'POST',headers:{...session,'content-type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    assert.equal(res.status,200);
+    const receipt=await res.json();
+    assert.equal(receipt.accepted,true);
+    assert.equal(receipt.submissionId,payload.submissionId);
+    assert.equal(calls.length,1);
+    assert.equal(calls[0].kind,'psychology');
+
+    res=await fetch(base+'/lab/report-submit/status?submissionId='+payload.submissionId,{
+      headers:session
+    });
+    assert.equal(res.status,200);
+    const status=await res.json();
+    assert.equal(status.status,'completed');
+    assert.equal(status.submissionId,payload.submissionId);
+    assert.equal(calls.length,1);
+
+    // Missing route must stay 404; never silently forward to a legacy worker.
+    res=await fetch(base+'/lab/report-submit-fallback',{
+      method:'POST',headers:{...session,'content-type':'application/json'},
+      body:JSON.stringify(payload)
+    });
+    assert.equal(res.status,404);
+    assert.equal(calls.length,1);
+  }finally{
+    await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
+  }
+});

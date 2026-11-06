@@ -277,12 +277,16 @@
     }
   }
 
-  function reportSubmit(session, payload) {
+  function reportSubmit(session, payload, settings) {
+    // Default: preserve educator's existing same-ID network retry.
+    // Psychology can request a single attempt and check receipt status before
+    // offering a same-ID manual resend; the destination remains identical.
+    const retryTransientWrite = settings?.retryTransientWrite !== false;
     return request(session, '/lab/report-submit', {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload || {})
-    }, true);
+    }, retryTransientWrite);
   }
 
   function reportStatus(session, submissionId) {

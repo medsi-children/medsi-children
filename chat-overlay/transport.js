@@ -32,21 +32,21 @@
     return id.startsWith('s3:') ? original + '?variant=preview' : original;
   }
 
-  async function request(session, path, options, retryTransientWrite) {
+  async function request(session, path, options, retryTransientWrite, writeTimeoutMs) {
     const provider = window.MedsiEducatorSession;
     const auth = provider ? {...await provider.get()} : session;
     try {
-      return await requestAuthenticated(auth, path, options, retryTransientWrite);
+      return await requestAuthenticated(auth, path, options, retryTransientWrite, writeTimeoutMs);
     } catch (error) {
       if (!provider || error.status !== 401) throw error;
       // An explicit rejection happens before the operation. Renew once; never
       // turn network failures or permission denials into a login refresh loop.
       const renewed = await provider.renew(auth.token);
-      return requestAuthenticated(renewed, path, options, retryTransientWrite);
+      return requestAuthenticated(renewed, path, options, retryTransientWrite, writeTimeoutMs);
     }
   }
 
-  async function requestAuthenticated(session, path, options, retryTransientWrite) {
+  async function requestAuthenticated(session, path, options, retryTransientWrite, writeTimeoutMs) {
     const auth = requireSession(session);
     const method = String((options && options.method) || 'GET').toUpperCase();
     const isWrite = method !== 'GET' && method !== 'HEAD';
@@ -54,7 +54,10 @@
     let lastError = null;
     for (let attempt = 0; attempt < attempts; attempt += 1) {
       const controller = typeof AbortController === 'function' ? new AbortController() : null;
-      const timer = controller ? setTimeout(() => controller.abort(), isWrite ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS) : null;
+      const timeoutMs = isWrite && Number.isFinite(writeTimeoutMs)
+        ? Math.max(1000, Math.min(WRITE_TIMEOUT_MS, writeTimeoutMs))
+        : (isWrite ? WRITE_TIMEOUT_MS : READ_TIMEOUT_MS);
+      const timer = controller ? setTimeout(() => controller.abort(), timeoutMs) : null;
       try {
         const response = await fetch(BASE_URL + path, {
           cache: 'no-store',
@@ -286,7 +289,7 @@
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(payload || {})
-    }, retryTransientWrite);
+    }, retryTransientWrite, settings?.writeTimeoutMs);
   }
 
   function reportStatus(session, submissionId) {

@@ -22,7 +22,7 @@ test('psychotherapy narrative after the topic is divided into readable stages',(
  const window={},document={readyState:'loading',addEventListener(){}};
  vm.runInNewContext(source,{window,document});
  const f=window.MedsiPsychologyFormatter;
- const input='Тема групповой психотерапии: "Понятие и функции благодарности". Сначала оценили состояние по шкале. Затем провели разминку. Основная часть: Обсудили притчу. Затем выполнили практическое задание. Активно участвовали Арина и Егор. Групповое занятие в целом прошло продуктивно.\\n\\nОтчёт о групповой психотерапии';
+ const input='Тема групповой психотерапии: "Понятие и функции благодарности". Сначала оценили состояние по шкале. Затем провели разминку. Основная часть: Обсудили притчу. Затем выполнили практическое задание. Активно участвовали Арина и Егор. Групповое занятие в целом прошло продуктивно.\n\nОтчёт о групповой психотерапии';
  const parsed=f.parse(input);
  assert.equal(parsed.meta[0].body,'"Понятие и функции благодарности"');
  assert.ok(parsed.sections.some(s=>s.title==='Начало занятия'));

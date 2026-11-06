@@ -63,6 +63,7 @@ test('successful psychology report uses exactly one write and confirms server re
   assert.equal(writes.length,1);
   assert.equal(writes[0].payload.reportType,'psychology');
   assert.equal(writes[0].settings.retryTransientWrite,false);
+  assert.equal(writes[0].settings.writeTimeoutMs,15000);
   assert.equal(app.element('doneScreen').classList.contains('hidden'),false);
 });
 

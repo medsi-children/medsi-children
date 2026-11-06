@@ -118,7 +118,7 @@
         // The educator panel keeps its existing retry behavior unchanged.
         receipt=await MedsiOverlayTransport.reportSubmit(session,{
           reportType:'psychology',text,submissionId
-        },{retryTransientWrite:false});
+        },{retryTransientWrite:false,writeTimeoutMs:15000});
       }catch(error){
         if(!uncertainDelivery(error))throw error;
         btn.textContent='Проверяем сохранение…';

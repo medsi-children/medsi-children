@@ -15,6 +15,13 @@ for (const dir of ['parents','tutors','chat-overlay','psychology']) {
   }
 }
 const errors=[];
+// PostgreSQL registration is already committed before the parent menu opens.
+// Do not reintroduce the obsolete fire-and-forget post-registration mirror call;
+// its backend adapter is kept only for older cached clients.
+const parentUi=readFileSync(new URL('parents/full-web.js',ROOT),'utf8');
+if(/callApi\(\s*['\"]mirrorCloudflareParentRegistration['\"]/.test(parentUi)) {
+  errors.push('obsolete post-registration mirror request must not run in the active parent UI');
+}
 if(existsSync(new URL('lib/session-preload.js',ROOT))) {
   errors.push('retired session preload with Google/Cloudflare upstream calls must not ship');
 }

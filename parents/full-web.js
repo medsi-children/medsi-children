@@ -162,7 +162,7 @@
   function makeFlowId(prefix){let value='';try{if(crypto&&crypto.randomUUID)value=crypto.randomUUID()}catch(_){}if(!value)value=Date.now().toString(36)+'_'+Math.random().toString(36).slice(2)+Math.random().toString(36).slice(2);return prefix+'_'+value.replace(/[^A-Za-z0-9_-]/g,'')}
   function makeAccessSecret(){return bytesToB64url(crypto.getRandomValues(new Uint8Array(32)))}
   function registrationFingerprint(data){return [onlyDigits(data.phone).slice(-10),data.parentName,data.childName].join('|')}
-  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();const attemptId=String(res.registrationAttemptId||'');if(attemptId)callApi('mirrorCloudflareParentRegistration',[currentPhone,attemptId,parentSession],5000,true).catch(()=>null);await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){showChoose();askToSavePasskey()}}
+  async function finishRegistration(res,run){if(!applyBootstrap(res))throw new Error('Регистрация завершена, но сессия не получена. Продолжаем проверку.');safeRemove(REG_ATTEMPT_KEY);justRegistered=true;prewarmAll();await Promise.resolve(window.MedsiAssistantReady);if(run===flowRun){showChoose();askToSavePasskey()}}
   function registrationCanRetry(message,data,run){
     if(run!==flowRun)return;
     $('registrationPendingText').textContent=message;

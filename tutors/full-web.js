@@ -171,8 +171,8 @@
     if(!validation.ok)throw Object.assign(new Error(validation.message),{code:validation.code});
     if(!window.MedsiOverlayTransport||!MedsiOverlayTransport.reportSubmit)throw new Error('Не загрузилась отправка отчёта. Обновите страницу и попробуйте ещё раз.');
     const session=await ensureD1Fresh();
-    // A receipt confirms durable server storage. Apps Script runs independently
-    // through the Worker and its scheduled retries after the browser closes.
+    // The Timeweb PostgreSQL response confirms durable publication.
+    // No Google Apps Script, Sheets or Cloudflare fallback is involved.
     const queued=await MedsiOverlayTransport.reportSubmit(session,{reportType:type,text,submissionId});
     if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
     return {accepted:true,submissionId};

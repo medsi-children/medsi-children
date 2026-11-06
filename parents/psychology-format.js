@@ -35,20 +35,21 @@
     const quoted=topic.body.match(/^([«"][^»"\n]{3,160}[»"])[.!?]?\s+([\s\S]+)$/);
     if(!quoted)return data;
     const narrative=quoted[2].trim();
-    if(!/^Сначала\b/i.test(narrative)||!/(?:Затем|Основная часть\s*:|Активно участвовали|Групповое занятие в целом)/i.test(narrative))return data;
-    const fragments=narrative.split(/(?<=[.!?])\s+(?=(?:Сначала\b|Затем\b|Основная часть\s*:|Активно участвовали\b|Групповое занятие в целом\b))/i).map(x=>x.trim()).filter(Boolean);
+    // JavaScript word-boundary matching treats Cyrillic as non-word; use explicit delimiters.
+    if(!/^Сначала(?=\s|$|[.,:;!?])/i.test(narrative)||!/(?:Затем|Основная часть\s*:|Активно участвовали|Групповое занятие в целом)/i.test(narrative))return data;
+    const fragments=narrative.split(/(?<=[.!?])\s+(?=(?:Сначала(?=\s|$|[.,:;!?])|Затем(?=\s|$|[.,:;!?])|Основная часть\s*:|Активно участвовали(?=\s|$|[.,:;!?])|Групповое занятие в целом(?=\s|$|[.,:;!?])))/i).map(x=>x.trim()).filter(Boolean);
     if(fragments.length<2)return data;
     topic.body=quoted[1];
     let thenCount=0,insertAt=0;
     for(const fragment of fragments){
       let heading='Ход занятия',body=fragment;
-      if(/^Сначала\b/i.test(fragment))heading='Начало занятия';
+      if(/^Сначала(?=\s|$|[.,:;!?])/i.test(fragment))heading='Начало занятия';
       else if(/^Основная часть\s*:/i.test(fragment)){
         heading='Основная часть';body=fragment.replace(/^Основная часть\s*:\s*/i,'');
-      }else if(/^Затем\b/i.test(fragment)){
+      }else if(/^Затем(?=\s|$|[.,:;!?])/i.test(fragment)){
         heading=thenCount++===0?'Разминка':'Практическая часть';
-      }else if(/^Активно участвовали\b/i.test(fragment))heading='Наблюдения за участниками';
-      else if(/^Групповое занятие в целом\b/i.test(fragment))heading='Итог занятия';
+      }else if(/^Активно участвовали(?=\s|$|[.,:;!?])/i.test(fragment))heading='Наблюдения за участниками';
+      else if(/^Групповое занятие в целом(?=\s|$|[.,:;!?])/i.test(fragment))heading='Итоги';
       data.sections.splice(insertAt++,0,{number:'',title:heading,parts:bodyParts(body)});
     }
     // Later sections may contain several stages in one paragraph as well.
@@ -58,13 +59,13 @@
         splitSections.push(section);continue;
       }
       const original=section.parts[0].text;
-      const pieces=original.split(/(?<=[.!?])\s+(?=(?:Затем\b|Активно участвовали\b|Групповое занятие в целом\b))/i).map(x=>x.trim()).filter(Boolean);
+      const pieces=original.split(/(?<=[.!?])\s+(?=(?:Затем(?=\s|$|[.,:;!?])|Активно участвовали(?=\s|$|[.,:;!?])|Групповое занятие в целом(?=\s|$|[.,:;!?])))/i).map(x=>x.trim()).filter(Boolean);
       if(pieces.length<2){splitSections.push(section);continue}
       section.parts=bodyParts(pieces.shift());
       splitSections.push(section);
       for(const piece of pieces){
-        const heading=/^Активно участвовали\b/i.test(piece)?'Наблюдения за участниками':
-          /^Групповое занятие в целом\b/i.test(piece)?'Итоги':'Практическая часть';
+        const heading=/^Активно участвовали(?=\s|$|[.,:;!?])/i.test(piece)?'Наблюдения за участниками':
+          /^Групповое занятие в целом(?=\s|$|[.,:;!?])/i.test(piece)?'Итоги':'Практическая часть';
         splitSections.push({number:'',title:heading,parts:bodyParts(piece)});
       }
     }

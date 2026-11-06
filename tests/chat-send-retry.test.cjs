@@ -6,7 +6,7 @@ const vm = require('node:vm');
 
 const source = fs.readFileSync(path.join(__dirname, '..', 'chat-overlay', 'transport.js'), 'utf8');
 
-function transport(fetch, provider) {
+function transport(fetch, provider, timerHooks={}) {
   const window = { location: { origin: 'https://example.test' } };
   if (provider) window.MedsiEducatorSession = provider;
   const document = {
@@ -19,7 +19,8 @@ function transport(fetch, provider) {
   };
   class MutationObserver { observe() {} }
   vm.runInNewContext(source, {
-    window, document, fetch, MutationObserver, AbortController, setTimeout, clearTimeout,
+    window, document, fetch, MutationObserver, AbortController,
+    setTimeout:timerHooks.setTimeout||setTimeout,clearTimeout:timerHooks.clearTimeout||clearTimeout,
     crypto: { randomUUID: () => 'one-send-id' }
   });
   return window.MedsiOverlayTransport;
@@ -160,4 +161,17 @@ test('psychologist single-attempt report write does not silently resend through 
   assert.equal(requests.length,1);
   assert.equal(requests[0].url,'https://example.test/lab/report-submit');
   assert.equal(requests[0].body.submissionId,payload.submissionId);
+});
+
+test('psychology uses a shorter Timeweb write deadline while educator keeps 35 seconds',async()=>{
+  const delays=[];
+  const timers={setTimeout:(_callback,ms)=>{delays.push(ms);return 1},clearTimeout(){}};
+  const chat=transport(async(_url,options)=>({
+    ok:true,status:200,
+    json:async()=>({ok:true,accepted:true,submissionId:JSON.parse(options.body).submissionId})
+  }),null,timers);
+  const payload={reportType:'psychology',text:'Вымышленный текст.',submissionId:'report_timeout_ci_123'};
+  await chat.reportSubmit({token:'synthetic'},payload,{retryTransientWrite:false,writeTimeoutMs:15000});
+  await chat.reportSubmit({token:'synthetic'},{...payload,reportType:'morning'});
+  assert.deepEqual(delays,[15000,35000]);
 });

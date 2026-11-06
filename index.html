@@ -158,7 +158,7 @@
   window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261012-group-therapy-label-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261105-phone-first-passkey-2').then(function(){
+  load('/parents/full-web.js?v=20261106-no-legacy-mirror-3').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){

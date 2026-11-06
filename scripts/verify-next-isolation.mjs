@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 // Prevent the next Timeweb release from reintroducing outbound requests to
@@ -15,6 +15,10 @@ for (const dir of ['parents','tutors','chat-overlay','psychology']) {
   }
 }
 const errors=[];
+if(existsSync(new URL('lib/session-preload.js',ROOT))) {
+  errors.push('retired session preload with Google/Cloudflare upstream calls must not ship');
+}
+
 const forbidden = /(?:script\.google(?:usercontent)?\.com|(?:[a-z0-9-]+\.)?workers\.dev|drive\.google\.com\/thumbnail|\/__session\/apps-script)/gi;
 for (const file of candidates) {
   const source=readFileSync(new URL(file,ROOT),'utf8');

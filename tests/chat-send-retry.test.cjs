@@ -147,3 +147,17 @@ test('a lost report receipt retries the identical report and submission id', asy
   assert.equal(requests.length,2);
   assert.deepEqual(requests[0],requests[1]);
 });
+
+
+test('psychologist single-attempt report write does not silently resend through a second route', async () => {
+  const requests=[];
+  const chat=transport(async (url, options) => {
+    requests.push({url,body:JSON.parse(options.body)});
+    throw new TypeError('VPN disconnected');
+  });
+  const payload={reportType:'psychology',text:'Вымышленный текст.',submissionId:'report_one_timeweb_123'};
+  await assert.rejects(chat.reportSubmit({token:'session'},payload,{retryTransientWrite:false}));
+  assert.equal(requests.length,1);
+  assert.equal(requests[0].url,'https://example.test/lab/report-submit');
+  assert.equal(requests[0].body.submissionId,payload.submissionId);
+});

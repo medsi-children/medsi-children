@@ -102,3 +102,83 @@ test('foreign or expired thread cursor is rejected instead of replaying first pa
     /Invalid or expired chat cursor/
   );
 });
+
+
+function mutableChatFixture(lastKey='latest-001') {
+  const state={
+    phone10:'9000000001',
+    last_message_key:lastKey,last_side:'educator',last_type:'text',
+    last_text:'Старый предпросмотр',last_at:1700,educator_has_unread:false
+  };
+  const messages=new Map([
+    ['latest-001',{phone10:state.phone10,message_key:'latest-001',
+      side:'educator',type:'text',text:'Старый предпросмотр',status:'active'}],
+    ['older-001',{phone10:state.phone10,message_key:'older-001',
+      side:'educator',type:'text',text:'Прежний текст',status:'active'}]
+  ]);
+  const queries=[];
+  const sql={async begin(options,run){
+    const tx=async(strings,...values)=>{
+      const query=strings.join('?').replace(/\s+/g,' ').trim();
+      queries.push(query);
+      if(query.includes('SELECT phone10,message_key,side,type,text,reaction,status')&&query.includes('FROM chat_messages')) {
+        return [[messages.get(values[0])||null]];
+      }
+      if(query.startsWith('UPDATE chat_messages SET text=')) {
+        const row=messages.get(values[3]); // text, edited_at, phone, message key
+        if(row&&row.phone10===values[2])row.text=values[0];
+        return [[]];
+      }
+      if(query.startsWith('UPDATE chat_thread_state SET last_text=')) {
+        if(state.phone10===values[1]&&state.last_message_key===values[2])state.last_text=values[0];
+        return [[]];
+      }
+      if(query.includes('FROM chat_thread_state AS s')) {
+        const last=messages.get(state.last_message_key);
+        return [[{...state,last_text:last&&last.status==='active'?last.text:state.last_text}]];
+      }
+      if(query.includes('FROM chat_pins'))return [[]];
+      if(query.includes('FROM parent_profiles'))return [[{
+        phone10:state.phone10,parent_name:'Тестовый родитель',
+        child_id:'child-001',child_name:'Ребёнок',relationship:'Мама'
+      }]];
+      if(query.includes('FROM children'))return [[{
+        child_id:'child-001',registered_first_name:'Ребёнок',surname:'Тестовый'
+      }]];
+      throw new Error('Unexpected SQL query '+query);
+    };
+    return run(tx);
+  }};
+  return {sql,state,messages,queries};
+}
+
+test('editing latest chat message immediately updates its persisted list preview',async()=>{
+  const {sql,state,queries}=mutableChatFixture();
+  const ops=createChatOperations(sql);
+  const updated=await ops.mutate('edit','latest-001',{role:'educator'},{text:'Исправленное сообщение'});
+  assert.equal(updated.ok,true);
+  assert.equal(state.last_text,'Исправленное сообщение');
+  assert.equal((await ops.listChats()).chats[0].lastText,'Исправленное сообщение');
+  assert.ok(queries.some(query=>query.includes('UPDATE chat_thread_state SET last_text=')&&
+    query.includes('last_message_key=')));
+});
+
+test('editing an older message never replaces the latest preview',async()=>{
+  const {sql,state,messages}=mutableChatFixture();
+  const ops=createChatOperations(sql);
+  await ops.mutate('edit','older-001',{role:'educator'},{text:'Изменено старое сообщение'});
+  assert.equal(messages.get('older-001').text,'Изменено старое сообщение');
+  assert.equal(state.last_text,'Старый предпросмотр');
+  assert.equal((await ops.listChats()).chats[0].lastText,'Старый предпросмотр');
+});
+
+test('already edited historical messages are shown in preview without resending',async()=>{
+  const {sql,state,messages,queries}=mutableChatFixture();
+  // Simulate an edit made before this fix: chat_messages changed, state did not.
+  messages.get('latest-001').text='Актуальный текст из сообщений';
+  const chats=await createChatOperations(sql).listChats();
+  assert.equal(state.last_text,'Старый предпросмотр');
+  assert.equal(chats.chats[0].lastText,'Актуальный текст из сообщений');
+  assert.ok(queries.some(query=>query.includes('COALESCE(m.text, s.last_text)')&&
+    query.includes('m.message_key=s.last_message_key')));
+});

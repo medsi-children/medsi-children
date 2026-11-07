@@ -377,13 +377,13 @@ body.medsi-report-library-open {overflow:hidden}
   .medsi-child-nav-arrow{position:relative;inset:auto;width:34px;height:34px;align-self:center}
   .medsi-child-nav-arrow svg{width:19px;height:19px}
   .medsi-child-deck-identity{
-    display:grid;grid-template-columns:minmax(0,.83fr) minmax(0,1.5fr);
+    display:grid;grid-template-columns:minmax(0,.95fr) minmax(0,1.5fr);
     align-items:center;min-width:0;width:100%;gap:8px;
   }
   .medsi-child-deck-name{
     width:auto;min-width:0;border:0;padding:0;text-align:left;
   }
-  .medsi-child-deck-name h3{font-size:clamp(17px,4.8vw,21px);line-height:1.18;overflow-wrap:anywhere}
+  .medsi-child-deck-name h3{font-size:clamp(15px,4vw,18px);line-height:1.18;overflow-wrap:anywhere}
   .medsi-child-deck-name p{margin-top:5px;font-size:13px;line-height:1.25;overflow-wrap:anywhere}
   .medsi-child-deck-details{
     display:grid;align-content:center;justify-items:stretch;
@@ -418,7 +418,7 @@ body.medsi-report-library-open {overflow:hidden}
 @media(max-width:355px){
   .medsi-child-deck-nav{grid-template-columns:30px minmax(0,1fr) 30px;gap:4px;padding:9px 6px}
   .medsi-child-nav-arrow{width:30px;height:30px}
-  .medsi-child-deck-identity{gap:5px;grid-template-columns:minmax(0,.72fr) minmax(0,1.5fr)}
+  .medsi-child-deck-identity{gap:5px;grid-template-columns:minmax(0,.9fr) minmax(0,1.5fr)}
   .medsi-child-deck-detail-row{gap:4px;padding:3px 4px}
   .medsi-child-deck-detail-copy{font-size:11px}
 }

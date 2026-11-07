@@ -366,21 +366,47 @@ body.medsi-report-library-open {overflow:hidden}
   .medsi-report-copy{width:35px;height:35px;border-radius:10px}
   .medsi-report-copy svg{width:20px;height:20px}
   .medsi-report-body{font-size:14px;line-height:1.57}
-  /* A genuinely small, centered square. Width is constrained independently
-     from the full-width report grid; extra parents may increase its height. */
-  .medsi-child-deck-nav{display:flex;flex-direction:column;align-items:center;justify-content:center;justify-self:center;width:min(100%,224px);aspect-ratio:1 / 1;min-height:min-content;gap:0;padding:10px 10px 43px}
-  .medsi-child-nav-arrow{position:absolute;bottom:9px;left:9px;width:34px;height:34px}
-  .medsi-child-nav-next{left:auto;right:9px}
+  /* Child profile on phones: wide, compact card with name on the left and
+     three softly tinted detail rows on the right (approved mobile reference).
+     Extra linked parents expand its height instead of clipping their rows. */
+  .medsi-child-deck-nav{
+    display:grid;grid-template-columns:34px minmax(0,1fr) 34px;
+    align-items:center;justify-self:stretch;width:100%;aspect-ratio:auto;
+    min-height:132px;gap:6px;padding:10px 8px;border-radius:22px;
+  }
+  .medsi-child-nav-arrow{position:relative;inset:auto;width:34px;height:34px;align-self:center}
   .medsi-child-nav-arrow svg{width:19px;height:19px}
-  .medsi-child-deck-identity{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:7px}
-  .medsi-child-deck-name{width:min(100%,196px);border-right:0;border-bottom:1px solid #d8e9ee;padding:0 0 8px}
-  .medsi-child-deck-name h3{font-size:clamp(18px,5vw,21px);line-height:1.2}
-  .medsi-child-deck-name p{margin-top:3px;font-size:12px}
-  .medsi-child-deck-details{gap:5px;width:max-content;max-width:100%;margin-inline:auto;justify-items:stretch}
-  .medsi-child-deck-detail-row{display:grid;grid-template-columns:23px minmax(0,1fr);gap:7px;width:100%;align-items:center}
-  .medsi-child-deck-detail-icon{width:22px;height:22px;border-radius:7px}
-  .medsi-child-deck-detail-icon svg{width:14px;height:14px}
-  .medsi-child-deck-detail-copy{font-size:12px;text-align:left}
+  .medsi-child-deck-identity{
+    display:grid;grid-template-columns:minmax(0,.83fr) minmax(0,1.5fr);
+    align-items:center;min-width:0;width:100%;gap:8px;
+  }
+  .medsi-child-deck-name{
+    width:auto;min-width:0;border:0;padding:0;text-align:left;
+  }
+  .medsi-child-deck-name h3{font-size:clamp(17px,4.8vw,21px);line-height:1.18;overflow-wrap:anywhere}
+  .medsi-child-deck-name p{margin-top:5px;font-size:13px;line-height:1.25;overflow-wrap:anywhere}
+  .medsi-child-deck-details{
+    display:grid;align-content:center;justify-items:stretch;
+    width:100%;min-width:0;max-width:100%;margin:0;gap:4px;
+  }
+  .medsi-child-deck-detail-row{
+    display:grid;grid-template-columns:25px minmax(0,1fr);
+    align-items:center;gap:6px;min-width:0;width:100%;min-height:32px;
+    padding:3px 6px;border-radius:999px;background:#eef8fa;
+  }
+  .medsi-child-deck-detail-icon{width:25px;height:25px;border-radius:9px;background:#ddf5f8}
+  .medsi-child-deck-detail-icon svg{width:16px;height:16px}
+  .medsi-child-deck-detail-copy{
+    min-width:0;text-align:left;font-size:12px;line-height:1.2;overflow-wrap:anywhere;
+  }
+  .medsi-child-deck-detail-copy strong{font-weight:800}
+  @media(max-width:355px){
+    .medsi-child-deck-nav{grid-template-columns:30px minmax(0,1fr) 30px;gap:4px;padding:9px 6px}
+    .medsi-child-nav-arrow{width:30px;height:30px}
+    .medsi-child-deck-identity{gap:5px;grid-template-columns:minmax(0,.72fr) minmax(0,1.5fr)}
+    .medsi-child-deck-detail-row{gap:4px;padding:3px 4px}
+    .medsi-child-deck-detail-copy{font-size:11px}
+  }
   .medsi-child-report-section{padding:15px 14px;border-radius:17px}
   .medsi-tutor-reports .medsi-child-report-pill{font-size:12px!important;padding:7px 10px!important;margin-bottom:12px!important}
   .medsi-name-columns,.medsi-name-row{grid-template-columns:minmax(95px,.85fr) minmax(0,1.5fr);gap:9px}

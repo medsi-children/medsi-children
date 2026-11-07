@@ -229,3 +229,49 @@ test('raw correction redistributes, retains report date and suppresses a recent 
  assert.equal(state.raw.get(corrected.publicationId).report_date,state.raw.get(first.publicationId).report_date);
  await assert.rejects(()=>store.publishPrepared(sample({submissionId:'correction_test_002',submittedAt:now,correctionOf:first.publicationId})),/Report changed/);
 });
+
+
+test('new group therapy publication replaces the previous parent report for every active recipient',async()=>{
+  const {sql,state}=fakeDb([
+    {phone10:'9000000001',admission_id:'admission_001'},
+    {phone10:'9000000002',admission_id:'admission_002'}
+  ]);
+  const store=createReportPublicationStore(sql);
+  const initial=sample({
+    kind:'psychology',
+    submissionId:'therapy_publication_001',
+    rawText:'Предыдущее групповое занятие',
+    normalizedText:'Предыдущее групповое занятие',
+    recipients:[
+      recipient('9000000001','admission_001','Предыдущее групповое занятие'),
+      recipient('9000000002','admission_002','Предыдущее групповое занятие')
+    ]
+  });
+  const old=await store.publishPrepared(initial);
+  assert.equal(old.status,'published');
+  const next=sample({
+    kind:'psychology',
+    submissionId:'therapy_publication_002',
+    submittedAt:now-60000,
+    rawText:'Новое групповое занятие',
+    normalizedText:'Новое групповое занятие',
+    recipients:[
+      recipient('9000000001','admission_001','Новое групповое занятие'),
+      recipient('9000000002','admission_002','Новое групповое занятие')
+    ]
+  });
+  const updated=await store.publishPrepared(next);
+  assert.equal(updated.status,'published');
+  assert.equal(updated.revision,2);
+  assert.equal(updated.notificationsQueued,0);
+  assert.equal(state.raw.size,2);
+  assert.equal(state.history.size,2);
+  assert.equal(state.push.size,0);
+  for(const phone of ['9000000001','9000000002']){
+    assert.equal(state.current.get(phone+'/psychology').text,'Новое групповое занятие');
+    assert.equal(state.current.get(phone+'/psychology').publication_id,updated.publicationId);
+  }
+  const repeated=await store.publishPrepared(next);
+  assert.equal(repeated.status,'duplicate');
+  assert.equal(state.raw.size,2);
+});

@@ -8,7 +8,7 @@
   const PHONE_KEY='medsi_parent_phone',LEGACY_PHONE_KEY='medsi_phone',PARENT_KEY='medsi_parent',CHILD_KEY='medsi_child',PARENT_SESSION_KEY='medsi_parent_auth_session_v1',D1_KEY='medsi_d1_parent_session_v1',BOOTSTRAP_CHECK_KEY='medsi_parent_bootstrap_check_v1',REG_ATTEMPT_KEY='medsi_parent_registration_attempt_v1',REAUTH_KEY='medsi_parent_reauthorization_v1';
   const $=id=>document.getElementById(id);
   const reportCache={},reportPending={},reportReadPending={};
-  const REPORT_FRESH_MS=60000;let sessionPending=null,menuPending=null,openingChat=false,reportRun=0,historyRun=0,previewMode=false;
+  const REPORT_FRESH_MS=60000;let sessionPending=null,menuPending=null,openingChat=false,reportRun=0,historyRun=0,reportFetchGeneration=0,previewMode=false;
   function freshReport(kind){return reportCache[kind]&&Date.now()-Number(reportCache[kind].fetchedAt||0)<REPORT_FRESH_MS}let currentPhone='',parentName='',childName='',regParentName='',regChildName='',justRegistered=false,d1Session=null,pushReady=false,parentSession='',flowRun=0,currentReportKind='morning',currentReportText='',chatReadPending=null,reportHistoryByDate={},reportHistoryMonth=0,reportHistoryMinMonth=0,reportHistoryMaxMonth=0,selectedHistoryDate='';
   const onlyDigits=v=>String(v||'').replace(/\D+/g,'');const validPhone=v=>onlyDigits(v).length>=10;
   const safeGet=k=>{try{return localStorage.getItem(k)||''}catch(_){return''}};
@@ -128,7 +128,7 @@
   function applyBootstrap(res){if(!res||!res.ok||!res.parentSession)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();parentSession=String(res.parentSession);if(res.d1Session&&res.d1Session.token)saveD1Session(res.d1Session);safeSet(PARENT_SESSION_KEY,parentSession);safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
   function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll();show('screenChoose');openRequestedDestination()}
   function openRequestedDestination(){const url=new URL(location.href),destination=url.searchParams.has('openMorning')?'morning':url.searchParams.has('openChat')?'chat':url.searchParams.has('openTherapy')?'therapy':'';if(!destination)return;url.searchParams.delete('openMorning');url.searchParams.delete('openChat');url.searchParams.delete('openTherapy');history.replaceState(history.state,'',url.pathname+url.search+url.hash);Promise.resolve().then(()=>{if(document.body.dataset.screen!=='screenChoose')return;if(destination==='chat')openChat();else openReport(destination==='morning'?'morning':'psychology')})}
-  function clearSession(){sessionPending=null;menuPending=null;reportRun++;historyRun++;currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);safeRemove(BOOTSTRAP_CHECK_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
+  function clearSession(){sessionPending=null;menuPending=null;reportRun++;historyRun++;reportFetchGeneration++;currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);safeRemove(BOOTSTRAP_CHECK_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
   async function restoreSaved(){
     const ph=onlyDigits(safeGet(PHONE_KEY)||safeGet(LEGACY_PHONE_KEY));
     if(!validPhone(ph)){showStart();return}
@@ -324,15 +324,26 @@
   function warmAllReports(forceKind){
     const kinds=['morning','evening','psychology'];
     if(!currentPhone||(!forceKind&&kinds.every(kind=>freshReport(kind)||reportPending[kind])))return;
-    const phone=currentPhone,session=parentSession;
+    const phone=currentPhone,session=parentSession,requestGeneration=++reportFetchGeneration;
     const batch=fetchCurrentReportsFromD1().then(reports=>{
-      if(currentPhone!==phone||parentSession!==session)return {};
+      // A slower prewarm must never overwrite a more recent explicit refresh.
+      if(currentPhone!==phone||parentSession!==session||requestGeneration!==reportFetchGeneration)return null;
       kinds.forEach(kind=>{if(reports[kind])reportCache[kind]={...reports[kind],fetchedAt:Date.now()};});
-      return reportCache;
-    }).catch(()=>({}));
-    kinds.forEach(kind=>{if(reportPending[kind])return;const pending=batch.then(reports=>reports[kind]||null).finally(()=>{if(reportPending[kind]===pending)delete reportPending[kind]});reportPending[kind]=pending;});
+      return reports;
+    }).catch(()=>null);
+    kinds.forEach(kind=>{
+      if(!forceKind&&reportPending[kind])return;
+      const pending=batch.then(reports=>reports&&reports[kind]?reportCache[kind]:null)
+        .finally(()=>{if(reportPending[kind]===pending)delete reportPending[kind]});
+      reportPending[kind]=pending;
+    });
   }
-  function warmReport(kind,force){if(!force&&freshReport(kind))return Promise.resolve(reportCache[kind]);if(!reportPending[kind])warmAllReports(force?kind:'');return reportPending[kind]||Promise.resolve(null)}
+  function warmReport(kind,force){
+    if(!force&&freshReport(kind))return Promise.resolve(reportCache[kind]);
+    // Explicit opening/refresh always issues a new read, even when prewarm is in flight.
+    if(force||!reportPending[kind])warmAllReports(force?kind:'');
+    return reportPending[kind]||Promise.resolve(null);
+  }
   function prewarmAll(){if(!currentPhone)return;warmAllReports();}
   function refreshParentMenu(){
     if(!currentPhone||!parentSession)return Promise.resolve();
@@ -374,7 +385,13 @@
     const result=await warmReport(kind,true);
     if(run!==reportRun||document.body.dataset.screen!=='screenReport')return;
     if(result)showReportResult(kind,result);
-    else if(!cached){$('reportContent').textContent='';$('reportError').textContent='Восстанавливаем соединение…';$('reportError').classList.remove('hidden');}
+    else {
+      if(!cached)$('reportContent').textContent='';
+      $('reportError').textContent=cached
+        ? 'Не удалось проверить актуальность. Сейчас показана ранее загруженная версия отчёта.'
+        : 'Восстанавливаем соединение…';
+      $('reportError').classList.remove('hidden');
+    }
     setTimeout(()=>{if(!document.hidden&&run===reportRun&&document.body.dataset.screen==='screenReport')openReport(kind,true)},!result?5000:result.hasReport?60000:15000);
   }
   function showSchedule(){setHeader('Режим дня','Расписание детского отделения.');show('screenSchedule')}

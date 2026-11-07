@@ -126,7 +126,7 @@
   function showAuth(){setHeader('Авторизация','Введите номер телефона для входа.');preparedPasskeyLogin=null;selectedPasskeyPhone='';$('passkeyRequiredPanel').classList.add('hidden');$('passkeyLoginError').classList.add('hidden');$('authBtn').disabled=false;show('screenAuth')}
   function showPasskeyRequired(phone){showAuth();$('phoneInputAuth').value=phone;selectedPasskeyPhone=onlyDigits(phone).slice(-10);$('passkeyRequiredPanel').classList.remove('hidden');$('authBtn').disabled=true;preparePasskeyLogin()}
   function applyBootstrap(res){if(!res||!res.ok||!res.parentSession)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();parentSession=String(res.parentSession);if(res.d1Session&&res.d1Session.token)saveD1Session(res.d1Session);safeSet(PARENT_SESSION_KEY,parentSession);safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
-  function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll();show('screenChoose');openRequestedDestination()}
+  function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll(true);show('screenChoose');openRequestedDestination()}
   function openRequestedDestination(){const url=new URL(location.href),destination=url.searchParams.has('openMorning')?'morning':url.searchParams.has('openChat')?'chat':url.searchParams.has('openTherapy')?'therapy':'';if(!destination)return;url.searchParams.delete('openMorning');url.searchParams.delete('openChat');url.searchParams.delete('openTherapy');history.replaceState(history.state,'',url.pathname+url.search+url.hash);Promise.resolve().then(()=>{if(document.body.dataset.screen!=='screenChoose')return;if(destination==='chat')openChat();else openReport(destination==='morning'?'morning':'psychology')})}
   function clearSession(){sessionPending=null;menuPending=null;reportRun++;historyRun++;reportFetchGeneration++;currentPhone='';parentName='';childName='';parentSession='';d1Session=null;chatReadPending=null;flowRun++;safeRemove(PHONE_KEY);safeRemove(LEGACY_PHONE_KEY);safeRemove(PARENT_KEY);safeRemove(CHILD_KEY);safeRemove(PARENT_SESSION_KEY);safeRemove(D1_KEY);safeRemove(BOOTSTRAP_CHECK_KEY);Object.keys(reportCache).forEach(k=>delete reportCache[k]);Object.keys(reportPending).forEach(k=>delete reportPending[k]);Object.keys(reportReadPending).forEach(k=>delete reportReadPending[k]);if(window.MedsiParentPrewarm)MedsiParentPrewarm.clear();if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();syncPushIdentity()}
   async function restoreSaved(){
@@ -344,7 +344,7 @@
     if(force||!reportPending[kind])warmAllReports(force?kind:'');
     return reportPending[kind]||Promise.resolve(null);
   }
-  function prewarmAll(){if(!currentPhone)return;warmAllReports();}
+  function prewarmAll(force){if(!currentPhone)return;warmAllReports(force?'psychology':'');}
   function refreshParentMenu(){
     if(!currentPhone||!parentSession)return Promise.resolve();
     if(menuPending)return menuPending;
@@ -381,16 +381,20 @@
     $('reportDisclaimer').classList.toggle('hidden',kind==='psychology');$('reportCopyBtn').classList.add('hidden');$('reportHistoryBtn').classList.remove('hidden');
     $('reportContent').innerHTML='<div class="report-loading"><span class="report-loading-spinner"></span><span>Загружаем...</span></div>';
     $('reportError').classList.add('hidden');show('screenReport');hideReportBadge(kind);}
-    const cached=reportCache[kind];if(cached)showReportResult(kind,cached);
-    const result=await warmReport(kind,true);
+    // A parent sees only a verified Timeweb response. Never paint the old
+    // in-memory report first: it could predate the latest therapy publication.
+    // If the menu prefetch is still running, reuse its in-flight response;
+    // otherwise validate against the server upon opening this report.
+    const pendingOnEntry=!refreshOnly&&reportPending[kind];
+    const result=await (pendingOnEntry||warmReport(kind,true));
     if(run!==reportRun||document.body.dataset.screen!=='screenReport')return;
     if(result)showReportResult(kind,result);
     else {
-      if(!cached)$('reportContent').textContent='';
-      $('reportError').textContent=cached
-        ? 'Не удалось проверить актуальность. Сейчас показана ранее загруженная версия отчёта.'
-        : 'Восстанавливаем соединение…';
-      $('reportError').classList.remove('hidden');
+      // Keep the ordinary loading state and retry automatically. No technical
+      // failures or potentially stale clinical text are shown to the parent.
+      $('reportContent').innerHTML='<div class="report-loading"><span class="report-loading-spinner"></span><span>Загружаем отчёт...</span></div>';
+      $('reportError').classList.add('hidden');
+      $('reportCopyBtn').classList.add('hidden');
     }
     setTimeout(()=>{if(!document.hidden&&run===reportRun&&document.body.dataset.screen==='screenReport')openReport(kind,true)},!result?5000:result.hasReport?60000:15000);
   }

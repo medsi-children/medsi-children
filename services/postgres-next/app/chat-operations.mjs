@@ -47,7 +47,12 @@ export function createChatOperations(sql) {
     if (!['all','unread','read'].includes(bucket)) throw new Error('Unsupported chat filter.');
     return read(async tx => {
       const [states,pins,profiles,children] = (await Promise.all([
-        tx`SELECT phone10, last_side, last_type, last_text, last_at, educator_has_unread FROM chat_thread_state`,
+        tx`SELECT s.phone10, s.last_side, s.last_type,
+            COALESCE(m.text, s.last_text) AS last_text,
+            s.last_at, s.educator_has_unread
+          FROM chat_thread_state AS s
+          LEFT JOIN chat_messages AS m ON m.phone10=s.phone10
+            AND m.message_key=s.last_message_key AND m.status=${'active'}`,
         tx`SELECT phone10, bucket FROM chat_pins`,
         tx`SELECT phone10, parent_name, child_id, child_name, relationship FROM parent_profiles`,
         tx`SELECT child_id, registered_first_name, surname FROM children`
@@ -194,6 +199,10 @@ export function createChatOperations(sql) {
         if(!text)throw new Error('Text is required.');
         await tx`UPDATE chat_messages SET text=${text},edited_at=${BigInt(Date.now())}
           WHERE phone10=${row.phone10} AND message_key=${key}`;
+        // Only the latest message drives the chat-list preview. Keep its
+        // denormalized state in sync, without changing unread flags or ordering.
+        await tx`UPDATE chat_thread_state SET last_text=${text}
+          WHERE phone10=${row.phone10} AND last_message_key=${key}`;
         return {ok:true,text};
       }
       await tx`UPDATE chat_messages SET status=${'deleted'}

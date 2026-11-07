@@ -29,7 +29,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261106-tight-square-15/);
+  assert.match(html,/next-settings\.css\?v=20261107-landscape-child-card-16/);
   assert.match(html,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });
 
@@ -59,20 +59,30 @@ test('roster status is shown above the corresponding icon instead of a global ba
   assert.match(css,/bottom:calc\(100% \+ 12px\)/);
 });
 
-test('mobile child identity stays centered and aliases have compact readable rows',()=>{
+test('mobile names stay readable and compact',()=>{
   const css=read('tutors/next-settings.css');
-  assert.match(css,/\.medsi-child-deck-details\{gap:5px;width:max-content;max-width:100%;margin-inline:auto;justify-items:stretch\}/);
-  assert.match(css,/\.medsi-child-deck-detail-row\{display:grid;grid-template-columns:23px minmax\(0,1fr\);gap:7px;width:100%;align-items:center\}/);
   assert.match(css,/#medsiNamesPane \{row-gap:9px\}/);
   assert.match(css,/\.medsi-name-word\{padding:7px 9px;font-size:14px\}/);
 });
 
-test('mobile child profile uses a compact centered square and bottom arrows without changing desktop',()=>{
-  const css=read('tutors/next-settings.css');
+test('mobile child profile matches the landscape reference with side arrows and tinted data rows',()=>{
+  const css=read('tutors/next-settings.css'),js=read('tutors/next-settings.js');
   assert.match(css,/@media\(max-width:650px\)/);
-  assert.match(css,/justify-self:center;width:min\(100%,224px\);aspect-ratio:1 \/ 1;min-height:min-content/);
-  assert.match(css,/\.medsi-child-nav-arrow\{position:absolute;bottom:9px;left:9px;width:34px;height:34px\}/);
-  assert.match(css,/\.medsi-child-nav-next\{left:auto;right:9px\}/);
-  assert.match(css,/\.medsi-child-deck-identity\{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;gap:7px\}/);
+  const mobile=css.slice(css.indexOf('@media(max-width:650px)'));
+  assert.match(mobile,/\.medsi-child-deck-nav\{\s*display:grid;grid-template-columns:34px minmax\(0,1fr\) 34px/);
+  assert.match(mobile,/justify-self:stretch;width:100%;aspect-ratio:auto/);
+  assert.match(mobile,/\.medsi-child-nav-arrow\{position:relative;inset:auto;width:34px;height:34px/);
+  assert.match(mobile,/\.medsi-child-deck-identity\{\s*display:grid;grid-template-columns:minmax\(0,.83fr\) minmax\(0,1.5fr\)/);
+  assert.match(mobile,/\.medsi-child-deck-name\{\s*width:auto;min-width:0;border:0;padding:0;text-align:left/);
+  assert.match(mobile,/\.medsi-child-deck-detail-row\{\s*display:grid;grid-template-columns:25px minmax\(0,1fr\)/);
+  assert.match(mobile,/border-radius:999px;background:#eef8fa/);
+  assert.match(mobile,/@media\(max-width:355px\)/);
+  assert.doesNotMatch(mobile,/width:min\(100%,224px\)/);
+  // DOM structure and pagination are unchanged; reports and all parent rows still render.
+  assert.match(js,/navigation\.append\(previous,identity,next\)/);
+  assert.match(js,/for\(const parent of linkedParents\)/);
+  assert.match(js,/detailRow\('phone','',parent\.phone\)/);
+  assert.match(js,/pane\.append\(textNode\('p','medsi-child-deck-progress'/);
+  // Desktop stays on its own horizontal grid, without mobile pill styling.
   assert.match(css,/\.medsi-child-deck-nav \{\s*display:grid;grid-template-columns:48px/);
 });

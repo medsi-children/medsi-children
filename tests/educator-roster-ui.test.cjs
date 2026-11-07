@@ -29,7 +29,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261107-landscape-child-card-16/);
+  assert.match(html,/next-settings\.css\?v=20261107-child-name-sizing-17/);
   assert.match(html,/next-settings\.js\?v=20261105-roster-tooltips-11/);
 });
 
@@ -72,8 +72,10 @@ test('mobile child profile matches the landscape reference with side arrows and 
   assert.match(mobile,/\.medsi-child-deck-nav\{\s*display:grid;grid-template-columns:34px minmax\(0,1fr\) 34px/);
   assert.match(mobile,/justify-self:stretch;width:100%;aspect-ratio:auto/);
   assert.match(mobile,/\.medsi-child-nav-arrow\{position:relative;inset:auto;width:34px;height:34px/);
-  assert.match(mobile,/\.medsi-child-deck-identity\{\s*display:grid;grid-template-columns:minmax\(0,.83fr\) minmax\(0,1.5fr\)/);
+  assert.match(mobile,/\.medsi-child-deck-identity\{\s*display:grid;grid-template-columns:minmax\(0,.95fr\) minmax\(0,1.5fr\)/);
   assert.match(mobile,/\.medsi-child-deck-name\{\s*width:auto;min-width:0;border:0;padding:0;text-align:left/);
+  assert.match(mobile,/\.medsi-child-deck-name h3\{font-size:clamp\(15px,4vw,18px\)/);
+  assert.match(mobile,/\.medsi-child-deck-identity\{gap:5px;grid-template-columns:minmax\(0,.9fr\) minmax\(0,1.5fr\)\}/);
   assert.match(mobile,/\.medsi-child-deck-detail-row\{\s*display:grid;grid-template-columns:25px minmax\(0,1fr\)/);
   assert.match(mobile,/border-radius:999px;background:#eef8fa/);
   assert.match(mobile,/@media\(max-width:355px\)/);

@@ -1,8 +1,9 @@
+import {canonicalEducatorSource} from './report-source-display.mjs';
 const KINDS = ['morning', 'evening', 'psychology'];
 const PHONE_RE = /^\d{10}$/;
 const blankReports = () => ({ morning:'', evening:'', psychology:'' });
 
-export function assembleEducatorReports({ profiles, children, admissions, current, heads, rawByPublication }) {
+export function assembleEducatorReports({ profiles, children, admissions, current, heads, rawByPublication, historyByPublication=new Map(), nameVariants=[] }) {
   if (![profiles, children, admissions, current, heads].every(Array.isArray)) {
     throw new Error('Incomplete educator dashboard snapshot.');
   }
@@ -70,8 +71,18 @@ export function assembleEducatorReports({ profiles, children, admissions, curren
       ? { reportDate: String(publication.report_date || ''),
           normalizedText: String(publication.normalized_text || ''),
           rawText: String(publication.raw_text || ''),
+          // Presentation-only: historical source and parent text stay immutable.
+          // Authored headings can become ambiguous when a namesake joins later.
+          displayText:kind==='psychology'
+            ? String(publication.raw_text || '')
+            : canonicalEducatorSource({
+                kind, normalizedText:String(publication.normalized_text || ''),
+                children, admissions,
+                historyRows:historyByPublication.get(head.publication_id)||[],
+                nameVariants
+              }),
           publicationId: head.publication_id }
-      : { reportDate: '', normalizedText: '', rawText: '' };
+      : { reportDate: '', normalizedText: '', rawText: '', displayText: '' };
   }
   return {
     ok: true,
@@ -98,18 +109,28 @@ export function createEducatorReportsDashboardStore(sql) {
           tx`SELECT child_id, registered_first_name, surname FROM children`,
           tx`SELECT admission_id, child_id, status FROM admissions`,
           tx`SELECT phone10, kind, text, admission_id FROM parent_current_reports`,
-          tx`SELECT kind, publication_id FROM report_publication_head`
+          tx`SELECT kind, publication_id FROM report_publication_head`,
+          tx`SELECT base_key, preferred_name, variants_json FROM name_variants`
         ]);
-        const [profiles, children, admissions, current, heads] = sets.map(result => result[0] || []);
-        const rawByPublication = new Map();
+        const [profiles, children, admissions, current, heads, nameVariants] = sets.map(result => result[0] || []);
+        const rawByPublication = new Map(),historyByPublication=new Map();
         for (const head of heads) {
           if (!KINDS.includes(head.kind) || !head.publication_id) continue;
           const [[publication]] = await tx`
             SELECT publication_id, kind, report_date, raw_text, normalized_text
             FROM raw_reports WHERE publication_id = ${head.publication_id}`;
           if (publication) rawByPublication.set(head.publication_id, publication);
+          if (head.kind === 'morning'||head.kind === 'evening') {
+            const [history]=await tx`
+              SELECT admission_id, kind, text FROM parent_report_history
+              WHERE publication_id = ${head.publication_id}`;
+            historyByPublication.set(head.publication_id,history||[]);
+          }
         }
-        return assembleEducatorReports({ profiles, children, admissions, current, heads, rawByPublication });
+        return assembleEducatorReports({
+          profiles, children, admissions, current, heads, rawByPublication,
+          historyByPublication, nameVariants
+        });
       });
     }
   };

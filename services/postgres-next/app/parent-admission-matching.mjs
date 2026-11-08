@@ -29,6 +29,12 @@ function variantsIndex(rows){
     return matches.length===1?matches[0].preferred:matches.length===0?key:null;
   };
 }
+export function canonicalRegisteredName(value,variants) {
+  return variantsIndex(variants)(value);
+}
+export function parseRegisteredChildName(value){
+  return enteredName(value);
+}
 export function findUniqueActiveAdmissionForParent({
   childName,children=[],admissions=[],nameVariants=[]
 }={}){

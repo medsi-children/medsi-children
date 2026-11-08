@@ -36,7 +36,7 @@ export function assembleEducatorRoster({children=[],admissions=[],profiles=[],cu
   }
   for(const report of currentReports){
     const card=active.get(String(report.admission_id||''));
-    if(!card||!card.parents.some(p=>p.phone10===report.phone10)||!String(report.text||'').trim())continue;
+    if(!card||!card.parents.some(p=>p.phone10===report.phone10)||!String(report.text||'').trim()||String(report.text).trim()==='Пока ещё нет отчёта 🙏')continue;
     if(report.kind==='morning')card.morning=true;
     if(report.kind==='evening')card.evening=true;
   }

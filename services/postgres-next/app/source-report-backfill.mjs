@@ -92,9 +92,9 @@ export async function backfillRecentEducatorReports(sql,{phone10='',now=()=>Date
     for(const kind of ['morning','evening']){
       const head=heads.find(h=>h.kind===kind&&h.publication_id);
       if(!head)continue;
-      const [[publication]]=await tx`SELECT publication_id,report_date,submitted_at,
+      const [[publication]]=await tx`SELECT publication_id,kind,report_date,submitted_at,
         revision,normalized_text FROM raw_reports WHERE publication_id=${head.publication_id}`;
-      if(!publication||!String(publication.normalized_text||'').trim())continue;
+      if(!publication||publication.kind!==kind||!String(publication.normalized_text||'').trim())continue;
       const publishedAt=Number(publication.submitted_at||0);
       const age=now()-publishedAt;
       if(!Number.isFinite(age)||age<0||age>7*24*60*60*1000)continue;
@@ -107,6 +107,12 @@ export async function backfillRecentEducatorReports(sql,{phone10='',now=()=>Date
           normalizedText:publication.normalized_text,child,activeChildren,nameVariants
         });
         if(!text)continue;
+        // Never replace a historical record from a different admission if
+        // this phone number was used by a parent during an earlier stay.
+        const [[history]]=await tx`SELECT admission_id FROM parent_report_history
+          WHERE phone10=${profile.phone10} AND kind=${kind}
+            AND report_date=${publication.report_date}`;
+        if(history&&String(history.admission_id)!==String(profile.admission_id))continue;
         const version=reportVersion(kind,String(profile.admission_id),text);
         const at=BigInt(publishedAt),revision=BigInt(publication.revision||0);
         await tx.upsert`INSERT INTO parent_current_reports

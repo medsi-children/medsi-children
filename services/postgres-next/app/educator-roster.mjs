@@ -1,3 +1,4 @@
+import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
 import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 // Educator-only roster. Report ownership remains on immutable IDs and admission IDs.
 const PHONE=/^\d{10}$/;
@@ -53,6 +54,7 @@ export function createEducatorRosterStore(sql,{now=()=>Date.now()}={}){
     // Heal older registrations when an unambiguous hospital roster record
     // exists, before showing either a linked or unlinked directory card.
     await reconcileUnlinkedRegisteredParents(sql,{now});
+    await backfillRecentEducatorReports(sql,{now});
     return read(async tx=>{
       const results=await Promise.all([
         tx`SELECT child_id,registered_first_name,surname FROM children`,

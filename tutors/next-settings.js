@@ -201,10 +201,51 @@
     if(!response.ok||!data.ok)throw new Error(data.message||'Не удалось сохранить изменения.');
     return data;
   }
-  function inlineReport(value,label,save){
+  // A raw morning/evening publication stays a single editable text value.
+  // These visual cards are computed from its lines without changing the
+  // source, its newlines, clipboard contents or PostgreSQL report ownership.
+  function splitSourceChildBlocks(value){
+    const lines=String(value||'').split('\n'),parts=[];
+    const header=/^([А-ЯЁ][А-ЯЁа-яё-]{1,48}(?:\s+[А-ЯЁ][а-яё-]{0,38}\.?)?)\s*[—–:]\s*(.*)$/u;
+    for(const line of lines){
+      const match=line.match(header);
+      const ambiguous=match&&/^(?:Общий|Общие|Комментарий|Для|Сегодня|Занятие)$/iu.test(match[1].split(/\s+/)[0]);
+      if(match&&!ambiguous){
+        parts.push({type:'child',name:match[1],content:match[2]});
+      }else if(parts.length&&parts[parts.length-1].type==='child'){
+        parts[parts.length-1].content+='\n'+line;
+      }else if(parts.length&&parts[parts.length-1].type==='plain'){
+        parts[parts.length-1].content+='\n'+line;
+      }else{
+        parts.push({type:'plain',content:line});
+      }
+    }
+    return parts;
+  }
+  function renderSourceChildPreview(target,value){
+    const parts=splitSourceChildBlocks(value);
+    if(!parts.some(part=>part.type==='child'))return;
+    target.classList.add('medsi-source-children');
+    target.replaceChildren();
+    for(const part of parts){
+      if(part.type==='plain'){
+        if(part.content.trim())target.append(textNode('div','medsi-source-plain',part.content));
+        continue;
+      }
+      const block=textNode('div','medsi-source-child-block','');
+      const title=textNode('span','medsi-source-child-name',part.name);
+      const divider=textNode('span','medsi-source-child-divider',' — ');
+      const content=textNode('span','medsi-source-child-text',part.content);
+      block.append(title,divider,content);
+      target.append(block);
+    }
+  }
+  function inlineReport(value,label,save,sourceKind=''){
     const wrap=textNode('div','medsi-inline-report','');
     function display(){
-      const body=textNode('div','medsi-report-body medsi-report-clickable',reportText(value));body.tabIndex=0;body.setAttribute('role','button');body.setAttribute('aria-label','Редактировать: '+label);
+      const body=textNode('div','medsi-report-body medsi-report-clickable',reportText(value));
+      if(sourceKind==='morning'||sourceKind==='evening')renderSourceChildPreview(body,value);
+      body.tabIndex=0;body.setAttribute('role','button');body.setAttribute('aria-label','Редактировать: '+label);
       const open=()=>{
         const form=document.createElement('form');form.className='medsi-inline-form';
         const area=document.createElement('textarea');area.value=value||'';area.maxLength=240000;area.setAttribute('aria-label',label);
@@ -277,7 +318,7 @@
       card.append(wave);
       if(entry.publicationId){
         card.classList.add('medsi-raw-collapsed');
-        card.append(inlineReport(kind==='psychology'?entry.rawText:(entry.displayText||entry.normalizedText||entry.rawText||''),reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())})));
+        card.append(inlineReport(kind==='psychology'?entry.rawText:(entry.displayText||entry.normalizedText||entry.rawText||''),reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())}),kind));
         const toggle=textNode('button','medsi-raw-expand','');
         toggle.type='button';toggle.setAttribute('aria-label','Развернуть отчёт');toggle.setAttribute('aria-expanded','false');
         toggle.onclick=()=>{const open=card.classList.toggle('medsi-raw-expanded');toggle.setAttribute('aria-label',open?'Свернуть отчёт':'Развернуть отчёт');toggle.setAttribute('aria-expanded',String(open));};

@@ -92,3 +92,23 @@ test('psychology report is not split by child headings and reaches every active 
   assert.equal(r.recipients.length,2);
   assert.equal(r.recipients[0].text,r.recipients[1].text);
 });
+
+
+test('group psychotherapy preserves double newlines in parent text without changing morning parsing',()=>{
+  const raw=[
+    'Отчёт по групповой психотерапии',
+    'Занятие посвящено когнитивным искажениям. Цель — обсудить альтернативы.',
+    'Ход занятия: беседа и практическая работа.',
+    'Итоги: участники сформулировали выводы.'
+  ].join('\r\n\r\n');
+  const r=planLegacyReport(input([
+    profile('9000000001','Тестовый','Ребёнок','admission_001'),
+    profile('9000000002','Другой','Ребёнок','admission_002')
+  ],raw,{kind:'psychology'}));
+  assert.equal(r.recipients.length,2);
+  assert.equal(r.normalizedText.split('\n\n').length,4);
+  assert.match(r.normalizedText,/\n\nХод занятия:/);
+  assert.match(r.recipients[0].text,/\n\nИтоги:/);
+  assert.equal(r.recipients[0].text,r.recipients[1].text);
+  assert.doesNotMatch(r.normalizedText,/\r/);
+});

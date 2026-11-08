@@ -5,10 +5,12 @@ const name=value=>String(value||'').trim().normalize('NFC').replace(/\s+/g,' ');
 const validName=(value,max=90)=>{const result=name(value);if(!result||result.length>max||/[<>\x00-\x1f]/.test(result))throw new Error('Invalid roster name.');return result};
 const validId=value=>{const result=String(value||'');if(!ID.test(result))throw new Error('Invalid roster identifier.');return result};
 
-export function assembleEducatorRoster({children=[],admissions=[],profiles=[],currentReports=[]}={}){
-  if(![children,admissions,profiles,currentReports].every(Array.isArray))throw new Error('Incomplete roster snapshot.');
+export function assembleEducatorRoster({children=[],admissions=[],profiles=[],currentReports=[],registeredPhones=[],chattedPhones=[]}={}){
+  if(![children,admissions,profiles,currentReports,registeredPhones,chattedPhones].every(Array.isArray))throw new Error('Incomplete roster snapshot.');
   if(children.length>500||admissions.length>2000||profiles.length>1000||currentReports.length>4000)throw new Error('Unexpected roster size.');
   const childrenById=new Map(children.map(row=>[String(row.child_id),row]));
+  const registered=new Set(registeredPhones.map(row=>String(row.phone10||'')));
+  const chatted=new Set(chattedPhones.map(row=>String(row.phone10||'')));
   const active=new Map();
   for(const admission of admissions){
     if(admission.status!=='active')continue;
@@ -24,7 +26,8 @@ export function assembleEducatorRoster({children=[],admissions=[],profiles=[],cu
     if(!PHONE.test(phone10))continue;
     const admissionId=String(profile.admission_id||''),childId=String(profile.child_id||'');
     const parent={phone10,phone:'8'+phone10,parentName:String(profile.parent_name||''),
-      relationship:String(profile.relationship||'Родитель'),childName:String(profile.child_name||'')};
+      relationship:String(profile.relationship||'Родитель'),childName:String(profile.child_name||''),
+      registered:registered.has(phone10),hasChat:chatted.has(phone10)};
     const linked=active.get(admissionId);
     if(linked&&linked.childId===childId){linked.parents.push(parent);}
     else{unmatched.push({...parent,linked:false});}
@@ -51,10 +54,12 @@ export function createEducatorRosterStore(sql,{now=()=>Date.now()}={}){
         tx`SELECT child_id,registered_first_name,surname FROM children`,
         tx`SELECT admission_id,child_id,status FROM admissions`,
         tx`SELECT phone10,parent_name,relationship,child_name,child_id,admission_id FROM parent_profiles`,
-        tx`SELECT phone10,admission_id,kind,text FROM parent_current_reports`
+        tx`SELECT phone10,admission_id,kind,text FROM parent_current_reports`,
+        tx`SELECT phone10 FROM parent_auth_profiles`,
+        tx`SELECT phone10 FROM chat_thread_state`
       ]);
-      const [children,admissions,profiles,currentReports]=results.map(x=>x[0]||[]);
-      return assembleEducatorRoster({children,admissions,profiles,currentReports});
+      const [children,admissions,profiles,currentReports,registeredPhones,chattedPhones]=results.map(x=>x[0]||[]);
+      return assembleEducatorRoster({children,admissions,profiles,currentReports,registeredPhones,chattedPhones});
     });
   }
   async function update(payload){

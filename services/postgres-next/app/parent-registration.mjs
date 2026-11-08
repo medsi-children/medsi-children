@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {findUniqueActiveAdmissionForParent} from './parent-admission-matching.mjs';
 
 const PHONE=/^\d{10}$/;
 const ATTEMPT=/^reg_[A-Za-z0-9_-]{12,125}$/;
@@ -47,21 +48,19 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
       if(existing)return {ok:true,duplicate:true};
       const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
       const [admissions]=await tx`SELECT admission_id,child_id,status FROM admissions`;
-      const byId=new Map(children.map(c=>[c.child_id,c]));
-      const matches=admissions.filter(a=>a.status==='active').filter(a=>{
-        const child=byId.get(a.child_id);
-        if(!child)return false;
-        const full=normalize([child.registered_first_name,child.surname].filter(Boolean).join(' '));
-        // No fuzzy-name or first-name-only matching for confidential reports.
-        return Boolean(full)&&full===normalize(childName);
+      const [nameVariants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
+      // Nicknames are resolved through the existing canonical variants table.
+      // A full surname must agree and the active admission must be unique.
+      // Never infer a child's clinical identity from one raw report mention.
+      const match=findUniqueActiveAdmissionForParent({
+        childName,children,admissions,nameVariants
       });
-      const unique=matches.length===1?matches[0]:null;
       const timestamp=now(),userHandle=randomBytes(32).toString('base64url');
       await tx.upsert`INSERT INTO parent_profiles
         (phone10,parent_name,child_name,relationship,child_id,admission_id,
         profile_generation,child_genitive,created_at,updated_at)
         VALUES (${phone10},${parentName},${childName},${'Родитель'},
-          ${unique?.child_id||''},${unique?.admission_id||''},${attemptId},
+          ${match?.childId||''},${match?.admissionId||''},${attemptId},
           ${''},${numeric(timestamp)},${numeric(timestamp)})`;
       await tx.upsert`INSERT INTO parent_auth_profiles (phone10,user_handle,generation_id,created_at)
         VALUES (${phone10},${userHandle},${attemptId},${numeric(timestamp)})`;
@@ -69,7 +68,7 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
         (attempt_id,phone10,parent_name,child_name,status,child_id,admission_id,
         approved_by,created_at,updated_at)
         VALUES (${attemptId},${phone10},${parentName},${childName},${'COMPLETED'},
-          ${unique?.child_id||''},${unique?.admission_id||''},
+          ${match?.childId||''},${match?.admissionId||''},
           ${''},${numeric(timestamp)},${numeric(timestamp)})`;
       return {ok:true,completed:true};
     });

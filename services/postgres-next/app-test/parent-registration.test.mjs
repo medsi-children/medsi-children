@@ -19,6 +19,9 @@ function fakeDatabase({matched=true}={}) {
     if(query.startsWith('SELECT')&&query.includes('FROM admissions'))return [[
       {admission_id:'adm-1',child_id:'child-1',status:matched?'active':'closed'}
     ]];
+    if(query.startsWith('SELECT')&&query.includes('FROM name_variants'))return [[
+      {base_key:'лена',preferred_name:'лена',variants_json:'["елена"]'}
+    ]];
     if(query.startsWith('INSERT INTO parent_profiles')) {
       profile={phone10:values[0],parent_name:values[1],child_name:values[2],
         child_id:values[4],admission_id:values[5],profile_generation:values[6]};
@@ -73,4 +76,14 @@ test('attempt cannot be reused for a different parent',async()=>{
     sessions:{issueParent:async()=>({token:'signed'})}});
   await service.register(payload);
   await assert.rejects(()=>service.register({...payload,parentName:'Другой родитель'}),/collision/);
+});
+
+test('registration resolves a canonical nickname with the exact same surname',async()=>{
+  const fake=fakeDatabase();
+  const service=createParentRegistrationService({sql:fake.sql,now:()=>2000,
+    sessions:{issueParent:async()=>({token:'signed',expiresAt:99999})}});
+  const result=await service.register({...payload,childName:'Елена Тестовая'});
+  assert.equal(result.ok,true);
+  assert.equal(fake.state().profile.child_id,'child-1');
+  assert.equal(fake.state().profile.admission_id,'adm-1');
 });

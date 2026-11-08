@@ -425,7 +425,11 @@
     // Deleting the final parent profile removes the entire directory row on refresh;
     // clinical child and admission records remain governed by their own lifecycle.
     const children=Array.isArray(data?.children)?data.children.filter(child=>Array.isArray(child.parents)&&child.parents.length>0):[];
-    if(!children.length){pane.append(textNode('p','medsi-reports-empty','В справочнике пока нет родительских профилей.'));return;}
+    // A parent can have an active chat even when their registered child name
+    // did not exactly match an active admission at registration time.
+    // The server returns such valid profiles separately; do not hide them.
+    const unlinked=Array.isArray(data?.unlinked)?data.unlinked.filter(parent=>parent&&parent.phone10):[];
+    if(!children.length&&!unlinked.length){pane.append(textNode('p','medsi-reports-empty','В справочнике пока нет родительских профилей.'));return;}
     for(const child of children){
       const parents=Array.isArray(child.parents)?child.parents:[];
       const card=textNode('article','medsi-roster-line',''),info=textNode('div','medsi-roster-line-info','');
@@ -512,6 +516,27 @@
       };
       actions.append(del);
       card.append(info,actions);pane.append(card);
+    }
+    // Unlinked parents remain visible in the educator directory, but the
+    // profile's typed child name is not proof of admission ownership.
+    // Never enable child edits, clinical reports or report-status flags here.
+    if(unlinked.length){
+      const section=textNode('section','medsi-roster-unlinked','');
+      section.append(textNode('h3','medsi-roster-unlinked-heading','Без подтверждённой привязки'));
+      section.append(textNode('p','medsi-roster-unlinked-intro',
+        'Эти родители зарегистрированы в системе и могут переписываться с воспитателями. Связь с действующей госпитализацией пока не подтверждена.'));
+      for(const parent of unlinked){
+        const card=textNode('article','medsi-roster-line medsi-roster-line-unlinked','');
+        const info=textNode('div','medsi-roster-line-info','');
+        info.append(textNode('div','medsi-roster-line-name',
+          String(parent.childName||'').trim()||'Ребёнок не указан'));
+        info.append(textNode('div','medsi-roster-line-parent',
+          [(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
+        info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
+        card.append(info,textNode('span','medsi-roster-unlinked-status','Нет привязки к госпитализации'));
+        section.append(card);
+      }
+      pane.append(section);
     }
   }
   async function refreshRoster(){

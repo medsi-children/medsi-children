@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findUniqueRecentStaffMention as find,
-  createAdmissionFromStaffReport as create
+  createAdmissionFromStaffReport as create,
+  staffSourceContradictsExistingChild as conflicts
 } from '../app/report-observed-admission.mjs';
 
 const variants=[{preferred_name:'Анна',variants_json:'["аня","анюта","анечка"]'}];
@@ -70,4 +71,16 @@ test('the prospective child is created only as roster rows, with no medical repo
   assert.match(inserted[0].sql,/^INSERT INTO children/);
   assert.match(inserted[1].sql,/^INSERT INTO admissions/);
   assert.ok(inserted.every(i=>!/(raw_reports|parent_report_history|parent_current_reports)/.test(i.sql)));
+});
+
+
+test('ambiguous or conflicting new staff notes prevent assigning an old unique namesake',()=>{
+  const base={childName:'Аня',surname:'Алексеева',nameVariants:variants};
+  assert.equal(conflicts({...base,reports:[report('Аня А. — Играла.')]}),false);
+  assert.equal(conflicts({...base,reports:[report('Аня Х. — Играла.')]}),true);
+  assert.equal(conflicts({...base,reports:[report('Аня: Играла.\nАня: Читала.')]}),true);
+  assert.equal(conflicts({...base,reports:[
+    report('Аня А. — Играла.'),report('Аня Х. — Читала.')
+  ]}),true);
+  assert.equal(conflicts({...base,reports:[]}),false);
 });

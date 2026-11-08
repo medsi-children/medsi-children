@@ -46,7 +46,8 @@ test('dashboard queries active reports as one snapshot using PostgreSQL result s
     'SELECT child_id, registered_first_name, surname FROM children':data.children,
     'SELECT admission_id, child_id, status FROM admissions':data.admissions,
     'SELECT phone10, kind, text, admission_id FROM parent_current_reports':data.current,
-    'SELECT kind, publication_id FROM report_publication_head':data.heads
+    'SELECT kind, publication_id FROM report_publication_head':data.heads,
+    'SELECT base_key, preferred_name, variants_json FROM name_variants':[]
   };
   const calls=[];
   const sql={async begin(opts,fn){
@@ -55,6 +56,7 @@ test('dashboard queries active reports as one snapshot using PostgreSQL result s
       const q=strings.join('?').replace(/\s+/g,' ').trim();
       calls.push(q);
       if(q.startsWith('SELECT publication_id, kind'))return [[data.rawByPublication.get(params[0])]];
+      if(q.startsWith('SELECT admission_id, kind, text FROM parent_report_history'))return [[]];
       const found=Object.entries(expected).find(([prefix])=>q.startsWith(prefix));
       if(!found)throw Error('Unexpected query: '+q);
       return [found[1]];
@@ -64,7 +66,7 @@ test('dashboard queries active reports as one snapshot using PostgreSQL result s
   const result=await createEducatorReportsDashboardStore(sql).readForEducator();
   assert.equal(result.children.length,1);
   assert.equal(result.raw.morning.normalizedText,'Катя Т. — исходный текст');
-  assert.equal(calls.length,6);
+  assert.equal(calls.length,8);
 });
 test('HTTP endpoint never leaks reports to unauthenticated parent or parent preview',async()=>{
   let reads=0;
@@ -105,4 +107,21 @@ test('active admission cannot be associated with the wrong child',()=>{
   const data=dataset();
   data.profiles[0].child_id='child_2';
   assert.throws(()=>assembleEducatorReports(data),/admission-child mismatch/);
+});
+
+
+test('source card prefers canonical display text but preserves original raw publication unchanged',()=>{
+  const data=dataset();
+  data.admissions.push({admission_id:'admission_new',child_id:'child_new',status:'active'});
+  data.children.push({child_id:'child_new',registered_first_name:'Екатерина',surname:'Туманова'});
+  data.rawByPublication.get('pub_1').normalized_text='Катя Т. — исходный текст';
+  data.historyByPublication=new Map([['pub_1',[
+    {admission_id:'admission_1',kind:'morning',text:'Екатерина: исходный текст'}
+  ]]]);
+  data.nameVariants=[{preferred_name:'Катя',variants_json:'["Екатерина"]'}];
+  const dash=assembleEducatorReports(data);
+  assert.equal(dash.raw.morning.rawText,'Катя Т: исходный текст');
+  assert.equal(dash.raw.morning.normalizedText,'Катя Т. — исходный текст');
+  assert.equal(dash.raw.morning.displayText,'Катя Те — исходный текст');
+  assert.equal(dash.raw.psychology.displayText,'');
 });

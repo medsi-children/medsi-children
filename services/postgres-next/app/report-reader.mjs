@@ -1,3 +1,4 @@
+import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
 import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 const PHONE=/^\d{10}$/;
 const KINDS=new Set(['morning','evening','psychology']);
@@ -25,10 +26,10 @@ export function createReportReader(sql) {
         }))};
     });
     const first=await fetchCurrent();
-    if(!first.unlinked)return first;
-    // Returning parent: retry a safe unique-admission match at the moment
-    // the panel requests reports, not only when staff opens the directory.
-    await reconcileUnlinkedRegisteredParents(sql,{phone10:phone});
+    // Returning parent: retry unique admission matching before retrieving
+    // previously published source blocks for this child's admission.
+    if(first.unlinked)await reconcileUnlinkedRegisteredParents(sql,{phone10:phone});
+    if(first.ok)await backfillRecentEducatorReports(sql,{phone10:phone});
     return fetchCurrent();
   }
   async function history(phoneRaw){

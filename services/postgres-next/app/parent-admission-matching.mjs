@@ -55,12 +55,17 @@ export function findUniqueActiveAdmissionForParent({
 }
 // Repair only genuinely unlinked authenticated profiles, without changing
 // historical clinical associations or creating new hospital records.
-export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()}={}){
+export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now(),phone10=''}={}){
   if(!sql?.begin)throw new Error('PostgreSQL client unavailable.');
+  if(phone10&&!/^\d{10}$/.test(String(phone10)))throw new Error('Invalid parent phone.');
   return sql.begin({isolation:'serializableReadWrite',idempotent:true},async tx=>{
     const [[profiles],[authenticated]]=await Promise.all([
-      tx`SELECT phone10,child_name,child_id,admission_id,profile_generation FROM parent_profiles`,
-      tx`SELECT phone10 FROM parent_auth_profiles`
+      phone10
+        ?tx`SELECT phone10,child_name,child_id,admission_id,profile_generation FROM parent_profiles WHERE phone10=${phone10}`
+        :tx`SELECT phone10,child_name,child_id,admission_id,profile_generation FROM parent_profiles`,
+      phone10
+        ?tx`SELECT phone10 FROM parent_auth_profiles WHERE phone10=${phone10}`
+        :tx`SELECT phone10 FROM parent_auth_profiles`
     ]);
     const authSet=new Set(authenticated.map(row=>String(row.phone10)));
     const waiting=profiles.filter(p=>authSet.has(String(p.phone10))&&

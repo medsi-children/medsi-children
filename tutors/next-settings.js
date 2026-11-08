@@ -267,7 +267,7 @@
         const copy=textNode('button','medsi-report-copy','');
         copy.type='button';copy.setAttribute('aria-label','Скопировать '+reportTypeLabel(kind).toLowerCase());copy.title='Скопировать отчёт';
         copy.innerHTML=icon('<rect x="8" y="8" width="11" height="11" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>');
-        copy.onclick=async()=>{try{await navigator.clipboard.writeText(String(entry.rawText||''));byId('medsiReportsFeedback').textContent='Отчёт скопирован.';}catch(_){byId('medsiReportsFeedback').textContent='Не удалось скопировать. Проверьте разрешение браузера.';}};
+        copy.onclick=async()=>{try{await navigator.clipboard.writeText(String(kind==='psychology'?entry.rawText:(entry.displayText||entry.normalizedText||entry.rawText||'')));byId('medsiReportsFeedback').textContent='Отчёт скопирован.';}catch(_){byId('medsiReportsFeedback').textContent='Не удалось скопировать. Проверьте разрешение браузера.';}};
         header.append(copy);
       }
       card.append(header);
@@ -277,7 +277,7 @@
       card.append(wave);
       if(entry.publicationId){
         card.classList.add('medsi-raw-collapsed');
-        card.append(inlineReport(entry.rawText,reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())})));
+        card.append(inlineReport(kind==='psychology'?entry.rawText:(entry.displayText||entry.normalizedText||entry.rawText||''),reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())})));
         const toggle=textNode('button','medsi-raw-expand','');
         toggle.type='button';toggle.setAttribute('aria-label','Развернуть отчёт');toggle.setAttribute('aria-expanded','false');
         toggle.onclick=()=>{const open=card.classList.toggle('medsi-raw-expanded');toggle.setAttribute('aria-label',open?'Свернуть отчёт':'Развернуть отчёт');toggle.setAttribute('aria-expanded',String(open));};

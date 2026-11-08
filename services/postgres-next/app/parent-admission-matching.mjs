@@ -1,4 +1,4 @@
-import {createAdmissionFromStaffReport,recentStaffSource} from './report-observed-admission.mjs';
+import {createAdmissionFromStaffReport,recentStaffSource,staffSourceContradictsExistingChild} from './report-observed-admission.mjs';
 // Match only existing active admissions. The variants dictionary identifies
 // nicknames, and an unambiguous active first name is enough even if a parent
 // supplies no surname. Contradictory suffixes and namesakes always block it.
@@ -89,6 +89,13 @@ export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()
       let match=findUniqueActiveAdmissionForParent({
         childName:profile.child_name,children,admissions,nameVariants
       });
+      if(match&&!enteredName(profile.child_name)?.surnamePrefix){
+        if(!reports)reports=await recentStaffSource(tx,now());
+        const child=children.find(row=>String(row.child_id)===match.childId);
+        if(staffSourceContradictsExistingChild({
+          childName:profile.child_name,surname:child?.surname,nameVariants,reports
+        }))match=null;
+      }
       if(!match){
         if(!reports)reports=await recentStaffSource(tx,now());
         match=await createAdmissionFromStaffReport(tx,{

@@ -24,7 +24,9 @@ function aliasesByName(variants) {
 function canonicalFirstName(value,groups) {
   const first=String(value||'').trim(),key=norm(first);
   const matches=groups.filter(group=>group.forms.has(key));
-  return matches.length===1?matches[0].preferred:first;
+  // Name-variant entries are often stored lowercased. They are lookup data,
+  // never a signal to display a child name with a lowercase first letter.
+  return upperFirst(matches.length===1?matches[0].preferred:first);
 }
 function sourceNameMatches(label,first,surname,groups) {
   const forms=new Set([norm(first)]);
@@ -64,10 +66,25 @@ export function canonicalEducatorSource({
   kind,normalizedText,children=[],admissions=[],historyRows=[],nameVariants=[]
 }={}) {
   const source=String(normalizedText||'');
-  if(!['morning','evening'].includes(kind)||!source.trim()||!historyRows.length)return source;
+  if(!['morning','evening'].includes(kind)||!source.trim())return source;
+  const groups=aliasesByName(nameVariants);
+  // Capitalize only proven name-like headers; do not alter their body, ordinary
+  // paragraphs, headings such as "Общий комментарий" or owner identities.
+  const knownForms=new Set([
+    ...children.map(child=>norm(child.registered_first_name)),
+    ...groups.flatMap(group=>[...group.forms])
+  ]);
+  const capitalizeKnownHeader=line=>{
+    const header=sourceHeader(line);
+    if(!header)return line;
+    const first=String(header[1]||'').trim().split(/\s+/)[0];
+    if(!knownForms.has(norm(first)))return line;
+    return line.replace(/^(\s*)(\p{L})/u,(_match,space,letter)=>
+      space+letter.toLocaleUpperCase('ru-RU'));
+  };
+  if(!historyRows.length)return source.split('\n').map(capitalizeKnownHeader).join('\n');
   const childById=new Map(children.map(c=>[String(c.child_id),c]));
   const admissionMap=new Map(admissions.map(a=>[String(a.admission_id),a]));
-  const groups=aliasesByName(nameVariants);
   const admissionsToInclude=new Set([
     ...admissions.filter(a=>a.status==='active').map(a=>String(a.admission_id)),
     ...historyRows.map(row=>String(row.admission_id||''))
@@ -105,6 +122,6 @@ export function canonicalEducatorSource({
     if(!sourceNameMatches(header[1],owner.first,owner.surname,groups))return line;
     const suffix=chosenFamilyPrefix(owner,participants);
     if(!suffix)return line; // Same full names cannot be safely distinguished.
-    return owner.canonical+' '+suffix+' '+header[2]+' '+header[3];
-  }).join('\n');
+    return upperFirst(owner.canonical)+' '+suffix+' '+header[2]+' '+header[3];
+  }).map(capitalizeKnownHeader).join('\n');
 }

@@ -23,5 +23,5 @@ test('child picker has no duplicate close button and still invokes legacy deleti
 });
 
 test('settings script cache version is refreshed',()=>{
-  assert.match(page,/next-settings\.js\?v=20261108-raw-child-blocks-13/);
+  assert.match(page,/next-settings\.js\?v=20261108-unlinked-chat-directory-14/);
 });

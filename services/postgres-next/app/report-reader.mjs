@@ -1,3 +1,4 @@
+import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 const PHONE=/^\d{10}$/;
 const KINDS=new Set(['morning','evening','psychology']);
 const timestamp=v=>Number(v||0);
@@ -13,15 +14,22 @@ export function createReportReader(sql) {
   }
   async function current(phoneRaw){
     const phone=activePhone(phoneRaw);
-    return read(async tx=>{
-      const [[profile]]=await tx`SELECT admission_id FROM parent_profiles WHERE phone10=${phone}`;
+    const fetchCurrent=()=>read(async tx=>{
+      const [[profile]]=await tx`SELECT admission_id,child_id FROM parent_profiles WHERE phone10=${phone}`;
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
       const [rows]=await tx`SELECT kind,text,version,updated_at,admission_id
         FROM parent_current_reports WHERE phone10=${phone}`;
-      return {ok:true,reports:rows.filter(r=>same(r.admission_id,profile.admission_id)).map(row=>({
-        kind:row.kind,text:row.text||'',version:row.version||'',updatedAt:timestamp(row.updated_at)
-      }))};
+      return {ok:true,unlinked:!String(profile.admission_id||'')&&!String(profile.child_id||''),
+        reports:rows.filter(r=>same(r.admission_id,profile.admission_id)).map(row=>({
+          kind:row.kind,text:row.text||'',version:row.version||'',updatedAt:timestamp(row.updated_at)
+        }))};
     });
+    const first=await fetchCurrent();
+    if(!first.unlinked)return first;
+    // Returning parent: retry a safe unique-admission match at the moment
+    // the panel requests reports, not only when staff opens the directory.
+    await reconcileUnlinkedRegisteredParents(sql,{phone10:phone});
+    return fetchCurrent();
   }
   async function history(phoneRaw){
     const phone=activePhone(phoneRaw);

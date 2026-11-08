@@ -66,3 +66,35 @@ test('therapy is not modified by child source heading logic',()=>{
   const input=options({kind:'psychology',normalizedText:'Общее занятие по когнитивной терапии.'});
   assert.equal(canonicalEducatorSource(input),input.normalizedText);
 });
+
+
+test('lowercase preferred names in variants always display with an uppercase initial',()=>{
+  const data=options({
+    nameVariants:[
+      {preferred_name:'михаил',variants_json:'["миша","мишенька"]'},
+      {preferred_name:'арина',variants_json:'[]'}
+    ],
+    normalizedText:'арина А. — Утром готовила проект.\nмиша К. — Смотрел фильм.'
+  });
+  const text=canonicalEducatorSource(data);
+  assert.equal(text,'Арина Ал — Утром готовила проект.\nМихаил К. — Смотрел фильм.');
+  assert.doesNotMatch(text,/(?:^|\n)(?:арина|михаил|миша)/);
+});
+
+test('even without historical ownership evidence, known first-name headers are capitalized without guessing identities',()=>{
+  const data=options({
+    historyRows:[],
+    normalizedText:'арина А. — Утром готовила проект.\nмиша К. — Смотрел фильм.\nобщий комментарий: Сохранить нижний регистр.'
+  });
+  assert.equal(canonicalEducatorSource(data),
+    'Арина А. — Утром готовила проект.\nМиша К. — Смотрел фильм.\nобщий комментарий: Сохранить нижний регистр.');
+});
+
+test('canonical source representation never mutates a parent report or group therapy source',()=>{
+  const opts=options({nameVariants:[{preferred_name:'миша',variants_json:'["Михаил"]'}]});
+  const before=JSON.stringify(opts.historyRows);
+  canonicalEducatorSource(opts);
+  assert.equal(JSON.stringify(opts.historyRows),before);
+  assert.equal(canonicalEducatorSource({...opts,kind:'psychology',normalizedText:'миша: Групповая терапия.'}),
+    'миша: Групповая терапия.');
+});

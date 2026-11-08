@@ -25,7 +25,7 @@
     if(text.length<=90)return{title:cap(text),body:''};
     return{title:'Этап занятия',body:text}
   }
-  function parse(v){const chunks=insertBreaks(normalize(v)).split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);const meta=[],sections=[],tail=[];let current=null;chunks.forEach(chunk=>{let m=chunk.match(/^(ТЕМА(?: групповой психотерапии)?|ЦЕЛЬ(?: групповой психотерапии)?|Возрастная категория|Начало группы)\s*:\s*([\s\S]*)$/i);if(m){meta.push({title:canonical(META,m[1]),body:cap(m[2])});current=null;return}m=chunk.match(/^Часть\s+([1-9])\s*:?\s*([\s\S]*)$/i);if(m){current={number:m[1],title:'Часть',parts:bodyParts(m[2])};sections.push(current);return}m=chunk.match(/^(?:([1-9])[.)]\s*)?(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*[:.]?\s*([\s\S]*)$/i);if(m){current={number:m[1]||'',title:canonical(SECTIONS,m[2]),parts:bodyParts(m[3])};sections.push(current);return}m=chunk.match(/^([1-9])[.)]\s*([\s\S]*)$/);if(m){const generic=splitNumberedHeading(m[2]);current={number:m[1],title:generic.title,parts:bodyParts(generic.body)};sections.push(current);return}const parts=bodyParts(chunk);if(current)current.parts.push.apply(current.parts,parts);else tail.push.apply(tail,parts)});return expandNarrativeTopic({meta,sections,tail})}
+  function parse(v){const chunks=insertBreaks(normalize(v)).split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);const meta=[],sections=[],tail=[];let current=null;chunks.forEach(chunk=>{let m=chunk.match(/^(ТЕМА(?: групповой психотерапии)?|ЦЕЛЬ(?: групповой психотерапии)?|Возрастная категория|Начало группы)\s*:\s*([\s\S]*)$/i);if(m){meta.push({title:canonical(META,m[1]),body:cap(m[2])});current=null;return}m=chunk.match(/^Часть\s+([1-9])\s*:?\s*([\s\S]*)$/i);if(m){current={number:m[1],title:'Часть',parts:bodyParts(m[2])};sections.push(current);return}m=chunk.match(/^(?:([1-9])[.)]\s*)?(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*[:.]?\s*([\s\S]*)$/i);if(m){current={number:m[1]||'',title:canonical(SECTIONS,m[2]),parts:bodyParts(m[3])};sections.push(current);return}m=chunk.match(/^([1-9])[.)]\s*([\s\S]*)$/);if(m){const generic=splitNumberedHeading(m[2]);current={number:m[1],title:generic.title,parts:bodyParts(generic.body)};sections.push(current);return}const parts=bodyParts(chunk);if(current)current.parts.push.apply(current.parts,parts);else tail.push.apply(tail,parts)});return expandNarrativeProse(v,expandNarrativeTopic({meta,sections,tail}))}
 
   // Older therapy notes can contain the entire chronology directly after "Тема:".
   // Only use explicit transitions; do not rewrite or invent clinical observations.
@@ -72,8 +72,62 @@
     data.sections=splitSections;
     return data;
   }
+  // Some psychologists write a narrative with paragraphs rather than labelled
+  // "Тема:", "Цель:", etc. Build visual sections only from explicit wording:
+  // no inferred observations, paraphrasing or additions to the original text.
+  // This also handles older PostgreSQL reports whose blank lines were collapsed
+  // by the line-oriented normalization used before the therapy-specific fix.
+  function expandNarrativeProse(original,data){
+    if(data.meta.length||data.sections.length)return data;
+    const chunks=normalize(original).replace(/\[\[ARROW\]\]/g,' ')
+      .split(/\n+/).map(chunk=>chunk.trim()).filter(Boolean);
+    while(chunks.length&&/^отч[её]т\s+(?:по|о)\s+групповой\s+психотерапии[.!?]?$/i.test(chunks[0]))chunks.shift();
+    if(!chunks.length||!/^Занятие\s+(?:было\s+)?посвящено\s+теме(?=\s|$)/i.test(chunks[0]))return data;
+    const meta=[],sections=[],tail=[];
+    const addMeta=(title,body)=>{if(body.trim())meta.push({title,body:cap(body)})};
+    const addSection=(title,body)=>{
+      const parts=bodyParts(body);if(parts.length)sections.push({number:'',title,parts});
+    };
+    const intro=chunks.shift();
+    const goal=intro.match(/(?:^|\s)(Цель занятия\s*[—–:-]\s*[\s\S]*)$/i);
+    addMeta('Тема групповой психотерапии',goal?intro.slice(0,goal.index).trim():intro);
+    if(goal)addMeta('Цель групповой психотерапии',goal[1]);
+    let hadStructure=false;
+    for(const chunk of chunks){
+      if(/^Структура занятия(?=\s|:|$)/i.test(chunk)){
+        const practical=chunk.match(/(?:^|\s)(В практической части(?=\s|$)[\s\S]*)$/i);
+        if(practical){
+          addSection('Ход занятия',chunk.slice(0,practical.index).trim());
+          addSection('Практическая часть',practical[1]);
+        }else addSection('Ход занятия',chunk);
+        hadStructure=true;continue;
+      }
+      if(/^В практической части(?=\s|$)/i.test(chunk)){
+        addSection('Практическая часть',chunk);hadStructure=true;continue;
+      }
+      if(/^В целом группа(?=\s|$)/i.test(chunk)){
+        addSection('Итоги',chunk);continue;
+      }
+      if(hadStructure){
+        const conclusion=chunk.match(/(?:^|\s)(В целом группа(?=\s|$)[\s\S]*)$/i);
+        if(conclusion){
+          addSection('Наблюдения за участниками',chunk.slice(0,conclusion.index).trim());
+          addSection('Итоги',conclusion[1]);continue;
+        }
+        // Multiple semicolon-separated participant observations.
+        if((chunk.match(/;\s*[А-ЯЁ]/g)||[]).length>=2){
+          addSection('Наблюдения за участниками',chunk);continue;
+        }
+      }
+      tail.push(...plainParts(chunk));
+    }
+    // Stay on the existing generic formatter if the narrative has no
+    // recognizable stages; arbitrary prose must not be assigned a category.
+    return sections.length?{meta,sections,tail}:data;
+  }
+
   function plainParts(v){
-    const lines=normalize(v).replace(/\[\[ARROW\]\]/g,'\n• ').split(/\n+/);
+    const lines=normalize(v).replace(/\[\[ARROW\]\]/g,'\n• ').split('\n');
     const out=[];let bullet=[],paragraph=[];
     const flushBullet=()=>{if(bullet.length){out.push({type:'list',items:bullet});bullet=[]}};
     const flushParagraph=()=>{const value=paragraph.join(' ').trim();if(value)out.push({type:'p',text:cap(value)});paragraph=[]};

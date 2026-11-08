@@ -114,7 +114,14 @@ export function planLegacyReport(input) {
   const { api, properties } = makeLegacyContext(input);
 
   if (kind === 'psychology') {
-    const normalizedText = api.normalizeReportSourcePunctuation_(rawText);
+    // The shared legacy punctuation normalizer collapses blank lines because
+    // morning/evening reports use line-oriented child headers. Therapy notes
+    // are prose: normalize each paragraph separately to keep their boundaries
+    // in the parent-facing PostgreSQL text (without changing other report kinds).
+    const normalizedText = rawText.replace(/\r\n?/g, '\n')
+      .split(/\n[ \t]*\n+/)
+      .map(paragraph => api.normalizeReportSourcePunctuation_(paragraph))
+      .filter(Boolean).join('\n\n');
     if (!normalizedText.trim()) throw new Error('Psychology report is empty.');
     return {
       kind, rawText, normalizedText,

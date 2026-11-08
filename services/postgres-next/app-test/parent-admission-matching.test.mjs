@@ -53,7 +53,7 @@ test('no hospital record is invented from an unsupported raw report reference',(
   assert.equal(find(opts('Аня',{children:[],admissions:[]})),null);
 });
 
-function fakeReconciliation(){
+function fakeReconciliation({rawOnly=false}={}){
   const profiles=[{
     phone10:'9000000055',child_name:'Анюта',
     child_id:'',admission_id:'',profile_generation:'reg_test_012345678901'
@@ -61,16 +61,19 @@ function fakeReconciliation(){
   const auth=[{phone10:profiles[0].phone10}];
   const attempts=[{attempt_id:profiles[0].profile_generation,phone10:profiles[0].phone10,status:'COMPLETED'}];
   let reportQueries=0,updates=0;
+  const hospitalChildren=[...children],hospitalAdmissions=rawOnly
+    ?admissions.map(row=>({...row,status:'closed'})):[...admissions];
+  const reported=rawOnly?[{kind:'morning',normalized_text:'Аня — Участвовала в занятии.',raw_text:'Аня: Участвовала в занятии.',report_date:'2026-11-08'}]:[];
   const sql={begin:async(_opts,fn)=>{
     const tx=async(strings,...params)=>{
       const q=strings.join('?').replace(/\s+/g,' ').trim();
-      if(/^(SELECT|UPDATE)/.test(q)&&/report_(?:history|current)|raw_reports/.test(q))reportQueries++;
+      if(/^(INSERT|UPDATE|DELETE)/.test(q)&&/report_(?:history|current)|raw_reports/.test(q))reportQueries++;
       if(q.startsWith('SELECT phone10,child_name,child_id,admission_id,profile_generation FROM parent_profiles'))return [profiles];
       if(q.startsWith('SELECT phone10 FROM parent_auth_profiles'))return [auth];
-      if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [children];
-      if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [admissions];
+      if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [hospitalChildren];
+      if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [hospitalAdmissions];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [nameVariants];
-      if(q.startsWith('SELECT kind,raw_text,normalized_text,report_date FROM raw_reports'))return [[]];
+      if(q.startsWith('SELECT kind,raw_text,normalized_text,report_date FROM raw_reports'))return [reported];
       if(q.startsWith('UPDATE parent_profiles SET child_id=')){
         const [childId,admissionId,,phone]=params;
         const p=profiles.find(p=>p.phone10===phone&&!p.child_id&&!p.admission_id);
@@ -86,9 +89,20 @@ function fakeReconciliation(){
       }
       throw new Error('Unexpected SQL: '+q);
     };
+    tx.upsert=async(strings,...params)=>{
+      const q=strings.join('?').replace(/\s+/g,' ').trim();
+      if(q.startsWith('INSERT INTO children')){
+        hospitalChildren.push({child_id:params[0],registered_first_name:params[1],surname:params[2]});return [[]];
+      }
+      if(q.startsWith('INSERT INTO admissions')){
+        hospitalAdmissions.push({admission_id:params[0],child_id:params[1],status:params[2]});return [[]];
+      }
+      throw new Error('Unexpected insert: '+q);
+    };
     return fn(tx);
   }};
-  return {sql,profiles,attempts,get reportQueries(){return reportQueries},get updates(){return updates}};
+  return {sql,profiles,attempts,hospitalChildren,hospitalAdmissions,
+    get reportQueries(){return reportQueries},get updates(){return updates}};
 }
 test('existing bot registration is safely linked retroactively and only once',async()=>{
   const fake=fakeReconciliation();
@@ -99,5 +113,21 @@ test('existing bot registration is safely linked retroactively and only once',as
   const second=await reconcile(fake.sql);
   assert.deepEqual(second,{ok:true,linked:0,review:0});
   assert.equal(fake.updates,1);
+  assert.equal(fake.reportQueries,0);
+});
+
+test('earlier registered parent is automatically connected after an educator first mentions a new child',async()=>{
+  const fake=fakeReconciliation({rawOnly:true});
+  const first=await reconcile(fake.sql,{now:()=>Date.parse('2026-11-08T12:00:00Z')});
+  assert.deepEqual(first,{ok:true,linked:1,review:0});
+  const parent=fake.profiles[0];
+  assert.equal(fake.hospitalAdmissions.filter(x=>x.status==='active').length,1);
+  assert.equal(parent.admission_id,fake.hospitalAdmissions.find(x=>x.status==='active').admission_id);
+  const generated=fake.hospitalChildren.find(c=>c.child_id===parent.child_id);
+  assert.equal(generated.registered_first_name,'Анна');
+  assert.equal(fake.attempts[0].admission_id,parent.admission_id);
+  const second=await reconcile(fake.sql,{now:()=>Date.parse('2026-11-08T12:00:00Z')});
+  assert.equal(second.linked,0);
+  assert.equal(fake.hospitalAdmissions.filter(x=>x.status==='active').length,1);
   assert.equal(fake.reportQueries,0);
 });

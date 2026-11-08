@@ -1,3 +1,4 @@
+import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 // Educator-only roster. Report ownership remains on immutable IDs and admission IDs.
 const PHONE=/^\d{10}$/;
 const ID=/^[A-Za-z0-9_-]{8,128}$/;
@@ -49,6 +50,9 @@ export function createEducatorRosterStore(sql,{now=()=>Date.now()}={}){
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
   async function list(){
+    // Heal older registrations when an unambiguous hospital roster record
+    // exists, before showing either a linked or unlinked directory card.
+    await reconcileUnlinkedRegisteredParents(sql,{now});
     return read(async tx=>{
       const results=await Promise.all([
         tx`SELECT child_id,registered_first_name,surname FROM children`,

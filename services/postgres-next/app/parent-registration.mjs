@@ -1,5 +1,6 @@
 import {randomBytes} from 'node:crypto';
 import {findUniqueActiveAdmissionForParent} from './parent-admission-matching.mjs';
+import {createAdmissionFromStaffReport,recentStaffSource} from './report-observed-admission.mjs';
 
 const PHONE=/^\d{10}$/;
 const ATTEMPT=/^reg_[A-Za-z0-9_-]{12,125}$/;
@@ -52,10 +53,19 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
       // Nicknames are resolved through the existing canonical variants table.
       // A full surname must agree and the active admission must be unique.
       // Never infer a child's clinical identity from one raw report mention.
-      const match=findUniqueActiveAdmissionForParent({
+      const timestamp=now();
+      let match=findUniqueActiveAdmissionForParent({
         childName,children,admissions,nameVariants
       });
-      const timestamp=now(),userHandle=randomBytes(32).toString('base64url');
+      if(!match){
+        // New admissions can first appear in a staff-written child block.
+        // Create a roster identity only for one unambiguous recent name.
+        const reports=await recentStaffSource(tx,timestamp);
+        match=await createAdmissionFromStaffReport(tx,{
+          childName,children,admissions,nameVariants,reports,now:timestamp
+        });
+      }
+      const userHandle=randomBytes(32).toString('base64url');
       await tx.upsert`INSERT INTO parent_profiles
         (phone10,parent_name,child_name,relationship,child_id,admission_id,
         profile_generation,child_genitive,created_at,updated_at)

@@ -63,7 +63,7 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
       if(q.startsWith('SELECT phone10,kind,admission_id,text FROM parent_current_reports'))return [current];
       if(q.startsWith('SELECT kind,publication_id FROM report_publication_head'))return [heads];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [variants];
-      if(q.startsWith('SELECT publication_id,kind,report_date,submitted_at,revision,normalized_text FROM raw_reports'))return [[raw]];
+      if(q.startsWith('SELECT publication_id,kind,report_date,submitted_at,')&&q.includes('FROM raw_reports'))return [[raw]];
       if(q.startsWith('SELECT admission_id FROM parent_report_history')){
         return [history.filter(h=>h.phone10===params[0]&&h.kind===params[1]&&h.report_date===params[2])];
       }

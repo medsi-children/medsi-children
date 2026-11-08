@@ -43,3 +43,34 @@ test('roster child editing preserves IDs and the report tables untouched',async(
   assert.equal(records.parent.child_name,'Михаил Тестовый');
   assert.equal(reportTouched,false);
 });
+
+
+test('new parent can chat before any report or admission match and is returned as unlinked',()=>{
+  const result=assembleEducatorRoster({
+    children:[
+      {child_id:'child_new_123456',registered_first_name:'Арина',surname:'Алексеева'}
+    ],
+    admissions:[
+      {admission_id:'admission_new_123456',child_id:'child_new_123456',status:'active'}
+    ],
+    profiles:[
+      {phone10:'9000000021',parent_name:'Новый родитель',relationship:'Мама',
+        child_name:'Арина Алексеева',child_id:'child_new_123456',
+        admission_id:'admission_new_123456'},
+      {phone10:'9000000022',parent_name:'Пишет в чате',relationship:'Папа',
+        child_name:'Другая Арина',child_id:'',admission_id:''}
+    ],
+    currentReports:[]
+  });
+  assert.equal(result.ok,true);
+  assert.equal(result.children.length,1);
+  assert.equal(result.children[0].parents.length,1);
+  assert.equal(result.children[0].morning,false);
+  assert.equal(result.children[0].evening,false);
+  assert.equal(result.unlinked.length,1);
+  assert.equal(result.unlinked[0].parentName,'Пишет в чате');
+  assert.equal(result.unlinked[0].childName,'Другая Арина');
+  assert.equal(result.unlinked[0].phone,'89000000022');
+  assert.equal(result.unlinked[0].linked,false);
+  assert.equal(result.counts.unlinkedProfiles,1);
+});

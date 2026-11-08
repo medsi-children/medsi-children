@@ -1,6 +1,6 @@
 import {randomBytes} from 'node:crypto';
-import {findUniqueActiveAdmissionForParent} from './parent-admission-matching.mjs';
-import {createAdmissionFromStaffReport,recentStaffSource} from './report-observed-admission.mjs';
+import {findUniqueActiveAdmissionForParent,parseRegisteredChildName} from './parent-admission-matching.mjs';
+import {createAdmissionFromStaffReport,recentStaffSource,staffSourceContradictsExistingChild} from './report-observed-admission.mjs';
 
 const PHONE=/^\d{10}$/;
 const ATTEMPT=/^reg_[A-Za-z0-9_-]{12,125}$/;
@@ -57,10 +57,18 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
       let match=findUniqueActiveAdmissionForParent({
         childName,children,admissions,nameVariants
       });
+      let reports=null;
+      if(match&&!parseRegisteredChildName(childName)?.surnamePrefix){
+        reports=await recentStaffSource(tx,timestamp);
+        const child=children.find(row=>String(row.child_id)===match.childId);
+        if(staffSourceContradictsExistingChild({
+          childName,surname:child?.surname,nameVariants,reports
+        }))match=null;
+      }
       if(!match){
-        // New admissions can first appear in a staff-written child block.
-        // Create a roster identity only for one unambiguous recent name.
-        const reports=await recentStaffSource(tx,timestamp);
+        // When a new child is documented only in an educator's source
+        // report, create their hospital identity if the name is unique.
+        if(!reports)reports=await recentStaffSource(tx,timestamp);
         match=await createAdmissionFromStaffReport(tx,{
           childName,children,admissions,nameVariants,reports,now:timestamp
         });

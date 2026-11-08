@@ -1,11 +1,13 @@
-// Match only existing active admissions. A first name mentioned in a raw
-// report cannot by itself authorize parent access to medical information.
+// Match only existing active admissions. The variants dictionary identifies
+// nicknames, and an unambiguous active first name is enough even if a parent
+// supplies no surname. Contradictory suffixes and namesakes always block it.
 const normalized=value=>String(value||'').trim().normalize('NFC')
   .replace(/\s+/g,' ').toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
-const fullName=value=>{
-  const parts=normalized(value).split(' ');
-  return parts.length===2&&parts.every(p=>/^[\p{L}-]{2,80}$/u.test(p))
-    ?{first:parts[0],surname:parts[1]}:null;
+const enteredName=value=>{
+  const parts=normalized(value).split(' ').filter(Boolean);
+  if(!parts.length||parts.length>2||
+    !parts.every((p,i)=>i===0?/^[\p{L}-]{2,80}$/u.test(p):/^[\p{L}-]{1,80}\.?$/u.test(p)))return null;
+  return {first:parts[0],surnamePrefix:(parts[1]||'').replace(/\.$/,'')};
 };
 function variantsIndex(rows){
   const groups=[];
@@ -30,21 +32,26 @@ function variantsIndex(rows){
 export function findUniqueActiveAdmissionForParent({
   childName,children=[],admissions=[],nameVariants=[]
 }={}){
-  const entered=fullName(childName);
+  const entered=enteredName(childName);
   if(!entered)return null;
   const canonical=variantsIndex(nameVariants),first=canonical(entered.first);
   if(!first)return null;
   const byId=new Map(children.map(child=>[String(child.child_id),child]));
-  const matches=[];
-  for(const admission of admissions){
-    if(admission.status!=='active')continue;
+  // A first-name-only parent registration maps to the ONE active admission
+  // in that canonical alias group. The absence of a surname is not a blocker.
+  const candidates=admissions.filter(a=>a.status==='active').flatMap(admission=>{
     const child=byId.get(String(admission.child_id));
-    if(!child)continue;
-    if(normalized(child.surname)!==entered.surname)continue;
-    if(canonical(child.registered_first_name)!==first)continue;
-    matches.push({childId:String(child.child_id),admissionId:String(admission.admission_id)});
-  }
-  return matches.length===1?matches[0]:null;
+    return child&&canonical(child.registered_first_name)===first
+      ?[{childId:String(child.child_id),admissionId:String(admission.admission_id),
+          surname:normalized(child.surname)}]:[];
+  });
+  // If the parent gave a surname or initial, it must agree; in particular,
+  // never ignore contradictory data just because this is the only namesake.
+  const matches=entered.surnamePrefix
+    ?candidates.filter(c=>c.surname.startsWith(entered.surnamePrefix))
+    :candidates;
+  return matches.length===1
+    ?{childId:matches[0].childId,admissionId:matches[0].admissionId}:null;
 }
 // Repair only genuinely unlinked authenticated profiles, without changing
 // historical clinical associations or creating new hospital records.

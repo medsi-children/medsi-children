@@ -8,30 +8,38 @@ const norm=value=>String(value||'').normalize('NFC').trim()
 const HEADER=/^\s*([\p{L}-]{2,60})(?:\s+([\p{L}-]{1,80})\.?)?\s*[:—–]\s*\S/u;
 const NAME_KEY=/^[\p{L}-]+$/u;
 const canonical=(value,variants)=>canonicalRegisteredName(value,variants);
-function reportMentions(reports,nameVariants,first){
-  const distinct=new Set(),all=[];
+function reportMentions(reports,nameVariants,first,requested=''){
+  const prefixes=new Set();
+  let mentions=0;
   for(const report of reports||[]){
     if(report.kind!=='morning'&&report.kind!=='evening')continue;
     const text=String(report.normalized_text||report.raw_text||'');
-    const inOne=new Set();
-    let blockCount=0;
+    const blocks=[];
     for(const line of text.replace(/\r\n?/g,'\n').split('\n')){
       const m=HEADER.exec(line);
       if(!m||!NAME_KEY.test(m[1])||canonical(m[1],nameVariants)!==first)continue;
       const suffix=norm(m[2]).replace(/\.$/,'');
-      blockCount++;
-      inOne.add(suffix);
-      all.push(suffix);
+      blocks.push(suffix);
+      prefixes.add(suffix);
+      mentions++;
     }
-    // A report with multiple blocks of the same canonical name may contain
-    // several different children, even if they omitted their initials.
-    if(blockCount>1)return null;
-    for(const suffix of inOne)distinct.add(suffix);
+    if(blocks.length>1){
+      // Without a surname from the parent, two same-name children cannot
+      // be distinguished. Even with a surname, identical staff initials
+      // on two blocks are ambiguous.
+      if(!requested||new Set(blocks).size<blocks.length||blocks.includes(''))return null;
+    }
   }
-  if(!all.length)return null;
-  const explicit=[...distinct].filter(Boolean);
-  if(new Set(explicit).size>1)return null;
-  return {prefix:explicit[0]||'',mentions:all.length};
+  if(!mentions)return null;
+  const explicit=[...prefixes].filter(Boolean);
+  if(!requested){
+    if(explicit.length>1)return null;
+    return {prefix:explicit[0]||'',mentions};
+  }
+  const matching=explicit.filter(prefix=>
+    requested.startsWith(prefix)||prefix.startsWith(requested));
+  if(matching.length!==1&&explicit.length)return null;
+  return {prefix:matching[0]||'',mentions};
 }
 // An active roster can still be incomplete when a new child first appears
 // in staff notes. Never select an older namesake by first name alone if
@@ -71,15 +79,18 @@ export function findUniqueRecentStaffMention({
   const active=admissions.filter(a=>a.status==='active')
     .map(a=>byId.get(String(a.child_id))).filter(Boolean)
     .filter(c=>canonical(c.registered_first_name,nameVariants)===first);
-  // Do not manufacture a new child when a namesake already has an admission.
-  // Resolve it using the stable, existing IDs instead.
-  if(active.length)return null;
-  const evidence=reportMentions(reports,nameVariants,first);
-  if(!evidence)return null;
   const requested=entered.surnamePrefix;
-  if(evidence.prefix&&requested&&
-     !requested.startsWith(evidence.prefix)&&!evidence.prefix.startsWith(requested))
-    return null;
+  // A new namesake may be reported by a *different* explicit surname
+  // initial before they have an admission row. Never create them from a
+  // bare name if an existing admission already shares that first name.
+  if(active.length&&!requested)return null;
+  if(active.some(c=>norm(c.surname).startsWith(requested)))return null;
+  const evidence=reportMentions(reports,nameVariants,first,requested);
+  if(!evidence)return null;
+  if(active.length){
+    if(!evidence.prefix||active.some(c=>norm(c.surname).startsWith(evidence.prefix)))
+      return null;
+  }
   // An initial is not a surname. Keep unknown family names blank rather
   // than writing a made-up legal surname into the hospital roster.
   const rawSurname=String(childName||'').trim().split(/\s+/)[1]||'';

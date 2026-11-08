@@ -70,6 +70,7 @@ function fakeReconciliation(){
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [children];
       if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [admissions];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [nameVariants];
+      if(q.startsWith('SELECT kind,raw_text,normalized_text,report_date FROM raw_reports'))return [[]];
       if(q.startsWith('UPDATE parent_profiles SET child_id=')){
         const [childId,admissionId,,phone]=params;
         const p=profiles.find(p=>p.phone10===phone&&!p.child_id&&!p.admission_id);

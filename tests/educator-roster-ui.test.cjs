@@ -121,3 +121,52 @@ test('raw morning and evening reports visually separate child blocks but keep on
   assert.match(css,/\.medsi-raw-morning \.medsi-source-child-block/);
   assert.match(css,/\.medsi-raw-evening \.medsi-source-child-block/);
 });
+
+
+test('parent registered for an unlinked child remains visible in directory with no reports',()=>{
+  const source=read('tutors/next-settings.js');
+  const begin=source.indexOf('function renderRoster(data){');
+  const end=source.indexOf('  async function refreshRoster(){',begin);
+  assert.ok(begin>=0&&end>begin,'Directory renderer must remain extractable');
+  const pane={tag:'div',className:'',children:[],replaceChildren(...items){this.children=[...items]},append(...items){this.children.push(...items)}};
+  const node=(tag,className='',value='')=>({
+    tag,className,textContent:String(value??''),children:[],dataset:{},
+    append(...items){this.children.push(...items)},
+    replaceChildren(...items){this.children=[...items]},
+    setAttribute(){},
+    classList:{add(){},remove(){},contains(){return false}}
+  });
+  const render=new Function('byId','textNode','icon','deleteIcon','rosterEdit','request','refreshRoster',
+    'refreshLibrary','window','setTimeout','document',
+    source.slice(begin,end)+'\nreturn renderRoster;')(
+      id=>{assert.equal(id,'medsiRosterPane');return pane},node,()=>'<svg/>','',()=>{},
+      ()=>{throw new Error('Unlinked directory must never call report or mutation APIs')},
+      ()=>{},()=>{}, {},()=>{},{}
+    );
+  const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
+    childName:'Новый ребёнок',relationship:'Мама',linked:false};
+  render({children:[],unlinked:[unlinked]});
+  assert.equal(pane.children.length,1,'An unlinked profile must prevent the empty directory screen');
+  const section=pane.children[0];
+  assert.match(section.className,/medsi-roster-unlinked/);
+  assert.equal(section.children.filter(item=>item.tag==='article').length,1);
+  const card=section.children.find(item=>item.tag==='article');
+  const allText=JSON.stringify(card);
+  assert.match(allText,/Новый ребёнок/);
+  assert.match(allText,/Тестовый родитель/);
+  assert.match(allText,/89000000091/);
+  assert.match(allText,/Нет привязки к госпитализации/);
+  assert.doesNotMatch(allText,/medsi-roster-status-icon|medsi-roster-line-delete|medsi-roster-form/);
+  const css=read('tutors/next-settings.css');
+  assert.match(css,/\.medsi-roster-line-unlinked\{/);
+  assert.match(css,/\.medsi-roster-unlinked-status\{/);
+});
+
+test('linked child with zero reports remains in directory and unlinked parent is shown separately',()=>{
+  const js=read('tutors/next-settings.js');
+  assert.match(js,/const unlinked=Array\.isArray\(data\?\.unlinked\)/);
+  assert.match(js,/if\(!children\.length&&!unlinked\.length\)/);
+  assert.match(js,/for\(const child of children\)/);
+  assert.match(js,/for\(const parent of unlinked\)/);
+  assert.match(js,/\/lab\/admin\/roster/);
+});

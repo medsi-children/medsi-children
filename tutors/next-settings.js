@@ -517,14 +517,31 @@
       actions.append(del);
       card.append(info,actions);pane.append(card);
     }
-    // Unlinked parents remain visible in the educator directory, but the
-    // profile's typed child name is not proof of admission ownership.
-    // Never enable child edits, clinical reports or report-status flags here.
+    // Unlinked parent profiles still belong in the directory. Report status
+    // cannot be attributed to a child without an admission ID. Keep clickable
+    // tooltips like the existing sun/moon buttons instead of a blanket warning.
     if(unlinked.length){
       const section=textNode('section','medsi-roster-unlinked','');
       section.append(textNode('h3','medsi-roster-unlinked-heading','Без подтверждённой привязки'));
       section.append(textNode('p','medsi-roster-unlinked-intro',
-        'Эти родители зарегистрированы в системе и могут переписываться с воспитателями. Связь с действующей госпитализацией пока не подтверждена.'));
+        'Нажмите на значки рядом с профилем, чтобы проверить регистрацию, отчёты и привязку.'));
+      const statusButton=(kind,present,svg,tooltip)=>{
+        const button=textNode('button','medsi-roster-status-icon medsi-roster-status-'+kind,'');
+        button.type='button';
+        button.dataset.present=present;
+        button.dataset.tooltip=tooltip;
+        button.setAttribute('aria-label',tooltip);
+        button.innerHTML=icon(svg);
+        button.onclick=()=>{
+          const opening=!button.classList.contains('medsi-roster-tooltip-open');
+          pane.querySelectorAll('.medsi-roster-tooltip-open').forEach(node=>
+            node.classList.remove('medsi-roster-tooltip-open'));
+          if(!opening)return;
+          button.classList.add('medsi-roster-tooltip-open');
+          setTimeout(()=>button.classList.remove('medsi-roster-tooltip-open'),3200);
+        };
+        return button;
+      };
       for(const parent of unlinked){
         const card=textNode('article','medsi-roster-line medsi-roster-line-unlinked','');
         const info=textNode('div','medsi-roster-line-info','');
@@ -533,7 +550,27 @@
         info.append(textNode('div','medsi-roster-line-parent',
           [(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
-        card.append(info,textNode('span','medsi-roster-unlinked-status','Нет привязки к госпитализации'));
+        const actions=textNode('div','medsi-roster-line-actions','');
+        const registration=parent.registered===true;
+        const chat=parent.hasChat===true;
+        const botHint=registration
+          ?'Родитель зарегистрирован в боте.'+(chat?' Есть переписка с воспитателями.':'')
+          :chat?'Переписка есть, но подтверждённая регистрация родителя не найдена.'
+            :'Профиль родителя есть, но подтверждённая регистрация в боте не найдена.';
+        actions.append(
+          statusButton('account',registration?'1':chat?'?':'0',
+            '<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',botHint),
+          statusButton('morning','?',
+            '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
+            'Утренний отчёт не подтверждён для этого профиля: ребёнок не связан с действующей госпитализацией. Упоминания в исходных отчётах могут существовать.'),
+          statusButton('evening','?',
+            '<path d="M20.5 15.5A9 9 0 0 1 8.5 3.5a9 9 0 1 0 12 12Z"/>',
+            'Вечерний отчёт не подтверждён для этого профиля: ребёнок не связан с действующей госпитализацией. Упоминания в исходных отчётах могут существовать.'),
+          statusButton('link','0',
+            '<path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/><path d="m3 3 18 18"/>',
+            'Нет подтверждённой привязки к действующей госпитализации. Совпадения имени недостаточно для доступа к отчётам.')
+        );
+        card.append(info,actions);
         section.append(card);
       }
       pane.append(section);

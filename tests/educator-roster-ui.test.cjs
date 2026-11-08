@@ -144,7 +144,7 @@ test('parent registered for an unlinked child remains visible in directory with 
       ()=>{},()=>{}, {},()=>{},{}
     );
   const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
-    childName:'Новый ребёнок',relationship:'Мама',linked:false};
+    childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,hasChat:true};
   render({children:[],unlinked:[unlinked]});
   assert.equal(pane.children.length,1,'An unlinked profile must prevent the empty directory screen');
   const section=pane.children[0];
@@ -155,11 +155,25 @@ test('parent registered for an unlinked child remains visible in directory with 
   assert.match(allText,/Новый ребёнок/);
   assert.match(allText,/Тестовый родитель/);
   assert.match(allText,/89000000091/);
-  assert.match(allText,/Нет привязки к госпитализации/);
-  assert.doesNotMatch(allText,/medsi-roster-status-icon|medsi-roster-line-delete|medsi-roster-form/);
+  const actions=card.children.find(item=>item.className==='medsi-roster-line-actions');
+  assert.ok(actions);
+  assert.equal(actions.children.length,4);
+  const [account,morning,evening,link]=actions.children;
+  assert.match(account.className,/medsi-roster-status-account/);
+  assert.equal(account.dataset.present,'1');
+  assert.match(account.dataset.tooltip,/зарегистрирован в боте/);
+  assert.match(account.dataset.tooltip,/Есть переписка/);
+  assert.equal(morning.dataset.present,'?');
+  assert.equal(evening.dataset.present,'?');
+  assert.match(morning.dataset.tooltip,/не подтверждён/);
+  assert.match(evening.dataset.tooltip,/не подтверждён/);
+  assert.match(link.dataset.tooltip,/Нет подтверждённой привязки/);
+  for(const icon of actions.children)assert.equal(typeof icon.onclick,'function');
+  assert.doesNotMatch(allText,/medsi-roster-line-delete|medsi-roster-form/);
   const css=read('tutors/next-settings.css');
   assert.match(css,/\.medsi-roster-line-unlinked\{/);
-  assert.match(css,/\.medsi-roster-unlinked-status\{/);
+  assert.match(css,/\.medsi-roster-status-account\[data-present="1"\]/);
+  assert.match(css,/\.medsi-roster-status-link\{/);
 });
 
 test('linked child with zero reports remains in directory and unlinked parent is shown separately',()=>{
@@ -169,4 +183,15 @@ test('linked child with zero reports remains in directory and unlinked parent is
   assert.match(js,/for\(const child of children\)/);
   assert.match(js,/for\(const parent of unlinked\)/);
   assert.match(js,/\/lab\/admin\/roster/);
+});
+
+
+test('unlinked account with no confirmed registration is not falsely marked as in bot',()=>{
+  const js=read('tutors/next-settings.js');
+  assert.match(js,/const registration=parent\.registered===true/);
+  assert.match(js,/const chat=parent\.hasChat===true/);
+  assert.match(js,/Профиль родителя есть, но подтверждённая регистрация в боте не найдена/);
+  assert.match(js,/Переписка есть, но подтверждённая регистрация родителя не найдена/);
+  assert.match(js,/Упоминания в исходных отчётах могут существовать/);
+  assert.doesNotMatch(js,/Нет привязки к госпитализации'\)\)/);
 });

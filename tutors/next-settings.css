@@ -156,6 +156,31 @@ body.medsi-report-library-open {overflow:hidden}
 .medsi-raw-expanded .medsi-raw-expand::after {transform:translateY(3px) rotate(225deg)}
 .medsi-raw-expand:focus-visible {outline:2px solid #5fbdc6;outline-offset:2px}
 
+/* Educator-only presentation of the original source. Child segments are
+   visual only; tapping the preview opens one original full-text editor. */
+.medsi-raw-report .medsi-report-body.medsi-source-children{
+  display:grid;gap:10px;white-space:normal;align-content:start;
+}
+.medsi-source-child-block{
+  min-width:0;padding:11px 14px;border-radius:13px;
+  border:1px solid #d6e6e7;background:linear-gradient(135deg,#ffffffee,#edf9f9a8);
+  box-shadow:0 2px 7px #224c5408;white-space:pre-wrap;overflow-wrap:anywhere;
+}
+.medsi-raw-morning .medsi-source-child-block{
+  border-color:#f3e6bf;background:linear-gradient(135deg,#ffffffef,#fff6dc9c);
+}
+.medsi-raw-evening .medsi-source-child-block{
+  border-color:#d6e8f7;background:linear-gradient(135deg,#ffffffef,#eaf5ffab);
+}
+.medsi-source-child-name{font-weight:800;color:#255461}
+.medsi-source-child-divider{color:#8da8b0}
+.medsi-source-child-text{font-weight:450;color:#244b56}
+.medsi-source-plain{white-space:pre-wrap}
+.medsi-raw-morning.medsi-raw-collapsed:not(.medsi-raw-expanded) .medsi-report-body.medsi-source-children,
+.medsi-raw-evening.medsi-raw-collapsed:not(.medsi-raw-expanded) .medsi-report-body.medsi-source-children{
+  display:grid;max-height:11.5em;overflow:hidden;
+}
+
 /* Reports by child: a single centered header and two standalone pastel cards. */
 .medsi-child-deck-nav {
   display:grid;grid-template-columns:48px minmax(0,1fr) 48px;align-items:center;gap:8px;

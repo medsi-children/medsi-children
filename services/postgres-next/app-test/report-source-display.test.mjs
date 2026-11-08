@@ -43,17 +43,20 @@ test('different surname initials remain a single initial',()=>{
 test('unproven assignments, conflicting names and repeated text never get attributed to a child',()=>{
   const source=options();
   assert.equal(canonicalEducatorSource({...source,historyRows:[]}),source.normalizedText);
-  assert.equal(canonicalEducatorSource({...source,historyRows:[
+  const collision=canonicalEducatorSource({...source,historyRows:[
     ...source.historyRows,
     {kind:'morning',admission_id:'admission_new',text:'Арина: Утром готовила проект.'}
-  ]}),source.normalizedText);
-  assert.equal(canonicalEducatorSource({...source,normalizedText:'Арина Х. — Утром готовила проект.'}),
-    'Арина Х. — Утром готовила проект.');
+  ]});
+  assert.match(collision,/^Арина А\. — Утром готовила проект\./);
+  assert.match(collision,/\nМихаил К\. — Смотрел фильм\.$/);
+  assert.match(canonicalEducatorSource({...source,normalizedText:'Арина Х. — Утром готовила проект.'}),
+    /^Арина Х\. — Утром готовила проект\.$/);
 });
 test('same full name and surname is not guessed from arbitrary admission ordering',()=>{
   const duplicate=children.map(c=>c.child_id==='child_new'?{...c,surname:'Алексеева'}:c);
-  assert.equal(canonicalEducatorSource(options({children:duplicate})),
-    options().normalizedText);
+  const display=canonicalEducatorSource(options({children:duplicate}));
+  assert.match(display,/^Арина А\. — Утром готовила проект\./);
+  assert.match(display,/\nМихаил К\. — Смотрел фильм\.$/);
 });
 test('a sibling discharged after the publication still retains a unique historical identity',()=>{
   const oldAdmissions=admissions.map(a=>a.admission_id==='admission_old'?{...a,status:'closed'}:a);

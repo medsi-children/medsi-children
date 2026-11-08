@@ -30,7 +30,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
   assert.match(html,/next-settings\.css\?v=20261108-raw-child-blocks-18/);
-  assert.match(html,/next-settings\.js\?v=20261108-compact-report-status-15/);
+  assert.match(html,/next-settings\.js\?v=20261108-natural-roster-tooltips-16/);
 });
 
 test('deleting the final linked parent removes the child directory row',()=>{
@@ -161,13 +161,12 @@ test('parent registered for an unlinked child remains visible in directory with 
   const [account,morning,evening,link]=actions.children;
   assert.match(account.className,/medsi-roster-status-account/);
   assert.equal(account.dataset.present,'1');
-  assert.match(account.dataset.tooltip,/В боте: да/);
-  assert.match(account.dataset.tooltip,/Чат: да/);
+  assert.equal(account.dataset.tooltip,'Родитель есть в боте');
   assert.equal(morning.dataset.present,'?');
   assert.equal(evening.dataset.present,'?');
-  assert.match(morning.dataset.tooltip,/не определён/);
-  assert.match(evening.dataset.tooltip,/не определён/);
-  assert.match(link.dataset.tooltip,/Привязка: нет/);
+  assert.equal(morning.dataset.tooltip,'Утреннего отчёта нет');
+  assert.equal(evening.dataset.tooltip,'Вечернего отчёта нет');
+  assert.equal(link.dataset.tooltip,'Привязки не найдено');
   for(const icon of actions.children)assert.equal(typeof icon.onclick,'function');
   assert.doesNotMatch(allText,/medsi-roster-line-delete|medsi-roster-form/);
   const css=read('tutors/next-settings.css');
@@ -190,8 +189,11 @@ test('unlinked account with no confirmed registration is not falsely marked as i
   const js=read('tutors/next-settings.js');
   assert.match(js,/const registration=parent\.registered===true/);
   assert.match(js,/const chat=parent\.hasChat===true/);
-  assert.match(js,/В боте: нет/);
-  assert.match(js,/В боте: не подтверждено/);
-  assert.match(js,/Утренний: не определён/);
+  assert.match(js,/Родителя нет в боте/);
+  assert.match(js,/Регистрация родителя не подтверждена/);
+  assert.match(js,/Утреннего отчёта нет/);
+  assert.match(js,/Вечернего отчёта нет/);
+  assert.match(js,/Привязки не найдено/);
+  assert.doesNotMatch(js,/В боте:|Чат:|Утренний: не определён|Вечерний: не определён|Привязка: нет/);
   assert.doesNotMatch(js,/Нет привязки к госпитализации'\)\)/);
 });

@@ -553,21 +553,21 @@
         const registration=parent.registered===true;
         const chat=parent.hasChat===true;
         const botHint=registration
-          ?'В боте: да'+(chat?' · Чат: да':'')
-          :chat?'В боте: не подтверждено · Чат: да'
-            :'В боте: нет';
+          ?'Родитель есть в боте'
+          :chat?'Регистрация родителя не подтверждена'
+            :'Родителя нет в боте';
         actions.append(
           statusButton('account',registration?'1':chat?'?':'0',
             '<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',botHint),
           statusButton('morning','?',
             '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
-            'Утренний: не определён'),
+            'Утреннего отчёта нет'),
           statusButton('evening','?',
             '<path d="M20.5 15.5A9 9 0 0 1 8.5 3.5a9 9 0 1 0 12 12Z"/>',
-            'Вечерний: не определён'),
+            'Вечернего отчёта нет'),
           statusButton('link','0',
             '<path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/><path d="m3 3 18 18"/>',
-            'Привязка: нет')
+            'Привязки не найдено')
         );
         card.append(info,actions);
         section.append(card);

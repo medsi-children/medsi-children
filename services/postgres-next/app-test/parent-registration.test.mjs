@@ -5,8 +5,9 @@ import {createParentRegistrationService} from '../app/parent-registration.mjs';
 const phone='9991112233';
 const payload={phone:'8'+phone,parentName:'Мария Тестовая',childName:'Лена Тестовая',
   attemptId:'reg_123456789012345678901234'};
-function fakeDatabase({matched=true}={}) {
+function fakeDatabase({matched=true,observed=false}={}) {
   let attempt=null,profile=null,auth=null;
+  const created={children:[],admissions:[]};
   const sql={begin:async(_opts,fn)=>{
    const tx=async(strings,...values)=>{
     const query=strings.join('?').replace(/\s+/g,' ').trim();
@@ -20,9 +21,19 @@ function fakeDatabase({matched=true}={}) {
       {admission_id:'adm-1',child_id:'child-1',status:matched?'active':'closed'}
     ]];
     if(query.startsWith('SELECT')&&query.includes('FROM name_variants'))return [[
-      {base_key:'лена',preferred_name:'лена',variants_json:'["елена"]'}
+      {base_key:'лена',preferred_name:'лена',variants_json:'["елена"]'},
+      {base_key:'анна',preferred_name:'анна',variants_json:'["аня","анюта"]'}
     ]];
-    if(query.startsWith('SELECT')&&query.includes('FROM raw_reports'))return [[]];
+    if(query.startsWith('SELECT')&&query.includes('FROM raw_reports'))return [observed?[{
+      kind:'morning',raw_text:'Аня: Была на групповом занятии.',
+      normalized_text:'Аня — Была на групповом занятии.',report_date:'2026-11-08'
+    }]:[]];
+    if(query.startsWith('INSERT INTO children')){
+      created.children.push({id:values[0],firstName:values[1],surname:values[2]});return [[]];
+    }
+    if(query.startsWith('INSERT INTO admissions')){
+      created.admissions.push({id:values[0],childId:values[1],status:values[2]});return [[]];
+    }
     if(query.startsWith('INSERT INTO parent_profiles')) {
       profile={phone10:values[0],parent_name:values[1],child_name:values[2],
         child_id:values[4],admission_id:values[5],profile_generation:values[6]};
@@ -42,7 +53,7 @@ function fakeDatabase({matched=true}={}) {
    tx.upsert=tx;
    return fn(tx);
   }};
-  return {sql,state:()=>({attempt,profile,auth})};
+  return {sql,state:()=>({attempt,profile,auth,created})};
 }
 test('registration completes immediately and preserves current parent-facing API',async()=>{
   const fake=fakeDatabase();
@@ -87,4 +98,19 @@ test('registration resolves a canonical nickname with the exact same surname',as
   assert.equal(result.ok,true);
   assert.equal(fake.state().profile.child_id,'child-1');
   assert.equal(fake.state().profile.admission_id,'adm-1');
+});
+
+test('sole staff-reported child is enrolled and linked when mother registers with the nickname only',async()=>{
+  const fake=fakeDatabase({observed:true});
+  const service=createParentRegistrationService({sql:fake.sql,now:()=>2000,
+    sessions:{issueParent:async()=>({token:'signed',expiresAt:99999})}});
+  const result=await service.register({...payload,childName:'Анюта'});
+  assert.equal(result.ok,true);
+  const {profile,created}=fake.state();
+  assert.equal(created.children.length,1);
+  assert.equal(created.children[0].firstName,'Анна');
+  assert.equal(created.admissions.length,1);
+  assert.equal(created.admissions[0].status,'active');
+  assert.equal(profile.child_id,created.children[0].id);
+  assert.equal(profile.admission_id,created.admissions[0].id);
 });

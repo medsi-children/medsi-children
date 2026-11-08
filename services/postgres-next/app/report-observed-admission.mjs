@@ -33,6 +33,33 @@ function reportMentions(reports,nameVariants,first){
   if(new Set(explicit).size>1)return null;
   return {prefix:explicit[0]||'',mentions:all.length};
 }
+// An active roster can still be incomplete when a new child first appears
+// in staff notes. Never select an older namesake by first name alone if
+// current reports show conflicting surname initials or duplicate blocks.
+export function staffSourceContradictsExistingChild({
+  childName,surname='',nameVariants=[],reports=[]
+}={}){
+  const entered=parseRegisteredChildName(childName);
+  if(!entered||entered.surnamePrefix)return false;
+  const first=canonical(entered.first,nameVariants);
+  if(!first)return true;
+  const prefixes=new Set();
+  for(const report of reports){
+    if(report.kind!=='morning'&&report.kind!=='evening')continue;
+    let count=0;
+    const text=String(report.normalized_text||report.raw_text||'');
+    for(const line of text.replace(/\r\n?/g,'\n').split('\n')){
+      const m=HEADER.exec(line);
+      if(!m||canonical(m[1],nameVariants)!==first)continue;
+      count++;
+      if(m[2])prefixes.add(norm(m[2]).replace(/\.$/,''));
+    }
+    if(count>1)return true;
+  }
+  if(prefixes.size>1)return true;
+  if(prefixes.size===1&&!norm(surname).startsWith([...prefixes][0]))return true;
+  return false;
+}
 export function findUniqueRecentStaffMention({
   childName,children=[],admissions=[],nameVariants=[],reports=[]
 }={}){

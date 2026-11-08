@@ -112,3 +112,29 @@ test('group psychotherapy preserves double newlines in parent text without chang
   assert.equal(r.recipients[0].text,r.recipients[1].text);
   assert.doesNotMatch(r.normalizedText,/\r/);
 });
+
+
+test('initials are present in canonical source even before a same-name child joins',()=>{
+ const r=planLegacyReport(input([
+  profile('9000000011','Арина','Алексеева','admission_first')
+ ],'Арина: Синтетическое наблюдение.',{
+  nameVariants:[{preferredName:'Арина',variants:''}]
+ }));
+ assert.match(r.normalizedText,/^Арина А\. [—–-] Синтетическое наблюдение\./);
+ assert.match(r.recipients[0].text,/Арина: Синтетическое наблюдение/);
+});
+
+test('two same-name children with matching family initials require distinct surname prefixes',()=>{
+ const r=planLegacyReport(input([
+  profile('9000000011','Арина','Алексеева','admission_first'),
+  profile('9000000022','Арина','Ахметова','admission_second')
+ ],'Арина Ал: Участница изучала схему А.\nАрина Ах: Участница изучала схему Б.',{
+  nameVariants:[{preferredName:'Арина',variants:''}]
+ }));
+ assert.match(r.normalizedText,/Арина Ал [—–-] Участница изучала схему А\./);
+ assert.match(r.normalizedText,/Арина Ах [—–-] Участница изучала схему Б\./);
+ assert.match(r.recipients[0].text,/схему А/);
+ assert.doesNotMatch(r.recipients[0].text,/схему Б/);
+ assert.match(r.recipients[1].text,/схему Б/);
+ assert.doesNotMatch(r.recipients[1].text,/схему А/);
+});

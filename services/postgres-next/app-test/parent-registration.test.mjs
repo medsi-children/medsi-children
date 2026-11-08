@@ -22,6 +22,7 @@ function fakeDatabase({matched=true}={}) {
     if(query.startsWith('SELECT')&&query.includes('FROM name_variants'))return [[
       {base_key:'лена',preferred_name:'лена',variants_json:'["елена"]'}
     ]];
+    if(query.startsWith('SELECT')&&query.includes('FROM raw_reports'))return [[]];
     if(query.startsWith('INSERT INTO parent_profiles')) {
       profile={phone10:values[0],parent_name:values[1],child_name:values[2],
         child_id:values[4],admission_id:values[5],profile_generation:values[6]};

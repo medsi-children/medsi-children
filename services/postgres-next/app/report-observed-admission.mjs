@@ -55,7 +55,9 @@ export function findUniqueRecentStaffMention({
     return null;
   // An initial is not a surname. Keep unknown family names blank rather
   // than writing a made-up legal surname into the hospital roster.
-  const surname=requested&&requested.length>=3?requested:'';
+  const rawSurname=String(childName||'').trim().split(/\s+/)[1]||'';
+  const surname=requested&&requested.length>=3
+    ?rawSurname.charAt(0).toLocaleUpperCase('ru-RU')+rawSurname.slice(1):'';
   const titleFirst=first.charAt(0).toLocaleUpperCase('ru-RU')+first.slice(1);
   return {firstName:titleFirst,surname};
 }

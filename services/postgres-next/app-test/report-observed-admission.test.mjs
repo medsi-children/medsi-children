@@ -84,3 +84,21 @@ test('ambiguous or conflicting new staff notes prevent assigning an old unique n
   ]}),true);
   assert.equal(conflicts({...base,reports:[]}),false);
 });
+
+
+test('new namesake can be added by explicit surname initial without confusing the previously admitted child',()=>{
+  const oldChild={child_id:'child_anna_old',registered_first_name:'Анна',surname:'Алексеева'};
+  const oldAdmission={admission_id:'admission_anna_old',child_id:oldChild.child_id,status:'active'};
+  const evidence=[report('Аня А. — Играла в конструктор.\nАня Х. — Беседовала с психологом.')];
+  const params=input('Анна Халитова',evidence,{
+    children:[...children,oldChild],admissions:[...admissions,oldAdmission]
+  });
+  assert.equal(find(params)?.surname,'Халитова');
+  assert.equal(find({...params,childName:'Аня'}),null);
+  assert.equal(find({...params,childName:'Анна Алексеева'}),null);
+});
+
+test('ambiguous identical initials remain blocked even if the parent knows the full surname',()=>{
+  const text='Аня Х. — Первое наблюдение.\nАнна Х. — Второе наблюдение.';
+  assert.equal(find(input('Анна Халитова',[report(text)])),null);
+});

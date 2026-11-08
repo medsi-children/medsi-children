@@ -14,16 +14,18 @@ function reportMentions(reports,nameVariants,first){
     if(report.kind!=='morning'&&report.kind!=='evening')continue;
     const text=String(report.normalized_text||report.raw_text||'');
     const inOne=new Set();
+    let blockCount=0;
     for(const line of text.replace(/\r\n?/g,'\n').split('\n')){
       const m=HEADER.exec(line);
       if(!m||!NAME_KEY.test(m[1])||canonical(m[1],nameVariants)!==first)continue;
       const suffix=norm(m[2]).replace(/\.$/,'');
+      blockCount++;
       inOne.add(suffix);
       all.push(suffix);
     }
     // A report with multiple blocks of the same canonical name may contain
     // several different children, even if they omitted their initials.
-    if(all.length&&inOne.size>1)return null;
+    if(blockCount>1)return null;
     for(const suffix of inOne)distinct.add(suffix);
   }
   if(!all.length)return null;

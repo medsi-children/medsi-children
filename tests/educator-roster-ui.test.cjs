@@ -88,3 +88,36 @@ test('mobile child profile matches the landscape reference with side arrows and 
   // Desktop stays on its own horizontal grid, without mobile pill styling.
   assert.match(css,/\.medsi-child-deck-nav \{\s*display:grid;grid-template-columns:48px/);
 });
+
+
+test('raw morning and evening reports visually separate child blocks but keep one original editor',()=>{
+  const js=read('tutors/next-settings.js');
+  const css=read('tutors/next-settings.css');
+  const start=js.indexOf('  function splitSourceChildBlocks(value){');
+  const end=js.indexOf('  function renderSourceChildPreview(target,value){',start);
+  assert.ok(start>=0&&end>start,'The raw source preview must use a pure text segmenter');
+  const segment=new Function(js.slice(start,end)+';return splitSourceChildBlocks;')();
+  const text=[
+    'Арина Ал — Поделилась переживаниями.',
+    'Михаил К. — Участвовал в занятии.',
+    'Продолжение наблюдения.',
+    'Общий комментарий: Пункты для врачей.'
+  ].join('\n');
+  const parts=segment(text);
+  assert.equal(parts.length,2);
+  assert.equal(parts[0].name,'Арина Ал');
+  assert.equal(parts[0].content,'Поделилась переживаниями.');
+  assert.equal(parts[1].name,'Михаил К.');
+  assert.match(parts[1].content,/Продолжение наблюдения/);
+  assert.match(parts[1].content,/Общий комментарий/);
+  assert.deepEqual(segment('Только текст, без детских блоков.'),
+    [{type:'plain',content:'Только текст, без детских блоков.'}]);
+  assert.match(js,/sourceKind==='morning'\|\|sourceKind==='evening'/);
+  assert.match(js,/area\.value=value\|\|''/);
+  assert.match(js,/text=>request\('\/lab\/admin\/reports\/raw','POST'/);
+  assert.match(js,/reportTypeLabel\(kind\),text=>request\([\s\S]*?\),kind\)\)/);
+  assert.match(css,/\.medsi-source-child-block\{/);
+  assert.match(css,/\.medsi-source-child-name\{font-weight:800/);
+  assert.match(css,/\.medsi-raw-morning \.medsi-source-child-block/);
+  assert.match(css,/\.medsi-raw-evening \.medsi-source-child-block/);
+});

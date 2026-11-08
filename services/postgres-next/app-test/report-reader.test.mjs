@@ -21,6 +21,10 @@ function fakeSql(){
       const q=strings.join(' ').replace(/\s+/g,' ').trim();
       reads.push(q);
       if(q.includes('FROM parent_profiles'))return [[data.profile]];
+      if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [[]];
+      if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [[]];
+      if(q.startsWith('SELECT kind,publication_id FROM report_publication_head'))return [[]];
+      if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [[]];
       if(q.includes('FROM children'))return [[data.child]];
       if(q.includes('FROM parent_current_reports')&&q.includes('AND kind='))return [[data.current.find(row=>row.kind===args[1])]];
       if(q.includes('FROM parent_current_reports'))return [data.current];

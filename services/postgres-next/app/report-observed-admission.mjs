@@ -118,10 +118,26 @@ export async function createAdmissionFromStaffReport(tx,{
     VALUES (${admissionId},${childId},${'active'},${BigInt(now)},${null})`;
   return {childId,admissionId,firstName:found.firstName,surname:found.surname};
 }
+// The last publication per kind, on the newest report date, describes the
+// current named roster. Older source reports are retained for display/history
+// but cannot resurrect a discharged namesake during new parent registration.
+export function currentStaffSourceRows(reports=[]){
+  const newestByKind=new Map();
+  for(const row of reports){
+    const kind=String(row.kind||'');
+    if(kind!=='morning'&&kind!=='evening')continue;
+    const prior=newestByKind.get(kind);
+    if(!prior||Number(row.submitted_at||0)>Number(prior.submitted_at||0))
+      newestByKind.set(kind,row);
+  }
+  const latest=[...newestByKind.values()];
+  const newestDate=latest.reduce((max,r)=>String(r.report_date||'')>max?String(r.report_date):max,'');
+  return latest.filter(r=>String(r.report_date||'')===newestDate);
+}
 export async function recentStaffSource(tx,now=Date.now()){
   const cutoff=new Date(now-14*24*60*60*1000).toISOString().slice(0,10);
   const [rows]=await tx`SELECT kind,raw_text,normalized_text,report_date,submitted_at FROM raw_reports
     WHERE kind IN (${'morning'},${'evening'}) AND report_date>=${cutoff}
     ORDER BY submitted_at DESC LIMIT 60`;
-  return rows;
+  return currentStaffSourceRows(rows);
 }

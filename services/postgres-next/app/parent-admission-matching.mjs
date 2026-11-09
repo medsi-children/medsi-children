@@ -36,6 +36,14 @@ export function canonicalRegisteredName(value,variants) {
 export function parseRegisteredChildName(value){
   return enteredName(value);
 }
+// Only current registered parent profiles belong to the matching roster.
+// Old imported/partially deleted hospital rows must never compete with a
+// newly registered child's name. The records are left untouched here.
+export function linkedAdmissionsForMatching({admissions=[],profiles=[]}={}){
+  const linked=new Set(profiles.filter(p=>String(p.child_id||'').trim()&&String(p.admission_id||'').trim())
+    .map(p=>String(p.child_id)+'|'+String(p.admission_id)));
+  return admissions.filter(a=>a.status==='active'&&linked.has(String(a.child_id)+'|'+String(a.admission_id)));
+}
 export function findUniqueActiveAdmissionForParent({
   childName,children=[],admissions=[],nameVariants=[]
 }={}){
@@ -84,10 +92,13 @@ export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()
       tx`SELECT admission_id,child_id,status FROM admissions`,
       tx`SELECT base_key,preferred_name,variants_json FROM name_variants`
     ]);
+    const linkedAdmissions=linkedAdmissionsForMatching({
+      admissions,profiles:profiles.filter(p=>authSet.has(String(p.phone10)))
+    });
     let linked=0,review=0,reports=null;
     for(const profile of waiting){
       let match=findUniqueActiveAdmissionForParent({
-        childName:profile.child_name,children,admissions,nameVariants
+        childName:profile.child_name,children,admissions:linkedAdmissions,nameVariants
       });
       const entered=enteredName(profile.child_name);
       const matchedChild=match&&children.find(row=>String(row.child_id)===match.childId);
@@ -101,12 +112,13 @@ export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()
       if(!match){
         if(!reports)reports=await recentStaffSource(tx,now());
         match=await createAdmissionFromStaffReport(tx,{
-          childName:profile.child_name,children,admissions,nameVariants,reports,now:now()
+          childName:profile.child_name,children,admissions:linkedAdmissions,nameVariants,reports,now:now()
         });
         if(match){
           children.push({child_id:match.childId,registered_first_name:match.firstName,
             surname:match.surname});
-          admissions.push({admission_id:match.admissionId,child_id:match.childId,status:'active'});
+          const added={admission_id:match.admissionId,child_id:match.childId,status:'active'};
+          admissions.push(added);linkedAdmissions.push(added);
         }
       }
       if(!match){review++;continue}
@@ -118,6 +130,10 @@ export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()
         RETURNING phone10`;
       if(!rows.length)continue;
       linked++;
+      if(!linkedAdmissions.some(a=>String(a.admission_id)===match.admissionId)){
+        const found=admissions.find(a=>String(a.admission_id)===match.admissionId);
+        if(found)linkedAdmissions.push(found);
+      }
       if(profile.profile_generation){
         await tx`UPDATE parent_registration_attempts
           SET child_id=${match.childId},admission_id=${match.admissionId},updated_at=${BigInt(now())}

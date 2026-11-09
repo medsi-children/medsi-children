@@ -19,7 +19,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         tx`SELECT phone10,child_id FROM parent_profiles`,
         tx`SELECT child_id,registered_first_name,surname FROM children`,
         tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
-        tx`SELECT r.publication_id,r.kind,r.report_date,r.normalized_text,r.submitted_at
+        tx`SELECT r.publication_id,r.kind,r.report_date,r.normalized_text,r.submitted_at,r.revision
           FROM report_publication_head AS h
           INNER JOIN raw_reports AS r ON r.publication_id=h.publication_id
           WHERE r.kind IN (${'morning'},${'evening'})`
@@ -30,6 +30,9 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         const prefix='CURRENT_BLOCK_'+source.publication_id+'_';
         const [ownerRows]=await tx`SELECT owner_key,record_json FROM report_ownership
           WHERE owner_key LIKE ${prefix+'%'}`;
+        // Existing legacy publications have no CURRENT_BLOCK ownership
+        // snapshot. Do not guess identities from old text during cutover.
+        if(!ownerRows.length)continue;
         const owners=[],saved=new Map();
         for(const row of ownerRows){
           const index=Number(String(row.owner_key).slice(prefix.length));
@@ -57,11 +60,11 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           await tx.upsert`INSERT INTO parent_current_reports
             (phone10,kind,child_id,publication_id,revision,text,version,read_version,updated_at)
             VALUES (${recipient.phone10},${source.kind},${recipient.childId},
-              ${source.publication_id},${1n},${recipient.text},${version},${''},${at})`;
+              ${source.publication_id},${BigInt(source.revision||1)},${recipient.text},${version},${''},${at})`;
           await tx.upsert`INSERT INTO parent_report_history
             (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
             VALUES (${recipient.phone10},${source.kind},${source.report_date},
-              ${recipient.childId},${source.publication_id},${1n},${recipient.text},${at})`;
+              ${recipient.childId},${source.publication_id},${BigInt(source.revision||1)},${recipient.text},${at})`;
           backfilled++;
         }
         // A pending block becomes owned by the SAME registered child after

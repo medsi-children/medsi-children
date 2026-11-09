@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {findPublishedSourceForChild as match,backfillRecentEducatorReports as backfill}
   from '../app/source-report-backfill.mjs';
 
@@ -35,6 +36,32 @@ test('duplicate bare child headers are ambiguous; general comments do not attach
   assert.equal(find('Аня — Первое.\nАня — Второе.'),null);
   assert.equal(find('Аня — Первое.\nОбщий комментарий: Для врачей.'),'Аня: Первое.');
   assert.equal(find('Групповая терапия: Аня активна.'),null);
+});
+
+test('late registration does not concatenate the next unregistered child into the first report',()=>{
+  const source='Аня — Её личное наблюдение.\nБоря — Только его наблюдение.\nДополнительная строка Бори.';
+  assert.equal(find(source),'Аня: Её личное наблюдение.');
+  assert.doesNotMatch(find(source),/Боря|Бори|его наблюдение/);
+  assert.equal(find('Аня: Свой текст.\nБоря: Чужой текст.'),'Аня: Свой текст.');
+  assert.equal(find('Аня — Свой текст.\nСон: другой раздел.'),'Аня: Свой текст.');
+});
+
+test('persisted owner from another admission and blocked source cannot be reassigned',()=>{
+  const body='Её наблюдение.';
+  const source='Аня — '+body;
+  const key='RAW_REPORT_OWNER_morning_'+createHash('sha256')
+    .update('анна\n'+body).digest('base64url');
+  const args={normalizedText:source,child:anna,activeChildren:[anna,misha],
+    nameVariants:variants,kind:'morning',admissionId:'admission_new'};
+  assert.equal(match({...args,ownershipRecords:new Map([[key,JSON.stringify({
+    childAdmissionId:'admission_old',identity:'historical',phones:['9000000001|admission_old']
+  })]])}),null);
+  assert.equal(match({...args,ownershipRecords:new Map([[key,JSON.stringify({
+    blocked:true
+  })]])}),null);
+  assert.equal(match({...args,ownershipRecords:new Map([[key,JSON.stringify({
+    childAdmissionId:'admission_new',identity:'verified'
+  })]])}),'Аня: Её наблюдение.');
 });
 
 function fakeDatabase({source='Аня — Была на группе.\nМиша К. — Собирал пазл.',

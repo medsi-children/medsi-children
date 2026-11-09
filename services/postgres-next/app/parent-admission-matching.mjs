@@ -36,6 +36,34 @@ export function canonicalRegisteredName(value,variants) {
 export function parseRegisteredChildName(value){
   return enteredName(value);
 }
+// Admission-free identity resolver. Candidates are current, registered
+// parent profiles only. An orphan child row can never become a candidate.
+// This is a pure migration primitive; existing production callers stay
+// unchanged until report ownership and read paths are migrated together.
+export function findUniqueRegisteredChildForParent({
+  childName,profiles=[],nameVariants=[]
+}={}){
+  const entered=enteredName(childName);
+  if(!entered)return null;
+  const canonical=variantsIndex(nameVariants),first=canonical(entered.first);
+  if(!first)return null;
+  const candidates=new Map();
+  for(const profile of profiles){
+    const id=String(profile.child_id||'').trim();
+    if(!id)continue;
+    const known=enteredName(profile.child_name);
+    if(!known||canonical(known.first)!==first)continue;
+    const surname=known.surnamePrefix;
+    const prior=candidates.get(id);
+    if(prior&&prior.surname!==surname)return null;
+    candidates.set(id,{childId:id,surname});
+  }
+  const matches=[...candidates.values()].filter(candidate=>
+    !entered.surnamePrefix||
+    (candidate.surname&&candidate.surname.startsWith(entered.surnamePrefix)));
+  // Unknown surname cannot justify a positive surname-prefix match.
+  return matches.length===1?{childId:matches[0].childId}:null;
+}
 export function findUniqueActiveAdmissionForParent({
   childName,children=[],admissions=[],nameVariants=[]
 }={}){

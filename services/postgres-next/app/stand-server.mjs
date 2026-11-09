@@ -21,7 +21,7 @@ async function closeDatabaseDriver(driver) {
 }
 import {createSessionService} from './session-auth.mjs';
 import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
-import {ensureCurrentChildColumns} from './current-child-schema.mjs';
+import {prepareCurrentChildSchema} from './current-child-schema.mjs';
 import {createCurrentReportSubmissionService} from './current-report-submission-service.mjs';
 import {createCurrentEducatorDashboardStore} from './current-educator-dashboard.mjs';
 import {createCurrentEducatorRosterStore} from './current-educator-roster.mjs';
@@ -292,7 +292,7 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
 // open before any network I/O. All data routes fail closed until NEXT is ready.
 export async function startIsolatedStand(env=process.env,{
   connect,
-  prepareChildSchema=ensureCurrentChildColumns,
+  prepareChildSchema=prepareCurrentChildSchema,
   verifyChildSchema=checkCurrentChildSchema,
   makeServices=createNextServices,
   makeApp=createNextStandApp,
@@ -362,12 +362,14 @@ export async function startIsolatedStand(env=process.env,{
         return;
       }
       driver=connection.driver;
-      // Apply only two additive, idempotent columns before exposing the
-      // current-child backend. Admission rows and authored reports are untouched.
+      // Make report ownership available via child_id, then retire the old
+      // hospital schema where possible. No clinical report data is deleted.
       state.code='CURRENT_CHILD_COLUMNS_PENDING';
-      await prepareChildSchema(connection.sql);
+      const prepared=await prepareChildSchema(connection.sql);
       await verifyChildSchema(connection.sql);
       console.log('MEDSI_CURRENT_CHILD_COLUMNS_READY');
+      if(prepared?.deferred)console.warn('MEDSI_ADMISSIONS_RETIREMENT_DEFERRED');
+      else if(prepared?.ok)console.log('MEDSI_ADMISSIONS_RETIREMENT_COMPLETE');
       state.code='NEXT_SERVICES_PENDING';
       const services=makeServices({sql:connection.sql,env});
       state.code='NEXT_ROUTER_PENDING';

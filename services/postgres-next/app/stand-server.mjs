@@ -292,6 +292,8 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
 // open before any network I/O. All data routes fail closed until NEXT is ready.
 export async function startIsolatedStand(env=process.env,{
   connect,
+  prepareChildSchema=ensureCurrentChildColumns,
+  verifyChildSchema=checkCurrentChildSchema,
   makeServices=createNextServices,
   makeApp=createNextStandApp,
   externalServer=null,
@@ -363,8 +365,8 @@ export async function startIsolatedStand(env=process.env,{
       // Apply only two additive, idempotent columns before exposing the
       // current-child backend. Admission rows and authored reports are untouched.
       state.code='CURRENT_CHILD_COLUMNS_PENDING';
-      await ensureCurrentChildColumns(connection.sql);
-      await checkCurrentChildSchema(connection.sql);
+      await prepareChildSchema(connection.sql);
+      await verifyChildSchema(connection.sql);
       console.log('MEDSI_CURRENT_CHILD_COLUMNS_READY');
       state.code='NEXT_SERVICES_PENDING';
       const services=makeServices({sql:connection.sql,env});
@@ -435,6 +437,7 @@ export async function startIsolatedStand(env=process.env,{
         ?'STAND_LEGACY_AUTH_INVALID'
         :msg.includes('PostgreSQL TLS probe failed')?'POSTGRES_CONNECT_FAILED'
         :failedAt==='POSTGRES_CONNECT_PENDING'?'POSTGRES_CONNECT_FAILED'
+        :failedAt==='CURRENT_CHILD_COLUMNS_PENDING'?'CURRENT_CHILD_SCHEMA_NOT_READY'
         :failedAt==='NEXT_SERVICES_PENDING'?'NEXT_SERVICES_INIT_FAILED'
         :failedAt==='NEXT_ROUTER_PENDING'?'NEXT_ROUTER_INIT_FAILED'
         :'NEXT_STARTUP_FAILED';

@@ -21,6 +21,12 @@ async function closeDatabaseDriver(driver) {
 }
 import {createSessionService} from './session-auth.mjs';
 import {createReportReader} from './report-reader.mjs';
+import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
+import {createCurrentReportSubmissionService} from './current-report-submission-service.mjs';
+import {createCurrentEducatorDashboardStore} from './current-educator-dashboard.mjs';
+import {createCurrentEducatorRosterStore} from './current-educator-roster.mjs';
+import {createCurrentEducatorReportEditsStore} from './current-educator-report-edits.mjs';
+import {createCurrentParentRegistrationService} from './current-parent-registration.mjs';
 import {createReportSubmissionService} from './report-submission-service.mjs';
 import {createChatStore} from './chat-store.mjs';
 import {createChatOperations} from './chat-operations.mjs';
@@ -99,22 +105,43 @@ export async function checkNextTestSchema(sql) {
   return {ok:true};
 }
 
+export async function checkCurrentChildSchema(sql) {
+  // Read-only column probe, no patient rows, before enabling the new backend.
+  const [columns]=await sql`SELECT table_name,column_name FROM information_schema.columns
+    WHERE table_schema=${'public'} AND table_name IN
+      (${'children'},${'parent_profiles'},${'parent_current_reports'},
+       ${'parent_report_history'},${'raw_reports'},${'report_publication_head'})`;
+  const keys=new Set(columns.map(c=>c.table_name+'.'+c.column_name));
+  for(const item of ['children.child_id','parent_profiles.child_id',
+    'parent_current_reports.child_id','parent_report_history.child_id',
+    'raw_reports.publication_id','report_publication_head.publication_id']){
+    if(!keys.has(item))throw new Error('Current-child schema incomplete.');
+  }
+  return {ok:true};
+}
 export function createNextServices({sql,env=process.env}) {
   requireEnv(env);
+  const currentChildMode=env.MEDSI_CURRENT_CHILD_MODEL==='1';
+  if(currentChildMode&&env.MEDSI_CURRENT_CHILD_SCHEMA_READY!=='1')
+    throw new Error('Current-child model requires verified database expansion.');
   const sessions=createSessionService({
     sql,secret:env.NEXT_SESSION_SECRET,login:env.NEXT_TUTOR_LOGIN,
     password:env.NEXT_TUTOR_PASSWORD,tutorVersion:env.NEXT_TUTOR_VERSION,
-    ...readLegacyAuthConfig(env)
+    currentChildMode,...readLegacyAuthConfig(env)
   });
-  const reportReader=createReportReader(sql),reports=createReportSubmissionService(sql);
+  const reportReader=currentChildMode?createCurrentParentReportReader(sql):createReportReader(sql);
+  const reports=currentChildMode?createCurrentReportSubmissionService(sql):createReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
-  const dashboard=createEducatorReportsDashboardStore(sql),roster=createEducatorRosterStore(sql),nameVariants=createNameVariantsStore(sql);
-  const reportEdits=createEducatorReportEditsStore(sql);
+  const dashboard=currentChildMode?createCurrentEducatorDashboardStore(sql):createEducatorReportsDashboardStore(sql);
+  const roster=currentChildMode?createCurrentEducatorRosterStore(sql):createEducatorRosterStore(sql);
+  const nameVariants=createNameVariantsStore(sql);
+  const reportEdits=currentChildMode?createCurrentEducatorReportEditsStore(sql):createEducatorReportEditsStore(sql);
   const push=createPushService({sql,env});
-  const parentRegistration=createParentRegistrationService({sql,sessions});
+  const parentRegistration=currentChildMode?createCurrentParentRegistrationService({sql,sessions}):
+    createParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});
   const storage=require('../../../lib/s3-storage.js');
-  const parentDeletion=createParentDeletionService({sql,
+  const parentDeletion=createParentDeletionService({sql,currentChildMode,
     enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1',
     removeMedia:async key=>{
       if(!storage.configured)throw new Error('Private S3 storage is not configured.');
@@ -127,9 +154,9 @@ export function createNextServices({sql,env=process.env}) {
        'registrationOptions','registrationVerify'].map(method=>[method,
       async()=>{throw new Error('Passkeys unavailable until origin and RP ID are configured.');}]));
   const media=createMediaService({sql,sessions,secret:env.NEXT_SESSION_SECRET,
-    storage});
+    storage,currentChildMode});
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
-  const dbSchemaHealth=()=>checkNextTestSchema(sql);
+  const dbSchemaHealth=()=>currentChildMode?checkCurrentChildSchema(sql):checkNextTestSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,roster,
     nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }

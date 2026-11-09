@@ -66,7 +66,7 @@ export function verifyCompatibleTutorSession(token, login, password, version) {
 
 export function createSessionService({
   sql,secret,login,password,tutorVersion,
-  legacyWorkerSecret='',legacyTutor=null,now=()=>Date.now()
+  legacyWorkerSecret='',legacyTutor=null,now=()=>Date.now(),currentChildMode=false
 }) {
   if (!sql || typeof sql.begin !== 'function') throw new Error('PostgreSQL client required.');
   if (String(secret || '').length < 32 || !login || !password || !tutorVersion) {
@@ -82,8 +82,9 @@ export function createSessionService({
     const rows=await sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
       const [authProfiles]=await tx`SELECT generation_id,created_at
         FROM parent_auth_profiles WHERE phone10 = ${phone10}`;
-      const [profiles]=await tx`SELECT phone10, admission_id FROM parent_profiles
-        WHERE phone10 = ${phone10}`;
+      const [profiles]=currentChildMode
+        ?await tx`SELECT phone10,child_id FROM parent_profiles WHERE phone10=${phone10}`
+        :await tx`SELECT phone10,admission_id FROM parent_profiles WHERE phone10=${phone10}`;
       return {auth:authProfiles[0], profile:profiles[0]};
     });
     return rows?.auth && rows?.profile ? rows.auth : null;

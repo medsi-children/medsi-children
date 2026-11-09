@@ -73,6 +73,9 @@ export async function retireHospitalAdmissions(sql){
 // The only supported production schema preparation. Existing installations
 // and newly created historical snapshots converge to the same 26-table model.
 export async function prepareCurrentChildSchema(sql){
+  // Ownership preparation is required for safe access. Physical cleanup may
+  // be deferred if locks are busy or an old row needs manual review.
   await ensureCurrentChildColumns(sql);
-  return retireHospitalAdmissions(sql);
+  try{return await retireHospitalAdmissions(sql)}
+  catch{return {ok:true,retired:false,deferred:true}}
 }

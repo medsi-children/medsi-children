@@ -92,7 +92,8 @@ export function createCurrentReportPublisher(sql){
       // ownership is scoped to this exact source publication (not a stay).
       for(const record of plan.owners){
         const key='CURRENT_BLOCK_'+publicationId+'_'+record.index;
-        const value=JSON.stringify({childId:record.childId,blocked:!!record.blocked});
+        const value=JSON.stringify({childId:record.childId,
+          pending:!!record.pending,blocked:!!record.blocked});
         await tx.upsert`INSERT INTO report_ownership
           (owner_key,record_json,updated_at) VALUES (${key},${value},${time})`;
       }

@@ -7,7 +7,25 @@ const norm=value=>String(value||'').trim().normalize('NFC')
 const reportVersion=(kind,admissionId,text)=>createHash('sha256')
   .update(kind+'\u0000'+admissionId+'\u0000'+text,'utf8').digest('hex');
 const EMPTY='Пока ещё нет отчёта 🙏';
-const HEADER=/^\s*([\p{L}-]{2,60})(?:\s+([\p{L}-]{1,80})\.?)?\s*[:—–]\s*(.*)$/u;
+const HEADER=/^\s*([\p{L}-]{2,60})(?:\s+([\p{L}-]{1,80})\.?)?\s*[:：—–-]\s*(.*)$/u;
+// Parse structural boundaries independently from the list of registered
+// children: a later registration must never swallow an unknown child's text.
+const normalizedBody=value=>String(value||'').replace(/[ \t]*\n[ \t]*/g,'\n')
+  .replace(/\n+/g,' ').replace(/[ \t]{2,}/g,' ')
+  .replace(/[ \t]+([,.])/g,'$1').replace(/\([ \t]+/g,'(')
+  .replace(/[ \t]+\)/g,')').replace(/,(?=[А-Яа-яЁёA-Za-z])/g,', ')
+  .replace(/([а-яёa-z])\.([А-ЯЁA-Z])/gu,'$1. $2').trim();
+const cleanFingerprint=value=>String(value||'').replace(/\r\n?/g,'\n')
+  .replace(/[\u2028\u2029]/g,'\n').replace(/[\u200B-\u200F\uFEFF]/g,'')
+  .replace(/[\u00A0\u202F\u2000-\u200A]/g,' ')
+  .replace(/[\u2010-\u2015\u2212]/g,'-')
+  .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'')
+  .replace(/[ \t]+/g,' ').replace(/[ \t]+\n/g,'\n')
+  .replace(/\n{3,}/g,'\n\n').trim().normalize('NFC');
+function sourceOwnershipKey(kind,block){
+  const value=cleanFingerprint(block.canonical+'\n'+normalizedBody(block.lines.join('\n')));
+  return 'RAW_REPORT_OWNER_'+kind+'_'+createHash('sha256').update(value,'utf8').digest('base64url');
+}
 const GENERAL=/^\s*(?:ОБЩИЙ КОММЕНТАРИЙ|Общий комментарий|Сегодня у ребят были|Для врачей)\s*[:：]/iu;
 
 function namedBlocks(source,activeChildren,nameVariants){
@@ -18,12 +36,18 @@ function namedBlocks(source,activeChildren,nameVariants){
     if(GENERAL.test(line)){current=null;continue}
     const match=HEADER.exec(line);
     const canonical=match?canonicalRegisteredName(match[1],nameVariants):null;
-    if(match&&canonical&&known.has(canonical)){
-      current={canonical,label:match[1],suffix:norm(match[2]).replace(/\.$/,''),lines:[match[3]]};
-      entries.push(current);
-    }else if(current){
-      current.lines.push(line);
+    if(match){
+      if(canonical&&known.has(canonical)){
+        current={canonical,label:match[1],suffix:norm(match[2]).replace(/\.$/,''),lines:[match[3]]};
+        entries.push(current);
+      }else{
+        // Unknown/unregistered child's heading (or a non-child heading)
+        // terminates the previous block. Never copy it to another child.
+        current=null;
+      }
+      continue;
     }
+    if(current)current.lines.push(line);
   }
   return entries;
 }
@@ -32,7 +56,8 @@ function namedBlocks(source,activeChildren,nameVariants){
 // active hospital child. Identical names without distinct initials are never
 // distributed by inference; publication data from other children stays sealed.
 export function findPublishedSourceForChild({
-  normalizedText='',child,activeChildren=[],nameVariants=[]
+  normalizedText='',child,activeChildren=[],nameVariants=[],
+  kind='',admissionId='',ownershipRecords=null
 }={}){
   if(!child||!Array.isArray(activeChildren)||!activeChildren.length)return null;
   const target=canonicalRegisteredName(child.registered_first_name,nameVariants);
@@ -53,6 +78,17 @@ export function findPublishedSourceForChild({
     return matchingChildren.length===1&&String(matchingChildren[0].child_id)===String(child.child_id);
   });
   if(matches.length!==1)return null;
+  // A saved owner is authoritative. A blocked or other-admission owner
+  // must not be reassigned by the roster's present-day name uniqueness.
+  if(ownershipRecords){
+    const raw=ownershipRecords.get(sourceOwnershipKey(kind,matches[0]));
+    if(raw!==undefined){
+      let owner;
+      try{owner=JSON.parse(raw)}catch{return null}
+      if(!owner||owner.blocked||!owner.childAdmissionId||
+        String(owner.childAdmissionId)!==String(admissionId))return null;
+    }
+  }
   const body=matches[0].lines.join('\n').trim();
   if(!body)return null;
   return matches[0].label.charAt(0).toLocaleUpperCase('ru-RU')+
@@ -99,13 +135,17 @@ export async function backfillRecentEducatorReports(sql,{phone10='',now=()=>Date
       const publishedAt=Number(publication.submitted_at||0);
       const age=now()-publishedAt;
       if(!Number.isFinite(age)||age<0||age>7*24*60*60*1000)continue;
+      const [ownerRows]=await tx`SELECT owner_key,record_json FROM report_ownership
+        WHERE owner_key LIKE ${'RAW_REPORT_OWNER_'+kind+'_%'}`;
+      const ownershipRecords=new Map(ownerRows.map(row=>[String(row.owner_key),String(row.record_json)]));
       for(const profile of validProfiles){
         const existing=currentByKey.get(String(profile.phone10)+'/'+kind);
         if(existing&&String(existing.admission_id)===String(profile.admission_id)&&
           String(existing.text||'').trim()&&String(existing.text).trim()!==EMPTY)continue;
         const child=childById.get(String(profile.child_id));
         const text=findPublishedSourceForChild({
-          normalizedText:publication.normalized_text,child,activeChildren,nameVariants
+          normalizedText:publication.normalized_text,child,activeChildren,nameVariants,
+          kind,admissionId:profile.admission_id,ownershipRecords
         });
         if(!text)continue;
         const cutoff=await deletionCutoff(tx,canonicalRegisteredName(child.registered_first_name,nameVariants));

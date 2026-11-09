@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   findUniqueActiveAdmissionForParent as find,
   linkedAdmissionsForMatching,
+  sourceAmbiguityAdmissions,
   reconcileUnlinkedRegisteredParents as reconcile
 } from '../app/parent-admission-matching.mjs';
 
@@ -64,6 +65,22 @@ test('orphan namesake is invisible to parent matching without deleting raw repor
   assert.deepEqual(live.map(r=>r.admission_id),['admission_current']);
   assert.equal(find({childName:'Степан',children:names,admissions:live})?.childId,'child_current_stepan');
   assert.deepEqual(linkedAdmissionsForMatching({admissions:stays,profiles:[]}),[]);
+});
+test('two lingering same-name entries still prevent bare-name attribution',()=>{
+  const roster=[
+    {child_id:'c_oleg1',registered_first_name:'Олег',surname:'Тестовый А'},
+    {child_id:'c_oleg2',registered_first_name:'Олег',surname:'Тестовый Б'}
+  ];
+  const stays=[
+    {admission_id:'adm_oleg1',child_id:'c_oleg1',status:'active'},
+    {admission_id:'adm_oleg2',child_id:'c_oleg2',status:'active'}
+  ];
+  const choices=sourceAmbiguityAdmissions({childName:'Олег',children:roster,
+    admissions:stays,linkedAdmissions:[]});
+  assert.equal(choices.length,2);
+  assert.deepEqual(sourceAmbiguityAdmissions({childName:'Степан Сидоров',
+    children:[{child_id:'c_old',registered_first_name:'Степан',surname:'Мерцалов'}],
+    admissions:[{admission_id:'old',child_id:'c_old',status:'active'}],linkedAdmissions:[]}),[]);
 });
 test('no hospital record is invented from an unsupported raw report reference',()=>{
   assert.equal(find(opts('Аня',{children:[],admissions:[]})),null);

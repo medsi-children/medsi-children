@@ -75,3 +75,51 @@ test('another guardian preserves the child and active admission',async()=>{
  const db=database({secondParent:true});await createParentDeletionService({sql:db.sql,enabled:true}).enqueue({phone,operationId});
  assert.ok(!db.writes.some(q=>q.startsWith('DELETE FROM admissions')||q.startsWith('DELETE FROM children')));
 });
+
+function childOnlyDatabase({hasParent=false}={}){
+ const childId='child_001',admissionId='admission_001',writes=[];
+ let exists=true;
+ const tx=async(strings,...args)=>{
+  const query=strings.join('?').replace(/\s+/g,' ').trim();
+  if(query.startsWith('SELECT')){
+   if(query.includes('FROM admissions WHERE admission_id='))return [exists?[{child_id:childId,status:'active'}]:[]];
+   if(query.includes('FROM admissions WHERE child_id='))return [exists?[{admission_id:admissionId}]:[]];
+   if(query.includes('FROM parent_profiles'))return [hasParent?[{phone10:'9000000001'}]:[]];
+   if(query.includes('FROM children'))return [exists?[{registered_first_name:'Боря',surname:'Тестовый'}]:[]];
+   if(/FROM (report_ownership|name_variants|parent_deletion_queue)/.test(query))return [[]];
+   throw Error('Unexpected SELECT '+query);
+  }
+  writes.push(query);
+  if(query.startsWith('DELETE FROM children'))exists=false;
+  return [[]];
+ };
+ tx.upsert=tx;
+ return {sql:{begin:async(_opts,fn)=>fn(tx)},writes,state:()=>exists,childId,admissionId};
+}
+test('educator can discharge a child without any registered parent',async()=>{
+ const db=childOnlyDatabase();
+ const service=createParentDeletionService({sql:db.sql,enabled:true,now:()=>1000});
+ const result=await service.removeChildWithoutParents({childId:db.childId,admissionId:db.admissionId});
+ assert.equal(result.removed,true);
+ assert.equal(db.state(),false);
+ assert.ok(db.writes.some(q=>q.startsWith('DELETE FROM admissions')));
+ assert.ok(db.writes.some(q=>q.startsWith('DELETE FROM children')));
+ assert.equal(db.writes.some(q=>q.includes('raw_reports')),false);
+});
+test('child discharge is blocked if any parent is still linked',async()=>{
+ const db=childOnlyDatabase({hasParent:true});
+ const service=createParentDeletionService({sql:db.sql,enabled:true,now:()=>1000});
+ await assert.rejects(()=>service.removeChildWithoutParents({
+  childId:db.childId,admissionId:db.admissionId
+ }),/still has parent profiles/);
+ assert.equal(db.state(),true);
+ assert.equal(db.writes.length,0);
+});
+test('unlinked-child discharge respects the production deletion feature gate',async()=>{
+ const db=childOnlyDatabase();
+ const service=createParentDeletionService({sql:db.sql});
+ await assert.rejects(()=>service.removeChildWithoutParents({
+  childId:db.childId,admissionId:db.admissionId
+ }),/temporarily disabled/);
+ assert.equal(db.state(),true);
+});

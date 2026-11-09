@@ -81,6 +81,13 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   const sameRegistered=registeredChildRoster({profiles,children})
     .filter(c=>preferredName(c.registered_first_name,nameVariants)===canonical);
   const existing=matchRegisteredChild({childName,profiles,children,nameVariants});
+  // When the parent supplied only a first name, a newly appeared namesake
+  // makes even an old unique registered child ambiguous.
+  const source=currentStaffPublications(publications,today);
+  const witnessed=source.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants)
+    .map(b=>({...b,kind:r.kind}))).filter(b=>b.canonical===canonical);
+  if(existing&&(!person.surname&&witnessed.some((b,i)=>i>0)))
+    return {status:'ambiguous',reason:'new-namesake-in-source'};
   if(existing)return {status:'linked',...existing};
   // An existing current namesake with a conflicting surname cannot be
   // overridden by a bare heading; a second child needs explicit staff initials.

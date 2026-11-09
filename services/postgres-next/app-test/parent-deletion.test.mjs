@@ -11,6 +11,7 @@ function database({secondParent=false}={}) {
    const tx=async(strings,...params)=>{
     const query=strings.join('?').replace(/\\s+/g,' ').trim();
     if(query.startsWith('SELECT')&&query.includes('FROM parent_deletion_queue')){
+      if(query.includes('AND status=')&&job?.status!=='completed')return [[]];
       if(query.includes('operation_id=?'))return [job?[job]:[]];
       return [job?[job]:[]];
     }

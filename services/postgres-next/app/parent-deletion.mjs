@@ -50,7 +50,11 @@ export async function purgeUnreferencedChild(tx,childId,timestamp,{guardOldSourc
     await tx`DELETE FROM parent_report_history WHERE admission_id=${stay.admission_id}`;
   }
   await tx`DELETE FROM parent_registration_attempts WHERE child_id=${childId}`;
-  await tx`DELETE FROM parent_deletion_queue WHERE child_id=${childId} AND status=${'completed'}`;
+  const [completed]=await tx`SELECT operation_id,phone10 FROM parent_deletion_queue WHERE child_id=${childId} AND status=${'completed'}`;
+  for(const job of completed){
+    const digest=String(job.phone10||'').startsWith('sha256:')?job.phone10:phoneDigest(job.phone10);
+    await tx`UPDATE parent_deletion_queue SET phone10=${digest},parent_name=${''},child_id=${''},admission_id=${''},profile_generation=${''} WHERE operation_id=${job.operation_id}`;
+  }
   await tx`DELETE FROM admissions WHERE child_id=${childId}`;
   await tx`DELETE FROM children WHERE child_id=${childId}`;
   return true;

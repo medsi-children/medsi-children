@@ -13,7 +13,7 @@ function harness(){
    if(q.includes('FROM children'))return [q.includes('WHERE child_id=')?children.filter(c=>c.child_id===args[0]):[...children]];
    if(q.includes('FROM admissions'))return [q.includes('WHERE child_id=')?admissions.filter(a=>a.child_id===args[0]):[...admissions]];
    if(q.includes('FROM parent_profiles'))return [q.includes('WHERE child_id=')?profiles.filter(p=>p.child_id===args[0]):q.includes('WHERE admission_id=')?profiles.filter(p=>p.admission_id===args[0]):[...profiles]];
-   if(/FROM (report_ownership|parent_auth_profiles|name_variants|parent_current_reports|report_publication_head)/.test(q))return [[]];
+   if(/FROM (report_ownership|parent_deletion_queue|parent_auth_profiles|name_variants|parent_current_reports|report_publication_head)/.test(q))return [[]];
   }
   if(q.startsWith('DELETE')){
    writes.push(q);

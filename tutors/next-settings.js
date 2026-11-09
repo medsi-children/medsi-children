@@ -421,20 +421,6 @@
   }
   function renderRoster(data){
     const pane=byId('medsiRosterPane');pane.replaceChildren();
-    const cleanup=textNode('button','medsi-inline-cancel','Очистить удалённых детей');cleanup.type='button';
-    cleanup.onclick=async()=>{
-      cleanup.disabled=true;
-      try{
-        const preview=await request('/lab/admin/roster/cleanup');
-        if(!preview.candidates){byId('medsiReportsFeedback').textContent='Записей без родителей нет.';return;}
-        if(!window.confirm('Удалить оставшиеся записи детей без родительских профилей: '+preview.candidates+'? Исходные отчёты сохранятся.'))return;
-        const result=await request('/lab/admin/roster/cleanup','POST',{confirm:true});
-        await refreshRoster();await refreshLibrary();
-        byId('medsiReportsFeedback').textContent='Удалено записей без родителей: '+result.removed+'. Привязки и отчёты проверены.';
-      }catch(error){byId('medsiReportsFeedback').textContent=error.message||'Не удалось завершить очистку.';}
-      finally{cleanup.disabled=false;}
-    };
-    pane.append(cleanup);
     // The parent directory displays only active children with at least one linked parent.
     // Deleting the final parent profile removes the entire directory row on refresh;
     // clinical child and admission records remain governed by their own lifecycle.
@@ -573,42 +559,21 @@
             '<path d="M20.5 15.5A9 9 0 0 1 8.5 3.5a9 9 0 1 0 12 12Z"/>',
             'Вечернего отчёта нет')
         );
-        const candidates=Array.isArray(parent.assignable)?parent.assignable:[];
-        const link=textNode('button','medsi-roster-status-icon medsi-roster-status-link','');
-        link.type='button';link.dataset.tooltip='Назначить ребёнка';
-        link.setAttribute('aria-label','Назначить ребёнка');link.setAttribute('aria-expanded','false');
-        link.innerHTML=icon('<path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>');
-        link.onclick=()=>{byId('medsiReportsFeedback').textContent='В свежих сырых отчётах пока нет подходящего ребёнка для назначения.'};
-        actions.append(link);
-        if(candidates.length){
-          const assignment=textNode('div','medsi-roster-assignment','');assignment.hidden=true;
-          const select=document.createElement('select');
-          select.setAttribute('aria-label','Выбрать ребёнка из свежих сырых отчётов');
-          const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Выбрать ребёнка по сырому отчёту';select.append(placeholder);
-          for(const candidate of candidates){
-            const option=document.createElement('option');option.value=candidate.childId+'|'+candidate.admissionId;
-            option.textContent=candidate.label;select.append(option);
-          }
-          const assign=textNode('button','medsi-inline-save','Назначить');assign.type='button';assign.disabled=true;
-          select.onchange=()=>{assign.disabled=!select.value};
-          assign.onclick=async()=>{
-            const selected=candidates.find(candidate=>select.value===candidate.childId+'|'+candidate.admissionId);
-            if(!selected)return;
-            if(!window.confirm('Связать профиль '+(parent.parentName||parent.phone)+' с ребёнком '+selected.label+' по свежему сырому отчёту? Отчёты прошлых госпитализаций переноситься не будут.'))return;
-            assign.disabled=true;select.disabled=true;
-            try{
-              await request('/lab/admin/roster/edit','POST',{kind:'assign',phone10:parent.phone10,
-                childId:selected.childId,admissionId:selected.admissionId});
-              await refreshRoster();refreshLibrary();
-              byId('medsiReportsFeedback').textContent='Родитель привязан к выбранному ребёнку. Доступные текущие отчёты проверены.';
-            }catch(error){
-              byId('medsiReportsFeedback').textContent=error.message||'Не удалось назначить ребёнка.';
-              assign.disabled=false;select.disabled=false;
-            }
-          };
-          assignment.append(select,assign);info.append(assignment);
-          link.onclick=()=>{assignment.hidden=!assignment.hidden;link.setAttribute('aria-expanded',String(!assignment.hidden));if(!assignment.hidden)select.focus()};
-        }
+        const del=textNode('button','medsi-roster-line-delete','');
+        del.type='button';del.innerHTML=deleteIcon;del.setAttribute('aria-label','Удалить профиль родителя');
+        del.onclick=async()=>{
+          if(!window.confirm('Удалить профиль '+(parent.parentName||parent.phone)+'? Доступ, переписка и файлы этого родителя будут удалены.'))return;
+          del.disabled=true;
+          try{
+            const uuid=window.crypto&&typeof window.crypto.randomUUID==='function'
+              ?window.crypto.randomUUID().replace(/-/g,''):Date.now().toString(36)+Math.random().toString(36).slice(2);
+            const answer=await request('/lab/parent-delete','POST',{phone:parent.phone,operationId:'del_'+uuid});
+            if(answer?.accepted!==true)throw new Error(answer?.message||'Сервер не принял удаление профиля.');
+            await refreshRoster();await refreshLibrary();
+            byId('medsiReportsFeedback').textContent='Профиль удалён. Очистка переписки и файлов поставлена в очередь.';
+          }catch(error){del.disabled=false;byId('medsiReportsFeedback').textContent=error.message||'Не удалось удалить профиль.';}
+        };
+        actions.append(del);
         card.append(info,actions);
         section.append(card);
       }

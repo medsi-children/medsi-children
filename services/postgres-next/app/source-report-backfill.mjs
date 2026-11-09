@@ -10,24 +10,6 @@ const EMPTY='Пока ещё нет отчёта 🙏';
 const HEADER=/^\s*([\p{L}-]{2,60})(?:\s+([\p{L}-]{1,80})\.?)?\s*[:—–]\s*(.*)$/u;
 const GENERAL=/^\s*(?:ОБЩИЙ КОММЕНТАРИЙ|Общий комментарий|Сегодня у ребят были|Для врачей)\s*[:：]/iu;
 
-// Manual educator assignment may resolve a namesake that automation must
-// leave ambiguous. Require a real child header in a recent raw source; the
-// human chooses the exact active admission after reviewing that source.
-export function rawReportMentionsChild({rawText='',child,activeChildren=[],nameVariants=[]}={}){
-  if(!child||!Array.isArray(activeChildren)||!activeChildren.some(c=>String(c.child_id)===String(child.child_id)))return false;
-  const target=canonicalRegisteredName(child.registered_first_name,nameVariants);
-  if(!target)return false;
-  for(const line of String(rawText||'').replace(/\r\n?/g,'\n').split('\n')){
-    if(GENERAL.test(line))continue;
-    const match=HEADER.exec(line);
-    if(!match||canonicalRegisteredName(match[1],nameVariants)!==target)continue;
-    const suffix=norm(match[2]).replace(/\.$/,'');
-    if(!suffix)return true;
-    if(norm(child.surname).startsWith(suffix))return true;
-  }
-  return false;
-}
-
 function namedBlocks(source,activeChildren,nameVariants){
   const known=new Set(activeChildren.map(c=>canonicalRegisteredName(c.registered_first_name,nameVariants)).filter(Boolean));
   const entries=[];

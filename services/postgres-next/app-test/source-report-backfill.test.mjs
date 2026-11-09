@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {findPublishedSourceForChild as match,backfillRecentEducatorReports as backfill}
   from '../app/source-report-backfill.mjs';
-import {rawReportMentionsChild} from '../app/source-report-backfill.mjs';
 
 const anna={child_id:'child_anna',registered_first_name:'Анна',surname:'Пономарёва'};
 const misha={child_id:'child_misha',registered_first_name:'Михаил',surname:'Казьмин'};
@@ -36,16 +35,6 @@ test('duplicate bare child headers are ambiguous; general comments do not attach
   assert.equal(find('Аня — Первое.\nАня — Второе.'),null);
   assert.equal(find('Аня — Первое.\nОбщий комментарий: Для врачей.'),'Аня: Первое.');
   assert.equal(find('Групповая терапия: Аня активна.'),null);
-});
-
-test('manual review recognizes raw report name mentions while preserving namesake ambiguity for the educator',()=>{
-  const other={child_id:'child_anna2',registered_first_name:'Аня',surname:'Халитова'};
-  const roster=[anna,other];
-  assert.equal(match({normalizedText:'Аня — Общие наблюдения.',child:anna,activeChildren:roster,nameVariants:variants}),null,
-    'automatic parent report backfill remains blocked for ambiguous bare names');
-  assert.equal(rawReportMentionsChild({rawText:'Аня — Общие наблюдения.',child:anna,activeChildren:roster,nameVariants:variants}),true);
-  assert.equal(rawReportMentionsChild({rawText:'Аня Х. — Наблюдения.',child:anna,activeChildren:roster,nameVariants:variants}),false);
-  assert.equal(rawReportMentionsChild({rawText:'Аня Х. — Наблюдения.',child:other,activeChildren:roster,nameVariants:variants}),true);
 });
 
 function fakeDatabase({source='Аня — Была на группе.\nМиша К. — Собирал пазл.',

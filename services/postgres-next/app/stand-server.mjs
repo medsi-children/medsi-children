@@ -25,7 +25,6 @@ import {createReportSubmissionService} from './report-submission-service.mjs';
 import {createChatStore} from './chat-store.mjs';
 import {createChatOperations} from './chat-operations.mjs';
 import {createEducatorReportsDashboardStore} from './educator-report-dashboard.mjs';
-import {createOrphanChildCleanup} from './orphan-child-cleanup.mjs';
 import {createEducatorRosterStore} from './educator-roster.mjs';
 import {createEducatorReportEditsStore} from './educator-report-edits.mjs';
 import {createNameVariantsStore} from './name-variants-store.mjs';
@@ -109,7 +108,6 @@ export function createNextServices({sql,env=process.env}) {
   });
   const reportReader=createReportReader(sql),reports=createReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
-  const orphanCleanup=createOrphanChildCleanup(sql,{enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1'});
   const dashboard=createEducatorReportsDashboardStore(sql),roster=createEducatorRosterStore(sql),nameVariants=createNameVariantsStore(sql);
   const reportEdits=createEducatorReportEditsStore(sql);
   const push=createPushService({sql,env});
@@ -133,7 +131,7 @@ export function createNextServices({sql,env=process.env}) {
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   const dbSchemaHealth=()=>checkNextTestSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,roster,
-    nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,orphanCleanup,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
+    nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
 
 function handler(fn) {

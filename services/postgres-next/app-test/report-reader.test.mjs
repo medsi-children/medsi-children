@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createReportReader} from '../app/report-reader.mjs';
 
-function fakeSql({publishedTherapy=null,unlinked=false}={}){
+function fakeSql({publishedTherapy=null,unlinked=false,failBackfill=false}={}){
   const data={
     profile:unlinked?{admission_id:'',parent_name:'Родитель',child_id:'',child_name:''}:{admission_id:'admission_NEW',parent_name:'Родитель',child_id:'c1'},
     child:{registered_first_name:'Лена',surname:'Тестовая'},
@@ -20,6 +20,7 @@ function fakeSql({publishedTherapy=null,unlinked=false}={}){
     const tx=async(strings,...args)=>{
       const q=strings.join(' ').replace(/\s+/g,' ').trim();
       reads.push(q);
+      if(failBackfill&&q.startsWith('SELECT phone10,child_id,admission_id FROM parent_profiles'))throw new Error('Synthetic recovery failed');
       if(q.includes('FROM parent_profiles'))return [[data.profile]];
       if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [[]];
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [[]];
@@ -86,4 +87,12 @@ test('unlinked authenticated parent still receives shared current therapy, witho
   assert.equal(result.ok,true);
   assert.equal(result.unlinked,true);
   assert.deepEqual(result.reports.map(r=>r.kind),['psychology']);
+});
+
+test('failed child backfill cannot hide current shared group therapy',async()=>{
+  const {sql}=fakeSql({publishedTherapy:'Актуальная групповая терапия.',failBackfill:true});
+  const result=await createReportReader(sql).current('9000000001');
+  assert.equal(result.ok,true);
+  assert.equal(result.reports.find(r=>r.kind==='psychology').text,'Актуальная групповая терапия.');
+  assert.equal(result.reports.find(r=>r.kind==='morning').text,'Текущий отчёт');
 });

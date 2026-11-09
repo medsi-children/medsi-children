@@ -102,7 +102,8 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   const personSurname=norm(person.surname);
   const possible=candidates.filter(b=>!b.prefix||
     personSurname&&personSurname.startsWith(b.prefix));
-  if(!possible.length)return {status:'pending',reason:'surname-conflict'};
+  if(!possible.length)return {status:!personSurname&&candidates.some(b=>b.prefix)?'ambiguous':'pending',
+    reason:!personSurname?'missing-surname':'surname-conflict'};
   if(possible.length!==candidates.length&&possible.some(b=>!b.prefix))
     return {status:'ambiguous',reason:'bare-with-namesakes'};
   // A bare matching heading is only safe when it is the single child of that

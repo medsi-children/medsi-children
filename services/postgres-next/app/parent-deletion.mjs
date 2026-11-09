@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {purgeCurrentRegisteredChild} from './current-child-deletion.mjs';
 import {canonicalRegisteredName} from './parent-admission-matching.mjs';
 import {deletedSourceKey} from './deleted-source-guard.mjs';
 const phoneDigest=value=>'sha256:'+createHash('sha256').update(String(value)).digest('hex');
@@ -60,7 +61,7 @@ export async function purgeUnreferencedChild(tx,childId,timestamp,{guardOldSourc
   return true;
 }
 
-export function createParentDeletionService({sql,removeMedia,enabled=false,now=()=>Date.now()}) {
+export function createParentDeletionService({sql,removeMedia,enabled=false,now=()=>Date.now(),currentChildMode=false}) {
   if(!sql?.begin)throw new Error('Deletion requires a PostgreSQL query client.');
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
@@ -80,22 +81,37 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
       const [jobs]=await tx`SELECT operation_id,phone10,status FROM parent_deletion_queue WHERE phone10=${phone10}`;
       const pending=jobs.find(j=>['pending','retry','processing','failed'].includes(j.status));
       if(pending)return {ok:true,accepted:true,operationId:pending.operation_id,status:pending.status,duplicate:true};
-      const [[profile]]=await tx`SELECT phone10,parent_name,child_id,admission_id,profile_generation
-        FROM parent_profiles WHERE phone10=${phone10}`;
+      const [[profile]]=currentChildMode
+        ?await tx`SELECT phone10,parent_name,child_id,profile_generation
+          FROM parent_profiles WHERE phone10=${phone10}`
+        :await tx`SELECT phone10,parent_name,child_id,admission_id,profile_generation
+          FROM parent_profiles WHERE phone10=${phone10}`;
       if(!profile)return {ok:false,code:'PROFILE_NOT_FOUND'};
       const timestamp=now();
-      await tx.upsert`INSERT INTO parent_deletion_queue
-        (operation_id,phone10,parent_name,child_id,admission_id,profile_generation,
-        status,attempts,last_error,created_at,updated_at)
-        VALUES (${id},${phone10},${String(profile.parent_name||'')},
-          ${String(profile.child_id||'')},${String(profile.admission_id||'')},
-          ${String(profile.profile_generation||'')},${'pending'},${num(0)},${''},
-          ${num(timestamp)},${num(timestamp)})`;
+      if(currentChildMode){
+        await tx.upsert`INSERT INTO parent_deletion_queue
+          (operation_id,phone10,parent_name,child_id,profile_generation,
+          status,attempts,last_error,created_at,updated_at)
+          VALUES (${id},${phone10},${String(profile.parent_name||'')},
+            ${String(profile.child_id||'')},${String(profile.profile_generation||'')},
+            ${'pending'},${num(0)},${''},${num(timestamp)},${num(timestamp)})`;
+      }else{
+        await tx.upsert`INSERT INTO parent_deletion_queue
+          (operation_id,phone10,parent_name,child_id,admission_id,profile_generation,
+          status,attempts,last_error,created_at,updated_at)
+          VALUES (${id},${phone10},${String(profile.parent_name||'')},
+            ${String(profile.child_id||'')},${String(profile.admission_id||'')},
+            ${String(profile.profile_generation||'')},${'pending'},${num(0)},${''},
+            ${num(timestamp)},${num(timestamp)})`;
+      }
       // Logical deletion first: all parent tokens are rejected immediately.
       // Other guardians retain their child. The last guardian removes the
       // clinical roster identity too, instead of leaving an invisible active stay.
       await tx`DELETE FROM parent_profiles WHERE phone10=${phone10}`;
-      if(profile.child_id)await purgeUnreferencedChild(tx,profile.child_id,timestamp);
+      if(profile.child_id){
+        if(currentChildMode)await purgeCurrentRegisteredChild(tx,profile.child_id,timestamp);
+        else await purgeUnreferencedChild(tx,profile.child_id,timestamp);
+      }
       await tx`UPDATE parent_access_requests SET status=${'DENIED'},decision=${'REVOKED'},
         updated_at=${num(timestamp)} WHERE phone10=${phone10}`;
       return {ok:true,accepted:true,operationId:id,status:'pending'};
@@ -195,9 +211,15 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
           // Identifier is statically allowlisted, only the phone is parameterized.
           await tx`DELETE FROM ${sql.identifier(table)} WHERE phone10 = ${phone10}`;
         }
-        await tx`UPDATE parent_deletion_queue SET status=${'completed'},last_error=${''},
-          phone10=${phoneDigest(phone10)},parent_name=${''},child_id=${''},admission_id=${''},profile_generation=${''},
-          updated_at=${num(now())} WHERE operation_id=${id}`;
+        if(currentChildMode){
+          await tx`UPDATE parent_deletion_queue SET status=${'completed'},last_error=${''},
+            phone10=${phoneDigest(phone10)},parent_name=${''},child_id=${''},profile_generation=${''},
+            updated_at=${num(now())} WHERE operation_id=${id}`;
+        }else{
+          await tx`UPDATE parent_deletion_queue SET status=${'completed'},last_error=${''},
+            phone10=${phoneDigest(phone10)},parent_name=${''},child_id=${''},admission_id=${''},profile_generation=${''},
+            updated_at=${num(now())} WHERE operation_id=${id}`;
+        }
       });
       return {ok:true,operationId:id,status:'completed'};
     }catch(_error) {

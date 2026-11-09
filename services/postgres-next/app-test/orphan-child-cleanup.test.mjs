@@ -3,8 +3,8 @@ import assert from 'node:assert/strict';
 import {createOrphanChildCleanup} from '../app/orphan-child-cleanup.mjs';
 import {sourcesAfterDeletion} from '../app/deleted-source-guard.mjs';
 function harness(){
- const children=[{child_id:'orphan',registered_first_name:'Тест',surname:'Удалённый'},{child_id:'kept',registered_first_name:'Ира',surname:'Тестовая'}];
- const admissions=[{admission_id:'old',child_id:'orphan',status:'active'},{admission_id:'current',child_id:'kept',status:'active'}];
+ const children=[{child_id:'orphan',registered_first_name:'Тест',surname:'Удалённый'},{child_id:'kept',registered_first_name:'Ира',surname:'Тестовая'},{child_id:'fresh',registered_first_name:'Боря',surname:'Безродителя'}];
+ const admissions=[{admission_id:'old',child_id:'orphan',status:'discharged'},{admission_id:'current',child_id:'kept',status:'active'},{admission_id:'fresh_stay',child_id:'fresh',status:'active'}];
  const profiles=[{phone10:'9990000001',child_id:'kept',admission_id:'current'},{phone10:'9990000002',child_id:'',admission_id:''}];
  const writes=[];
  const tx=async(strings,...args)=>{
@@ -31,8 +31,8 @@ test('orphan cleanup preview is read-only and execution preserves linked and unl
  assert.deepEqual(await service.preview(),{ok:true,candidates:1,removed:0,executed:false});
  assert.equal(h.writes.length,0);
  assert.deepEqual(await service.execute(),{ok:true,candidates:1,removed:1,executed:true});
- assert.deepEqual(h.children.map(c=>c.child_id),['kept']);
- assert.deepEqual(h.admissions.map(a=>a.admission_id),['current']);
+ assert.deepEqual(h.children.map(c=>c.child_id),['kept','fresh']);
+ assert.deepEqual(h.admissions.map(a=>a.admission_id),['current','fresh_stay']);
  assert.equal(h.profiles.length,2);
  assert.ok(h.writes.every(q=>!q.includes('raw_reports')));
  assert.equal((await service.execute()).removed,0);

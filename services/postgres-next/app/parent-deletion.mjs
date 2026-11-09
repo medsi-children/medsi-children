@@ -101,6 +101,29 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
       return {ok:true,accepted:true,operationId:id,status:'pending'};
     });
   }
+  // An educator can discharge a child before any parent has registered.
+  // Do not infer the child by name; require the current roster's exact IDs.
+  // Parents-linked children continue through the existing deletion queue so
+  // chats, credentials and S3 media get their own secure cleanup.
+  async function removeChildWithoutParents({childId,admissionId}={}) {
+    ensureEnabled();
+    const child=String(childId||''),admission=String(admissionId||'');
+    if(!/^[A-Za-z0-9_-]{8,128}$/.test(child)||
+      !/^[A-Za-z0-9_-]{8,128}$/.test(admission))throw new Error('Invalid child deletion identifiers.');
+    return write(async tx=>{
+      const [[active]]=await tx`SELECT child_id,status FROM admissions
+        WHERE admission_id=${admission} FOR UPDATE`;
+      if(!active||active.status!=='active'||String(active.child_id)!==child)
+        throw new Error('Roster changed; reload before deleting.');
+      const [linked]=await tx`SELECT phone10 FROM parent_profiles WHERE child_id=${child}`;
+      const [stayLinked]=await tx`SELECT phone10 FROM parent_profiles WHERE admission_id=${admission}`;
+      if(linked.length||stayLinked.length)
+        throw new Error('Child still has parent profiles; delete those first.');
+      const removed=await purgeUnreferencedChild(tx,child,now());
+      if(!removed)throw new Error('Roster changed; reload before deleting.');
+      return {ok:true,removed:true,childId:child};
+    });
+  }
   async function status(operationId) {
     const id=String(operationId||'');
     if(!OP.test(id))throw new Error('Invalid parent deletion identifier.');
@@ -211,5 +234,5 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
       return {ok:false,operationId:id,status:final?'failed':'retry'};
     }
   }
-  return {enqueue,status,pending,retry,processNext};
+  return {enqueue,removeChildWithoutParents,status,pending,retry,processNext};
 }

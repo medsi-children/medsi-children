@@ -112,7 +112,7 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   if(bare&&(sameRegistered.length||candidates.some(b=>b.prefix)))
     return {status:'ambiguous',reason:'unqualified-with-namesake'};
   const explicit=new Set(candidates.map(b=>b.prefix).filter(Boolean));
-  if(explicit.size>1&&(!personSurname||[...explicit].some(p=>!personSurname.startsWith(p))))
+  if(explicit.size>1&&!personSurname)
     return {status:'ambiguous',reason:'multiple-surname-prefixes'};
   if(sameRegistered.length&&possible.some(b=>b.prefix&&
     sameRegistered.some(c=>norm(c.surname).startsWith(b.prefix))))

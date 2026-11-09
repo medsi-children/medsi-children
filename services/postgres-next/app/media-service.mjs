@@ -31,7 +31,7 @@ function parseClaims(value,secret,now) {
     return claims;
   }catch(_){return null;}
 }
-export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now()}) {
+export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now(),currentChildMode=false}) {
   if(!sql?.begin||!sessions?.verifyWorker||!storage||String(secret||'').length<32) {
     throw new Error('Protected media service requires PostgreSQL, sessions, S3 and signing key.');
   }
@@ -39,6 +39,13 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
 
   async function activePhone(tx,phone10) {
+    if(currentChildMode){
+      const [[profile]]=await tx`SELECT phone10,child_id FROM parent_profiles WHERE phone10=${phone10}`;
+      if(!profile)return false;
+      if(!String(profile.child_id||'').trim())return true;
+      const [[child]]=await tx`SELECT child_id FROM children WHERE child_id=${profile.child_id}`;
+      return !!child&&String(child.child_id)===String(profile.child_id);
+    }
     const [[profile]]=await tx`SELECT phone10,child_id,admission_id FROM parent_profiles WHERE phone10=${phone10}`;
     if(!profile)return false;
     // Registration opens the chat before clinical matching is complete.

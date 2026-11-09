@@ -108,6 +108,7 @@ test('Timeweb can scan HTTP port before a slow database connection, while data r
   let destroyed=0;
   const started=await startIsolatedStand({...env,PORT:'0'},{
     connect:()=>new Promise(resolve=>{release=resolve;}),
+    prepareChildSchema:async()=>{},verifyChildSchema:async()=>{},
     makeServices:()=>fakeServices(),
     makeApp:(services,options)=>createNextStandApp(services,options)
   });

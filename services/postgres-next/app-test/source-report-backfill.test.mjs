@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import {createHash} from 'node:crypto';
 import {findPublishedSourceForChild as match,backfillRecentEducatorReports as backfill}
   from '../app/source-report-backfill.mjs';
 
@@ -37,8 +38,34 @@ test('duplicate bare child headers are ambiguous; general comments do not attach
   assert.equal(find('Групповая терапия: Аня активна.'),null);
 });
 
+test('late registration does not concatenate the next unregistered child into the first report',()=>{
+  const source='Аня — Её личное наблюдение.\nБоря — Только его наблюдение.\nДополнительная строка Бори.';
+  assert.equal(find(source),'Аня: Её личное наблюдение.');
+  assert.doesNotMatch(find(source),/Боря|Бори|его наблюдение/);
+  assert.equal(find('Аня: Свой текст.\nБоря: Чужой текст.'),'Аня: Свой текст.');
+  assert.equal(find('Аня — Свой текст.\nСон: другой раздел.'),'Аня: Свой текст.');
+});
+
+test('persisted owner from another admission and blocked source cannot be reassigned',()=>{
+  const body='Её наблюдение.';
+  const source='Аня — '+body;
+  const key='RAW_REPORT_OWNER_morning_'+createHash('sha256')
+    .update('анна\n'+body).digest('base64url');
+  const args={normalizedText:source,child:anna,activeChildren:[anna,misha],
+    nameVariants:variants,kind:'morning',admissionId:'admission_new'};
+  assert.equal(match({...args,ownershipRecords:new Map([[key,JSON.stringify({
+    childAdmissionId:'admission_old',identity:'historical',phones:['9000000001|admission_old']
+  })]])}),null);
+  assert.equal(match({...args,ownershipRecords:new Map([[key,JSON.stringify({
+    blocked:true
+  })]])}),null);
+  assert.equal(match({...args,ownershipRecords:new Map([[key,JSON.stringify({
+    childAdmissionId:'admission_new',identity:'verified'
+  })]])}),'Аня: Её наблюдение.');
+});
+
 function fakeDatabase({source='Аня — Была на группе.\nМиша К. — Собирал пазл.',
-  secondAnna=false,otherAdmission=false,expired=false}={}){
+  secondAnna=false,otherAdmission=false,expired=false,otherPublicationOwner=false}={}){
   const now=Date.parse('2026-11-08T13:00:00Z');
   const profiles=[{phone10:'9000000001',child_id:'child_anna',admission_id:'admission_anna'}];
   const admissions=[{admission_id:'admission_anna',child_id:'child_anna',status:'active'},
@@ -50,6 +77,9 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
   const current=[],history=[],writes=[];
   if(otherAdmission)history.push({phone10:profiles[0].phone10,kind:'morning',
     report_date:'2026-11-08',admission_id:'old_admission'});
+  if(otherPublicationOwner)history.push({phone10:'9000000009',kind:'morning',
+    report_date:'2026-11-08',admission_id:'old_admission',
+    publication_id:'publication_morning',text:'Аня: Была на группе.'});
   const heads=[{kind:'morning',publication_id:'publication_morning'}];
   const raw={publication_id:'publication_morning',kind:'morning',
     report_date:'2026-11-08',revision:5n,submitted_at:BigInt(now-(expired?9:1)*86400000),
@@ -65,6 +95,9 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
       if(q.startsWith('SELECT kind,publication_id FROM report_publication_head'))return [heads];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [variants];
       if(q.startsWith('SELECT publication_id,kind,report_date,submitted_at,')&&q.includes('FROM raw_reports'))return [[raw]];
+      if(q.startsWith('SELECT admission_id,text FROM parent_report_history')){
+        return [history.filter(h=>h.publication_id===params[0]&&h.kind===params[1])];
+      }
       if(q.startsWith('SELECT admission_id FROM parent_report_history')){
         return [history.filter(h=>h.phone10===params[0]&&h.kind===params[1]&&h.report_date===params[2])];
       }
@@ -103,7 +136,8 @@ test('late linked parent receives current morning source in PostgreSQL exactly o
 });
 
 test('unsafe namesakes, expired sources and a historical admission collision are never backfilled',async()=>{
-  for(const config of [{secondAnna:true},{expired:true},{otherAdmission:true}]){
+  for(const config of [{secondAnna:true},{expired:true},{otherAdmission:true},
+    {otherPublicationOwner:true}]){
     const fake=fakeDatabase(config);
     assert.deepEqual(await backfill(fake.sql,{now:()=>fake.now}),{backfilled:0});
     assert.equal(fake.current.length,0);

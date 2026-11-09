@@ -190,6 +190,8 @@ test('real PostgreSQL HTTP: complete NEXT UI, protected endpoints and schema hea
   const conn = await connectPostgresNext(process.env);
   const env = {
     ...process.env, MEDSI_NEXT_STAND: '1', MEDSI_NEXT_PG_ENABLED: '1',
+    // Historical environment flags must never reactivate admission-based routes.
+    MEDSI_CURRENT_CHILD_MODEL: '0',
     NEXT_SESSION_SECRET: 'synthetic-ci-session-secret-1234567890',
     NEXT_TUTOR_LOGIN: 'fictional_ci_tutor',
     NEXT_TUTOR_PASSWORD: 'not-a-production-password',

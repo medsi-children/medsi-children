@@ -44,13 +44,15 @@ export function currentStaffPublications(rows=[],today){
 export function parseCurrentStaffBlocks(text,nameVariants=[]){
   const blocks=[];
   let current=null;
-  for(const line of String(text||'').replace(/\r\n?/g,'\n').split('\n')){
+  const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
+  for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
+    const line=lines[lineIndex];
     if(GENERAL.test(line)){current=null;continue}
     const m=HEADER.exec(line);
     if(m){
       const key=preferredName(m[1],nameVariants);
       // Name-like headings are structural boundaries even if nobody has registered.
-      current=key?{canonical:key,name:firstUpper(m[1]),prefix:norm(m[2]).replace(/\.$/,''),body:[m[3]]}:null;
+      current=key?{canonical:key,name:firstUpper(m[1]),prefix:norm(m[2]).replace(/\.$/,''),body:[m[3]],lineIndex}:null;
       if(current)blocks.push(current);
     }else if(current)current.body.push(line);
   }

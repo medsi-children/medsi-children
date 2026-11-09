@@ -45,6 +45,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
     // the same canonical name. Duplicate unqualified headers are likewise
     // never inferred or assigned.
     if(!block.prefix&&(family.length!==1||siblingBlocks.length!==1))candidates=[];
+    if(siblingBlocks.length>1&&siblingBlocks.some(b=>!b.prefix))candidates=[];
     if(block.prefix&&siblingBlocks.some(b=>b!==block&&b.prefix===block.prefix))candidates=[];
     const recorded=priorBlockOwners[block.index];
     if(recorded===null||recorded?.blocked)candidates=[];

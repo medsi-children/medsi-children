@@ -34,7 +34,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
     const g=groups.get(b.canonical)||[];
     g.push(b);groups.set(b.canonical,g);
   }
-  const assigned=new Map(),owners=[],unresolved=[];
+  const assigned=new Map(),blockedChildren=new Set(),owners=[],unresolved=[];
   for(const block of sourceBlocks){
     const family=roster.filter(c=>canonicalCurrentName(c.registered_first_name,nameVariants)===block.canonical);
     const siblingBlocks=groups.get(block.canonical)||[];
@@ -53,16 +53,26 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
     const childId=unique?String(candidates[0].child_id):'';
     // One block can serve two parents of the SAME child. It must never
     // serve multiple child IDs, and one child cannot get two source blocks.
-    if(childId&&assigned.has(childId)){
+    if(childId&&(assigned.has(childId)||blockedChildren.has(childId))){
       assigned.delete(childId);
+      blockedChildren.add(childId);
       owners.push({index:block.index,childId:'',blocked:true});
       unresolved.push({index:block.index,reason:'duplicate-child-block'});
     }else if(childId){
       assigned.set(childId,{...block,childId});
       owners.push({index:block.index,childId});
     }else{
-      owners.push({index:block.index,childId:'',blocked:true});
-      unresolved.push({index:block.index,reason:'unresolved-or-ambiguous'});
+      // A clearly distinguishable source block without a registered parent
+      // is unclaimed, not quarantined. Late registration can claim it if the
+      // latest report still proves a UNIQUE matching surname/name.
+      const competingSource=siblingBlocks.filter(b=>b!==block&&
+        (!b.prefix||!block.prefix||b.prefix===block.prefix));
+      const competitors=family.filter(c=>!block.prefix||
+        prefixMatch(c.surname,block.prefix));
+      const pending=!recorded&&competingSource.length===0&&competitors.length===0;
+      owners.push({index:block.index,childId:'',pending,blocked:!pending});
+      unresolved.push({index:block.index,
+        reason:pending?'awaiting-parent':'unresolved-or-ambiguous'});
     }
   }
   return {kind,rawText,normalizedText:rawText,owners,unresolved,

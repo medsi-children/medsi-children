@@ -2,9 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createReportReader} from '../app/report-reader.mjs';
 
-function fakeSql(){
+function fakeSql({publishedTherapy=null,unlinked=false}={}){
   const data={
-    profile:{admission_id:'admission_NEW',parent_name:'Родитель',child_id:'c1'},
+    profile:unlinked?{admission_id:'',parent_name:'Родитель',child_id:'',child_name:''}:{admission_id:'admission_NEW',parent_name:'Родитель',child_id:'c1'},
     child:{registered_first_name:'Лена',surname:'Тестовая'},
     current:[
       {kind:'morning',admission_id:'admission_NEW',version:'version_002',read_version:'',text:'Текущий отчёт',updated_at:3},
@@ -24,6 +24,9 @@ function fakeSql(){
       if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [[]];
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [[]];
       if(q.startsWith('SELECT kind,publication_id FROM report_publication_head'))return [[]];
+      if(q.startsWith('SELECT publication_id FROM report_publication_head'))return [publishedTherapy?[{publication_id:'psychology_latest'}]:[]];
+      if(q.startsWith('SELECT normalized_text,submitted_at FROM raw_reports'))return [publishedTherapy?[{normalized_text:publishedTherapy,submitted_at:123456789}]:[]];
+      if(q.startsWith('SELECT phone10 FROM parent_auth_profiles'))return [[]];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [[]];
       if(q.includes('FROM children'))return [[data.child]];
       if(q.includes('FROM parent_current_reports')&&q.includes('AND kind='))return [[data.current.find(row=>row.kind===args[1])]];
@@ -63,4 +66,24 @@ test('invalid phone and kind fail before database access',async()=>{
   const {sql}=fakeSql();const r=createReportReader(sql);
   await assert.rejects(()=>r.current('90000'),/Invalid parent phone/);
   await assert.rejects(()=>r.markRead('9000000001','secret','v'),/Invalid report version/);
+});
+
+test('group therapy is always fetched from the latest published source, even for a late parent',async()=>{
+  const value='Занятие: общая групповая терапия.\n\nИтоги: синтетический пример.';
+  const {sql}=fakeSql({publishedTherapy:value});
+  const result=await createReportReader(sql).current('9000000001');
+  assert.equal(result.ok,true);
+  const therapy=result.reports.find(r=>r.kind==='psychology');
+  assert.equal(therapy.text,value);
+  assert.equal(therapy.updatedAt,123456789);
+  assert.match(therapy.version,/^[a-f0-9]{64}$/);
+  assert.equal(result.reports.find(r=>r.kind==='morning').text,'Текущий отчёт');
+  assert.equal(result.reports.some(r=>r.kind==='evening'),false);
+});
+test('unlinked authenticated parent still receives shared current therapy, without child report leakage',async()=>{
+  const {sql}=fakeSql({publishedTherapy:'Общая терапия: тестовое занятие.',unlinked:true});
+  const result=await createReportReader(sql).current('9000000001');
+  assert.equal(result.ok,true);
+  assert.equal(result.unlinked,true);
+  assert.deepEqual(result.reports.map(r=>r.kind),['psychology']);
 });

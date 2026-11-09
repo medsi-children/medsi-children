@@ -85,6 +85,10 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(!await educator(req,res))return;
     return parentDeletion.enqueue(req.body||{});
   }));
+  router.post('/admin/roster/remove-unlinked-child',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return parentDeletion.removeChildWithoutParents(req.body||{});
+  }));
   router.get('/parent-delete/status',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return parentDeletion.status(req.query.operationId);

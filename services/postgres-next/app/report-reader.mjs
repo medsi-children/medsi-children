@@ -49,8 +49,15 @@ export function createReportReader(sql) {
     const first=await fetchCurrent();
     // Returning parent: retry unique admission matching before retrieving
     // previously published source blocks for this child's admission.
-    if(first.unlinked)await reconcileUnlinkedRegisteredParents(sql,{phone10:phone});
-    if(first.ok)await backfillRecentEducatorReports(sql,{phone10:phone});
+    // Recovery is opportunistic. A failure in child/admission matching or
+    // morning/evening backfill must never hide the current shared group
+    // therapy (or other already published, verified parent reports).
+    if(first.unlinked){
+      try{await reconcileUnlinkedRegisteredParents(sql,{phone10:phone})}catch(_){}
+    }
+    if(first.ok){
+      try{await backfillRecentEducatorReports(sql,{phone10:phone})}catch(_){}
+    }
     return fetchCurrent();
   }
   async function history(phoneRaw){

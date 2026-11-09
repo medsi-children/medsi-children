@@ -22,6 +22,7 @@ async function closeDatabaseDriver(driver) {
 import {createSessionService} from './session-auth.mjs';
 import {createReportReader} from './report-reader.mjs';
 import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
+import {ensureCurrentChildColumns} from './current-child-schema.mjs';
 import {createCurrentReportSubmissionService} from './current-report-submission-service.mjs';
 import {createCurrentEducatorDashboardStore} from './current-educator-dashboard.mjs';
 import {createCurrentEducatorRosterStore} from './current-educator-roster.mjs';
@@ -122,8 +123,6 @@ export async function checkCurrentChildSchema(sql) {
 export function createNextServices({sql,env=process.env}) {
   requireEnv(env);
   const currentChildMode=env.MEDSI_CURRENT_CHILD_MODEL==='1';
-  if(currentChildMode&&env.MEDSI_CURRENT_CHILD_SCHEMA_READY!=='1')
-    throw new Error('Current-child model requires verified database expansion.');
   const sessions=createSessionService({
     sql,secret:env.NEXT_SESSION_SECRET,login:env.NEXT_TUTOR_LOGIN,
     password:env.NEXT_TUTOR_PASSWORD,tutorVersion:env.NEXT_TUTOR_VERSION,
@@ -366,6 +365,14 @@ export async function startIsolatedStand(env=process.env,{
         return;
       }
       driver=connection.driver;
+      if(env.MEDSI_CURRENT_CHILD_MODEL==='1'){
+        // Opt-in only. Add two columns and migrate only proven associations;
+        // never delete patient rows, raw sources, or the old schema.
+        state.code='CURRENT_CHILD_COLUMNS_PENDING';
+        await ensureCurrentChildColumns(connection.sql);
+        await checkCurrentChildSchema(connection.sql);
+        console.log('MEDSI_CURRENT_CHILD_COLUMNS_READY');
+      }
       state.code='NEXT_SERVICES_PENDING';
       const services=makeServices({sql:connection.sql,env});
       state.code='NEXT_ROUTER_PENDING';

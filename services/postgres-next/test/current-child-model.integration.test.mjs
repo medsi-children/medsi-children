@@ -10,6 +10,7 @@ import {createCurrentReportPublisher} from '../app/current-report-publications.m
 import {createCurrentParentReportReader} from '../app/current-parent-report-reader.mjs';
 import {purgeCurrentRegisteredChild} from '../app/current-child-deletion.mjs';
 import {checkCurrentChildSchema} from '../app/stand-server.mjs';
+import {ensureCurrentChildColumns} from '../app/current-child-schema.mjs';
 
 const enabled=process.env.CI==='true'&&process.env.MEDSI_CURRENT_IDENTITY_TEST==='1';
 const raw=label=>'Степан '+label+' — Синтетическое наблюдение.';
@@ -18,12 +19,14 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
 },async()=>{
   const env={...process.env,PG_SCHEMA_CONFIRM:'CREATE_SCHEMA_IN_EMPTY_DATABASE'};
   await installSchema(env);
-  const pool=new pg.Pool(readPostgresConfig(env));
-  try{
-    await pool.query(readFileSync(new URL('../sql/002_current_child_expand.sql',import.meta.url),'utf8'));
-  }finally{await pool.end()}
   const conn=await connectPostgresNext(env);
   const {sql}=conn;
+  // The opt-in runtime can prepare old installations in-place without an
+  // external SQL console. Repeating it must be safe and never drop tables.
+  await ensureCurrentChildColumns(sql);
+  await ensureCurrentChildColumns(sql);
+  const [[legacyTable]]=await sql`SELECT to_regclass(${'public.admissions'}) IS NOT NULL AS retained`;
+  assert.equal(legacyTable.retained,true);
   let clock=Date.now()-20000;
   const now=()=>clock;
   const publisher=createCurrentReportPublisher(sql);

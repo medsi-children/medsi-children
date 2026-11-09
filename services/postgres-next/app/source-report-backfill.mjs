@@ -22,6 +22,10 @@ const cleanFingerprint=value=>String(value||'').replace(/\r\n?/g,'\n')
   .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g,'')
   .replace(/[ \t]+/g,' ').replace(/[ \t]+\n/g,'\n')
   .replace(/\n{3,}/g,'\n\n').trim().normalize('NFC');
+function publishedTextBody(text){
+  // Parent-facing reports normally have a short "Name: body" prefix.
+  return normalizedBody(String(text||'').replace(/^[^:\n—–]{2,90}\s*[:—–]\s*/u,''));
+}
 function sourceOwnershipKey(kind,block){
   const value=cleanFingerprint(block.canonical+'\n'+normalizedBody(block.lines.join('\n')));
   return 'RAW_REPORT_OWNER_'+kind+'_'+createHash('sha256').update(value,'utf8').digest('base64url');
@@ -57,7 +61,7 @@ function namedBlocks(source,activeChildren,nameVariants){
 // distributed by inference; publication data from other children stays sealed.
 export function findPublishedSourceForChild({
   normalizedText='',child,activeChildren=[],nameVariants=[],
-  kind='',admissionId='',ownershipRecords=null
+  kind='',admissionId='',ownershipRecords=null,publishedOwners=[]
 }={}){
   if(!child||!Array.isArray(activeChildren)||!activeChildren.length)return null;
   const target=canonicalRegisteredName(child.registered_first_name,nameVariants);
@@ -78,6 +82,9 @@ export function findPublishedSourceForChild({
     return matchingChildren.length===1&&String(matchingChildren[0].child_id)===String(child.child_id);
   });
   if(matches.length!==1)return null;
+  const candidateBody=normalizedBody(matches[0].lines.join('\n'));
+  if(publishedOwners.some(row=>String(row.admission_id)!==String(admissionId)&&
+      publishedTextBody(row.text)===candidateBody))return null;
   // A saved owner is authoritative. A blocked or other-admission owner
   // must not be reassigned by the roster's present-day name uniqueness.
   if(ownershipRecords){
@@ -135,8 +142,12 @@ export async function backfillRecentEducatorReports(sql,{phone10='',now=()=>Date
       const publishedAt=Number(publication.submitted_at||0);
       const age=now()-publishedAt;
       if(!Number.isFinite(age)||age<0||age>7*24*60*60*1000)continue;
-      const [ownerRows]=await tx`SELECT owner_key,record_json FROM report_ownership
-        WHERE owner_key LIKE ${'RAW_REPORT_OWNER_'+kind+'_%'}`;
+      const [[ownerRows],[publishedOwners]]=await Promise.all([
+        tx`SELECT owner_key,record_json FROM report_ownership
+          WHERE owner_key LIKE ${'RAW_REPORT_OWNER_'+kind+'_%'}`,
+        tx`SELECT admission_id,text FROM parent_report_history
+          WHERE publication_id=${publication.publication_id} AND kind=${kind}`
+      ]);
       const ownershipRecords=new Map(ownerRows.map(row=>[String(row.owner_key),String(row.record_json)]));
       for(const profile of validProfiles){
         const existing=currentByKey.get(String(profile.phone10)+'/'+kind);
@@ -145,7 +156,7 @@ export async function backfillRecentEducatorReports(sql,{phone10='',now=()=>Date
         const child=childById.get(String(profile.child_id));
         const text=findPublishedSourceForChild({
           normalizedText:publication.normalized_text,child,activeChildren,nameVariants,
-          kind,admissionId:profile.admission_id,ownershipRecords
+          kind,admissionId:profile.admission_id,ownershipRecords,publishedOwners
         });
         if(!text)continue;
         const cutoff=await deletionCutoff(tx,canonicalRegisteredName(child.registered_first_name,nameVariants));

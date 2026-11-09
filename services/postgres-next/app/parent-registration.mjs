@@ -1,5 +1,5 @@
 import {randomBytes} from 'node:crypto';
-import {findUniqueActiveAdmissionForParent,parseRegisteredChildName,linkedAdmissionsForMatching} from './parent-admission-matching.mjs';
+import {findUniqueActiveAdmissionForParent,parseRegisteredChildName,linkedAdmissionsForMatching,sourceAmbiguityAdmissions} from './parent-admission-matching.mjs';
 import {createAdmissionFromStaffReport,recentStaffSource,staffSourceContradictsExistingChild} from './report-observed-admission.mjs';
 import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
@@ -76,7 +76,9 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
         // report, create their hospital identity if the name is unique.
         if(!reports)reports=await recentStaffSource(tx,timestamp);
         match=await createAdmissionFromStaffReport(tx,{
-          childName,children,admissions:matchingAdmissions,nameVariants,reports,now:timestamp
+          childName,children,admissions:sourceAmbiguityAdmissions({childName,children,
+            admissions,linkedAdmissions:matchingAdmissions,nameVariants}),
+          nameVariants,reports,now:timestamp
         });
       }
       const userHandle=randomBytes(32).toString('base64url');

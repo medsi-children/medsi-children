@@ -48,8 +48,9 @@ export function createCurrentChildLinkStore(sql,{now=()=>Date.now()}={}){
             (child_id,registered_first_name,surname,created_at)
             VALUES (${childId},${decision.firstName},${decision.surname},${BigInt(now())})`;
           matched={childId};
-          children.push({child_id:childId,registered_first_name:decision.firstName,
-            surname:decision.surname});
+          if(!children.some(row=>String(row.child_id)===childId))
+            children.push({child_id:childId,registered_first_name:decision.firstName,
+              surname:decision.surname});
         }
         if(!matched){
           decision.status==='ambiguous'?ambiguous++:pending++;

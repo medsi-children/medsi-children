@@ -5,30 +5,36 @@ import {createParentRegistrationService} from '../app/parent-registration.mjs';
 const phone='9991112233';
 const payload={phone:'8'+phone,parentName:'Мария Тестовая',childName:'Лена Тестовая',
   attemptId:'reg_123456789012345678901234'};
-function fakeDatabase({matched=true,observed=false}={}) {
+function fakeDatabase({matched=true,observed=false,staleOrphan=false}={}) {
   let attempt=null,profile=null,auth=null,recoveryReads=0;
   const created={children:[],admissions:[]};
+  const oldChild=staleOrphan?{child_id:'child_old_stepan',registered_first_name:'Степан',surname:'Мерцалов'}:
+    {child_id:'child-1',registered_first_name:'Лена',surname:'Тестовая'};
+  const activeStay=staleOrphan?{admission_id:'admission_old_stepan',child_id:oldChild.child_id,status:'active'}:
+    {admission_id:'adm-1',child_id:'child-1',status:matched?'active':'closed'};
+  const currentParents=matched&&!staleOrphan?[{child_id:'child-1',admission_id:'adm-1'}]:[];
   const sql={begin:async(_opts,fn)=>{
    const tx=async(strings,...values)=>{
     const query=strings.join('?').replace(/\s+/g,' ').trim();
     if(query.includes('FROM report_ownership'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_deletion_queue'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_registration_attempts'))return [attempt?[attempt]:[]];
+    if(query.startsWith('SELECT child_id,admission_id FROM parent_profiles'))return [currentParents];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_profiles'))return [profile?[profile]:[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_auth_profiles'))return [auth?[auth]:[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_current_reports')){recoveryReads++;return [[]]}
     if(query.startsWith('SELECT')&&query.includes('FROM report_publication_head'))return [[]];
-    if(query.startsWith('SELECT')&&query.includes('FROM children'))return [[
-      {child_id:'child-1',registered_first_name:'Лена',surname:'Тестовая'}
-    ]];
-    if(query.startsWith('SELECT')&&query.includes('FROM admissions'))return [[
-      {admission_id:'adm-1',child_id:'child-1',status:matched?'active':'closed'}
-    ]];
+    if(query.startsWith('SELECT')&&query.includes('FROM children'))return [[oldChild]];
+    if(query.startsWith('SELECT')&&query.includes('FROM admissions'))return [[activeStay]];
     if(query.startsWith('SELECT')&&query.includes('FROM name_variants'))return [[
       {base_key:'лена',preferred_name:'лена',variants_json:'["елена"]'},
       {base_key:'анна',preferred_name:'анна',variants_json:'["аня","анюта"]'}
     ]];
-    if(query.startsWith('SELECT')&&query.includes('FROM raw_reports'))return [observed?[{
+    if(query.startsWith('SELECT')&&query.includes('FROM raw_reports'))return [staleOrphan?[{
+      kind:'morning',raw_text:'Степан: Занимался на прогулке.',
+      normalized_text:'Степан — Занимался на прогулке.',report_date:'2026-11-09',
+      submitted_at:Date.parse('2026-11-09T12:00:00Z')
+    }]:observed?[{
       kind:'morning',raw_text:'Аня: Была на групповом занятии.',
       normalized_text:'Аня — Была на групповом занятии.',report_date:'2026-11-08'
     }]:[]];
@@ -117,6 +123,21 @@ test('sole staff-reported child is enrolled and linked when mother registers wit
   assert.equal(created.children[0].firstName,'Анна');
   assert.equal(created.admissions.length,1);
   assert.equal(created.admissions[0].status,'active');
+  assert.equal(profile.child_id,created.children[0].id);
+  assert.equal(profile.admission_id,created.admissions[0].id);
+});
+
+test('deleted Stepan Merts(al)ov roster residue cannot steal Stepan Sidorov registration',async()=>{
+  const fake=fakeDatabase({staleOrphan:true});
+  const service=createParentRegistrationService({sql:fake.sql,now:()=>Date.parse('2026-11-09T13:00:00Z'),
+    sessions:{issueParent:async()=>({token:'signed',expiresAt:99999})}});
+  const result=await service.register({...payload,childName:'Степан Сидоров'});
+  assert.equal(result.ok,true);
+  const {profile,created}=fake.state();
+  assert.equal(created.children.length,1);
+  assert.equal(created.children[0].firstName,'Степан');
+  assert.equal(created.children[0].surname,'Сидоров');
+  assert.notEqual(profile.child_id,'child_old_stepan');
   assert.equal(profile.child_id,created.children[0].id);
   assert.equal(profile.admission_id,created.admissions[0].id);
 });

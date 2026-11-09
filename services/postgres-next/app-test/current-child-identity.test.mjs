@@ -92,3 +92,14 @@ test('duplicate parent profiles are not mistaken for two different children',()=
   const profiles=[{child_id:'kid1',phone10:'9000000001'}, {child_id:'kid1',phone10:'9000000002'}];
   assert.equal(matchRegisteredChild({childName:'Степан',children,profiles}).childId,'kid1');
 });
+
+test('evening explicit namesakes supersede morning bare name for NEW registrations',()=>{
+  const publications=[
+    src('Саша — Ранее без уточнения.', 'morning', '2026-11-09',100),
+    src('Саша Ив. — Девочка читала.\nСаша Иг. — Девочка рисовала.',
+      'evening','2026-11-09',200)
+  ];
+  assert.equal(check('Александра Игнатьева',publications).status,'new');
+  assert.equal(check('Александра Иванова',publications).status,'new');
+  assert.equal(check('Саша',publications).status,'ambiguous');
+});

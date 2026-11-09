@@ -1,5 +1,5 @@
 import {randomUUID} from 'node:crypto';
-import {matchRegisteredChild,matchCurrentSource} from './current-child-identity.mjs';
+import {matchCurrentSource} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const moscowDate=value=>{
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Moscow',
@@ -37,25 +37,23 @@ export function createCurrentChildLinkStore(sql,{now=()=>Date.now()}={}){
         :[profiles];
       let linked=0,pending=0,ambiguous=0;
       for(const parent of waiting){
-        let matched=matchRegisteredChild({childName:parent.child_name,
-          profiles:allProfiles,children,nameVariants:variants});
+        const decision=matchCurrentSource({
+          childName:parent.child_name,profiles:allProfiles,children,
+          nameVariants:variants,publications,today:moscowDate(now())
+        });
+        let matched=decision.status==='linked'?{childId:decision.childId}:null;
+        if(decision.status==='new'){
+          const childId='child_'+randomUUID().replace(/-/g,'');
+          await tx.upsert`INSERT INTO children
+            (child_id,registered_first_name,surname,created_at)
+            VALUES (${childId},${decision.firstName},${decision.surname},${BigInt(now())})`;
+          matched={childId};
+          children.push({child_id:childId,registered_first_name:decision.firstName,
+            surname:decision.surname});
+        }
         if(!matched){
-          const decision=matchCurrentSource({
-            childName:parent.child_name,profiles:allProfiles,children,
-            nameVariants:variants,publications,today:moscowDate(now())
-          });
-          if(decision.status==='new'){
-            const childId='child_'+randomUUID().replace(/-/g,'');
-            await tx.upsert`INSERT INTO children
-              (child_id,registered_first_name,surname,created_at)
-              VALUES (${childId},${decision.firstName},${decision.surname},${BigInt(now())})`;
-            matched={childId};
-            children.push({child_id:childId,registered_first_name:decision.firstName,
-              surname:decision.surname});
-          }else{
-            decision.status==='ambiguous'?ambiguous++:pending++;
-            continue;
-          }
+          decision.status==='ambiguous'?ambiguous++:pending++;
+          continue;
         }
         const [updated]=await tx`UPDATE parent_profiles
           SET child_id=${matched.childId},updated_at=${BigInt(now())}

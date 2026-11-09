@@ -55,7 +55,7 @@ test('already active namesake must be resolved using existing child IDs, never d
 });
 test('the prospective child is created only as roster rows, with no medical report writes',async()=>{
   const inserted=[];
-  const tx=()=>{throw new Error('Unexpected query')};
+  const tx=async strings=>{if(strings.join('?').includes('FROM report_ownership'))return [[]];throw new Error('Unexpected query')};
   tx.upsert=async(strings,...values)=>{
     inserted.push({sql:strings.join('?').replace(/\s+/g,' ').trim(),values});
     return [[]];

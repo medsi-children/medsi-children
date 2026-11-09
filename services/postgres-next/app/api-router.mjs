@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push,orphanCleanup}) {
   const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
@@ -131,6 +131,17 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(!await educator(req,res))return;
     if(typeof roster?.list!=='function')throw new Error('Roster unavailable.');
     return roster.list();
+  }));
+  router.get('/admin/roster/cleanup',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    if(!orphanCleanup)throw new Error('Roster cleanup unavailable.');
+    return orphanCleanup.preview();
+  }));
+  router.post('/admin/roster/cleanup',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    if(req.body?.confirm!==true)throw new Error('Invalid cleanup confirmation.');
+    if(!orphanCleanup)throw new Error('Roster cleanup unavailable.');
+    return orphanCleanup.execute();
   }));
   router.post('/admin/roster/edit',run(async(req,res)=>{
     if(!await educator(req,res))return;

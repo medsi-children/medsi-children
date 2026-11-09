@@ -1,3 +1,4 @@
+import {sourcesAfterDeletion} from './deleted-source-guard.mjs';
 import {randomUUID} from 'node:crypto';
 import {canonicalRegisteredName,parseRegisteredChildName} from './parent-admission-matching.mjs';
 
@@ -102,7 +103,12 @@ export function findUniqueRecentStaffMention({
 export async function createAdmissionFromStaffReport(tx,{
   childName,children,admissions,nameVariants,reports,now=Date.now()
 }={}){
-  const found=findUniqueRecentStaffMention({childName,children,admissions,nameVariants,reports});
+  let found=findUniqueRecentStaffMention({childName,children,admissions,nameVariants,reports});
+  if(found){
+    const canonicalName=canonical(parseRegisteredChildName(childName).first,nameVariants);
+    reports=await sourcesAfterDeletion(tx,canonicalName,reports);
+    found=findUniqueRecentStaffMention({childName,children,admissions,nameVariants,reports});
+  }
   if(!found)return null;
   const childId='child_'+randomUUID().replace(/-/g,'');
   const admissionId='admission_'+randomUUID().replace(/-/g,'');
@@ -114,7 +120,7 @@ export async function createAdmissionFromStaffReport(tx,{
 }
 export async function recentStaffSource(tx,now=Date.now()){
   const cutoff=new Date(now-14*24*60*60*1000).toISOString().slice(0,10);
-  const [rows]=await tx`SELECT kind,raw_text,normalized_text,report_date FROM raw_reports
+  const [rows]=await tx`SELECT kind,raw_text,normalized_text,report_date,submitted_at FROM raw_reports
     WHERE kind IN (${'morning'},${'evening'}) AND report_date>=${cutoff}
     ORDER BY submitted_at DESC LIMIT 60`;
   return rows;

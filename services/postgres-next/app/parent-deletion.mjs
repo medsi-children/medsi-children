@@ -1,4 +1,7 @@
-
+import {createHash} from 'node:crypto';
+import {canonicalRegisteredName} from './parent-admission-matching.mjs';
+import {deletedSourceKey} from './deleted-source-guard.mjs';
+const phoneDigest=value=>'sha256:'+createHash('sha256').update(String(value)).digest('hex');
 const PHONE=/^\d{10}$/;
 // Accept IDs from both current and previously cached educator panels.
 const OP=/^(?:del|delete)_[A-Za-z0-9_-]{12,125}$/;
@@ -6,6 +9,52 @@ const num=n=>BigInt(n);
 const phoneOf=p=>String(p||'').replace(/\D/g,'').slice(-10);
 const MAX_ATTEMPTS=6;
 const LEASE_MS=10*60*1000;
+
+
+// Raw educator sources are deliberately never edited by deletion.
+export async function purgeUnreferencedChild(tx,childId,timestamp,{guardOldSources=true}={}){
+  const [remaining]=await tx`SELECT phone10 FROM parent_profiles WHERE child_id=${childId}`;
+  const [stays]=await tx`SELECT admission_id FROM admissions WHERE child_id=${childId}`;
+  if(remaining.length)return false;
+  for(const stay of stays){
+    const [references]=await tx`SELECT phone10 FROM parent_profiles WHERE admission_id=${stay.admission_id}`;
+    if(references.length)return false;
+  }
+  const [[child]]=await tx`SELECT registered_first_name,surname FROM children WHERE child_id=${childId}`;
+  const stayIds=new Set(stays.map(row=>String(row.admission_id)));
+  const [owners]=await tx`SELECT owner_key,record_json FROM report_ownership`;
+  let lastOwnedAt=0;
+  for(const owner of owners){
+    let record;try{record=JSON.parse(owner.record_json)}catch{continue}
+    const owned=record&&(stayIds.has(String(record.childAdmissionId||''))||
+      (Array.isArray(record.phones)&&record.phones.some(contact=>stayIds.has(String(contact).split('|')[1]))));
+    if(owned){
+      lastOwnedAt=Math.max(lastOwnedAt,Number(record.at)||0);
+      await tx`UPDATE report_ownership SET record_json=${JSON.stringify({blocked:true,at:timestamp})},updated_at=${num(timestamp)} WHERE owner_key=${owner.owner_key}`;
+    }
+  }
+  // A future deletion fences current sources. Repairing old orphans fences
+  // only sources known to have belonged to that old stay, not fresh reports.
+  const cutoff=guardOldSources?timestamp:lastOwnedAt;
+  if(child&&cutoff){
+    const [variants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
+    const canonical=canonicalRegisteredName(child.registered_first_name,variants);
+    if(!canonical)throw new Error('Child name needs review before deletion.');
+    const [[prior]]=await tx`SELECT record_json FROM report_ownership WHERE owner_key=${deletedSourceKey(canonical)}`;
+    let previous=0;try{previous=Number(JSON.parse(prior?.record_json||'{}').cutoff)||0}catch{throw new Error('Deletion source guard needs review.');}
+    await tx.upsert`INSERT INTO report_ownership (owner_key,record_json,updated_at)
+      VALUES (${deletedSourceKey(canonical)},${JSON.stringify({cutoff:Math.max(cutoff,previous)})},${num(timestamp)})`;
+  }
+  for(const stay of stays){
+    await tx`DELETE FROM parent_current_reports WHERE admission_id=${stay.admission_id}`;
+    await tx`DELETE FROM parent_report_history WHERE admission_id=${stay.admission_id}`;
+  }
+  await tx`DELETE FROM parent_registration_attempts WHERE child_id=${childId}`;
+  await tx`DELETE FROM parent_deletion_queue WHERE child_id=${childId} AND status=${'completed'}`;
+  await tx`DELETE FROM admissions WHERE child_id=${childId}`;
+  await tx`DELETE FROM children WHERE child_id=${childId}`;
+  return true;
+}
 
 export function createParentDeletionService({sql,removeMedia,enabled=false,now=()=>Date.now()}) {
   if(!sql?.begin)throw new Error('Deletion requires a PostgreSQL query client.');
@@ -21,7 +70,7 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
     return write(async tx=>{
       const [[existing]]=await tx`SELECT operation_id,phone10,status FROM parent_deletion_queue WHERE operation_id=${id}`;
       if(existing){
-        if(existing.phone10!==phone10)throw new Error('Invalid parent deletion identifier collision.');
+        if(existing.phone10!==phone10&&existing.phone10!==phoneDigest(phone10))throw new Error('Invalid parent deletion identifier collision.');
         return {ok:true,accepted:true,operationId:id,status:existing.status,duplicate:true};
       }
       const [jobs]=await tx`SELECT operation_id,phone10,status FROM parent_deletion_queue WHERE phone10=${phone10}`;
@@ -39,8 +88,10 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
           ${String(profile.profile_generation||'')},${'pending'},${num(0)},${''},
           ${num(timestamp)},${num(timestamp)})`;
       // Logical deletion first: all parent tokens are rejected immediately.
-      // Keep children/admissions/reports for other active parents.
+      // Other guardians retain their child. The last guardian removes the
+      // clinical roster identity too, instead of leaving an invisible active stay.
       await tx`DELETE FROM parent_profiles WHERE phone10=${phone10}`;
+      if(profile.child_id)await purgeUnreferencedChild(tx,profile.child_id,timestamp);
       await tx`UPDATE parent_access_requests SET status=${'DENIED'},decision=${'REVOKED'},
         updated_at=${num(timestamp)} WHERE phone10=${phone10}`;
       return {ok:true,accepted:true,operationId:id,status:'pending'};
@@ -53,7 +104,7 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
       const [[row]]=await tx`SELECT operation_id,phone10,child_id,status,attempts,last_error,updated_at
         FROM parent_deletion_queue WHERE operation_id=${id}`;
       if(!row)return {ok:true,operationId:id,status:'not_found'};
-      return {ok:true,operationId:id,phone:row.phone10,status:row.status,
+      return {ok:true,operationId:id,phone:PHONE.test(row.phone10)?'8'+row.phone10:'',status:row.status,
         attempts:Number(row.attempts||0),message:row.last_error||'',updatedAt:Number(row.updated_at||0)};
     });
   }
@@ -141,6 +192,7 @@ export function createParentDeletionService({sql,removeMedia,enabled=false,now=(
           await tx`DELETE FROM ${sql.identifier(table)} WHERE phone10 = ${phone10}`;
         }
         await tx`UPDATE parent_deletion_queue SET status=${'completed'},last_error=${''},
+          phone10=${phoneDigest(phone10)},parent_name=${''},child_id=${''},admission_id=${''},profile_generation=${''},
           updated_at=${num(now())} WHERE operation_id=${id}`;
       });
       return {ok:true,operationId:id,status:'completed'};

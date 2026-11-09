@@ -68,6 +68,7 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
   const sql={begin:async(_opts,fn)=>{
     const tx=async(strings,...params)=>{
       const q=strings.join('?').replace(/\s+/g,' ').trim();
+      if(q.includes('FROM report_ownership'))return [[]];
       if(q.startsWith('SELECT phone10,child_id,admission_id FROM parent_profiles'))return [profiles];
       if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [admissions];
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [children];
@@ -82,6 +83,7 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
     };
     tx.upsert=async(strings,...params)=>{
       const q=strings.join('?').replace(/\s+/g,' ').trim();
+      if(q.includes('FROM report_ownership'))return [[]];
       if(q.startsWith('INSERT INTO parent_current_reports')){
         writes.push('current');
         current.splice(0,current.length,{phone10:params[0],kind:params[1],admission_id:params[2],

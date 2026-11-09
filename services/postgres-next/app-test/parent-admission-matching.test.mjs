@@ -67,13 +67,14 @@ function fakeReconciliation({rawOnly=false}={}){
   const sql={begin:async(_opts,fn)=>{
     const tx=async(strings,...params)=>{
       const q=strings.join('?').replace(/\s+/g,' ').trim();
+      if(q.includes('FROM report_ownership'))return [[]];
       if(/^(INSERT|UPDATE|DELETE)/.test(q)&&/report_(?:history|current)|raw_reports/.test(q))reportQueries++;
       if(q.startsWith('SELECT phone10,child_name,child_id,admission_id,profile_generation FROM parent_profiles'))return [profiles];
       if(q.startsWith('SELECT phone10 FROM parent_auth_profiles'))return [auth];
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [[...hospitalChildren]];
       if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [[...hospitalAdmissions]];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [nameVariants];
-      if(q.startsWith('SELECT kind,raw_text,normalized_text,report_date FROM raw_reports'))return [reported];
+      if(q.startsWith('SELECT kind,raw_text,normalized_text,report_date,submitted_at FROM raw_reports'))return [reported];
       if(q.startsWith('UPDATE parent_profiles SET child_id=')){
         const [childId,admissionId,,phone]=params;
         const p=profiles.find(p=>p.phone10===phone&&!p.child_id&&!p.admission_id);
@@ -91,6 +92,7 @@ function fakeReconciliation({rawOnly=false}={}){
     };
     tx.upsert=async(strings,...params)=>{
       const q=strings.join('?').replace(/\s+/g,' ').trim();
+      if(q.includes('FROM report_ownership'))return [[]];
       if(q.startsWith('INSERT INTO children')){
         hospitalChildren.push({child_id:params[0],registered_first_name:params[1],surname:params[2]});return [[]];
       }

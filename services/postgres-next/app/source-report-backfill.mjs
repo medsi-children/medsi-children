@@ -1,3 +1,4 @@
+import {deletionCutoff} from './deleted-source-guard.mjs';
 import {createHash} from 'node:crypto';
 import {canonicalRegisteredName} from './parent-admission-matching.mjs';
 
@@ -125,6 +126,8 @@ export async function backfillRecentEducatorReports(sql,{phone10='',now=()=>Date
           normalizedText:publication.normalized_text,child,activeChildren,nameVariants
         });
         if(!text)continue;
+        const cutoff=await deletionCutoff(tx,canonicalRegisteredName(child.registered_first_name,nameVariants));
+        if(cutoff&&publishedAt<=cutoff)continue;
         // Never replace a historical record from a different admission if
         // this phone number was used by a parent during an earlier stay.
         const [[history]]=await tx`SELECT admission_id FROM parent_report_history

@@ -421,6 +421,20 @@
   }
   function renderRoster(data){
     const pane=byId('medsiRosterPane');pane.replaceChildren();
+    const cleanup=textNode('button','medsi-inline-cancel','Очистить удалённых детей');cleanup.type='button';
+    cleanup.onclick=async()=>{
+      cleanup.disabled=true;
+      try{
+        const preview=await request('/lab/admin/roster/cleanup');
+        if(!preview.candidates){byId('medsiReportsFeedback').textContent='Записей без родителей нет.';return;}
+        if(!window.confirm('Удалить оставшиеся записи детей без родительских профилей: '+preview.candidates+'? Исходные отчёты сохранятся.'))return;
+        const result=await request('/lab/admin/roster/cleanup','POST',{confirm:true});
+        await refreshRoster();await refreshLibrary();
+        byId('medsiReportsFeedback').textContent='Удалено записей без родителей: '+result.removed+'. Привязки и отчёты проверены.';
+      }catch(error){byId('medsiReportsFeedback').textContent=error.message||'Не удалось завершить очистку.';}
+      finally{cleanup.disabled=false;}
+    };
+    pane.append(cleanup);
     // The parent directory displays only active children with at least one linked parent.
     // Deleting the final parent profile removes the entire directory row on refresh;
     // clinical child and admission records remain governed by their own lifecycle.
@@ -485,7 +499,7 @@
         if(!parents.length)return;
         const childLabel=[child.firstName,child.surname].filter(Boolean).join(' ');
         const parentList=parents.map(p=>p.parentName||p.phone||'Родитель').join(', ');
-        if(!window.confirm('Удалить ребёнка '+childLabel+' из справочника родителей?\n\nБудут отозваны доступ и переписки '+parents.length+' родительских профилей: '+parentList+'.\n\nЭто действие необратимо.'))return;
+        if(!window.confirm('Удалить ребёнка '+childLabel+' из справочника родителей?\n\nБудут удалены запись ребёнка, доступ, отчёты и переписки '+parents.length+' родительских профилей: '+parentList+'.\n\nЭто действие необратимо.'))return;
         del.disabled=true;
         let accepted=0;
         try{
@@ -504,7 +518,7 @@
           const refreshed=await refreshRoster();
           if(!refreshed)throw new Error('Справочник не удалось обновить после удаления.');
           await refreshLibrary();
-          byId('medsiReportsFeedback').textContent='Профили исключены из справочника. Очистка истории поставлена в очередь.';
+          byId('medsiReportsFeedback').textContent='Ребёнок и родительские профили удалены. Очистка переписок и файлов поставлена в очередь.';
         }catch(error){
           del.disabled=false;
           await refreshRoster();

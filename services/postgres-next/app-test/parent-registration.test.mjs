@@ -11,6 +11,7 @@ function fakeDatabase({matched=true,observed=false}={}) {
   const sql={begin:async(_opts,fn)=>{
    const tx=async(strings,...values)=>{
     const query=strings.join('?').replace(/\s+/g,' ').trim();
+    if(query.includes('FROM report_ownership'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_deletion_queue'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_registration_attempts'))return [attempt?[attempt]:[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_profiles'))return [profile?[profile]:[]];

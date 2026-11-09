@@ -29,8 +29,8 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261109-parent-assignment-20/);
-  assert.match(html,/next-settings\.js\?v=20261109-parent-assignment-20/);
+  assert.match(html,/next-settings\.css\?v=20261109-child-deletion-21/);
+  assert.match(html,/next-settings\.js\?v=20261109-child-deletion-21/);
   assert.match(js,/Выбрать ребёнка по сырому отчёту/);
   assert.match(js,/Старая привязка — нужна проверка/);
   assert.doesNotMatch(js,/Родитель есть в боте/);
@@ -150,8 +150,8 @@ test('unlinked parent rightmost action opens assignment and submits the selected
   const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
     childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,assignable:[{childId:'child_synthetic',admissionId:'admission_synthetic',label:'Новый ребёнок'}]};
   render({children:[],unlinked:[unlinked]});
-  assert.equal(pane.children.length,1,'An unlinked profile must prevent the empty directory screen');
-  const section=pane.children[0];
+  assert.equal(pane.children.length,2,'Directory includes maintenance and the unlinked section');
+  const section=pane.children[1];
   assert.match(section.className,/medsi-roster-unlinked/);
   assert.equal(section.children.filter(item=>item.tag==='article').length,1);
   const card=section.children.find(item=>item.tag==='article');

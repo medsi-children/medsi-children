@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import {
   findUniqueRecentStaffMention as find,
   createAdmissionFromStaffReport as create,
-  staffSourceContradictsExistingChild as conflicts
+  staffSourceContradictsExistingChild as conflicts,
+  currentStaffSourceRows
 } from '../app/report-observed-admission.mjs';
 
 const variants=[{preferred_name:'Анна',variants_json:'["аня","анюта","анечка"]'}];
@@ -101,4 +102,29 @@ test('new namesake can be added by explicit surname initial without confusing th
 test('ambiguous identical initials remain blocked even if the parent knows the full surname',()=>{
   const text='Аня Х. — Первое наблюдение.\nАнна Х. — Второе наблюдение.';
   assert.equal(find(input('Анна Халитова',[report(text)])),null);
+});
+
+test('current staff roster ignores old mentions that could resurrect a former namesake',()=>{
+  const reports=[
+    {kind:'morning',report_date:'2026-11-08',submitted_at:100,
+      normalized_text:'Степан М. — Старое наблюдение.'},
+    {kind:'evening',report_date:'2026-11-08',submitted_at:200,
+      normalized_text:'Степан М. — Старое вечернее наблюдение.'},
+    {kind:'morning',report_date:'2026-11-09',submitted_at:300,
+      normalized_text:'Степан — Новое наблюдение.'}
+  ];
+  const fresh=currentStaffSourceRows(reports);
+  assert.equal(fresh.length,1);
+  assert.equal(fresh[0].submitted_at,300);
+  // With no current registered namesake, the newest bare block is enough.
+  assert.equal(find({childName:'Степан Сидоров',children:[],admissions:[],
+    nameVariants:[],reports:fresh})?.firstName,'Степан');
+});
+test('current-day morning and evening publications remain available together',()=>{
+  const reports=[
+    {kind:'morning',report_date:'2026-11-09',submitted_at:100},
+    {kind:'morning',report_date:'2026-11-09',submitted_at:200},
+    {kind:'evening',report_date:'2026-11-09',submitted_at:300}
+  ];
+  assert.deepEqual(currentStaffSourceRows(reports).map(r=>r.submitted_at),[200,300]);
 });

@@ -91,6 +91,14 @@ jobs:
           npm test --prefix services/postgres-next
           npm run verify
 
+      - name: Verify admission-free pipeline and SQL retirement on disposable PostgreSQL 18
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+          MEDSI_CURRENT_IDENTITY_TEST: '1'
+        run: |
+          docker exec "$PG_CONTAINER" createdb -U medsi_ci medsi_current_child
+          PGDATABASE=medsi_current_child node --test services/postgres-next/test/current-child-model.integration.test.mjs
+
   safeguard:
     runs-on: ubuntu-latest
     timeout-minutes: 5

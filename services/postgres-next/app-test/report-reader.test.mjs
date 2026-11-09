@@ -22,6 +22,7 @@ function fakeSql({publishedTherapy=null,unlinked=false,failBackfill=false}={}){
       reads.push(q);
       if(failBackfill&&q.startsWith('SELECT phone10,child_id,admission_id FROM parent_profiles'))throw new Error('Synthetic recovery failed');
       if(q.includes('FROM parent_profiles'))return [[data.profile]];
+      if(q.startsWith('SELECT child_id,status FROM admissions'))return [args[0]==='admission_NEW'?[{child_id:'c1',status:'active'}]:[]];
       if(q.startsWith('SELECT admission_id,child_id,status FROM admissions'))return [[]];
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [[]];
       if(q.startsWith('SELECT kind,publication_id FROM report_publication_head'))return [[]];
@@ -95,4 +96,33 @@ test('failed child backfill cannot hide current shared group therapy',async()=>{
   assert.equal(result.ok,true);
   assert.equal(result.reports.find(r=>r.kind==='psychology').text,'Актуальная групповая терапия.');
   assert.equal(result.reports.find(r=>r.kind==='morning').text,'Текущий отчёт');
+});
+
+test('empty admission identifiers never authorize old individual current/history records',async()=>{
+  const {sql,data}=fakeSql({publishedTherapy:'Общий отчёт по терапии.',unlinked:true});
+  data.current.push({kind:'morning',admission_id:'',version:'v_old',
+    read_version:'',text:'Чужой прежний отчёт',updated_at:100});
+  data.history.push({kind:'evening',admission_id:'',report_date:'2026-11-01',
+    text:'Чужая история',captured_at:100});
+  const reader=createReportReader(sql);
+  const current=await reader.current('9000000001');
+  assert.deepEqual(current.reports.map(r=>r.kind),['psychology']);
+  assert.equal(current.reports[0].text,'Общий отчёт по терапии.');
+  assert.deepEqual((await reader.history('9000000001')).reports,[]);
+  assert.deepEqual((await reader.unread('9000000001')).reportUnread,{
+    morning:false,evening:false,psychology:false
+  });
+  assert.equal((await reader.markRead('9000000001','morning','v_old')).skipped,true);
+});
+test('discharged or mismatched admission cannot reveal old personal reports',async()=>{
+  for(const changed of [{admission_id:'admission_OLD',child_id:'c1'},
+    {admission_id:'admission_NEW',child_id:'different_child'}]){
+    const {sql,data}=fakeSql({publishedTherapy:'Общая терапия актуальна.'});
+    Object.assign(data.profile,changed);
+    const reader=createReportReader(sql);
+    const current=await reader.current('9000000001');
+    assert.deepEqual(current.reports.map(r=>r.kind),['psychology']);
+    assert.deepEqual((await reader.history('9000000001')).reports,[]);
+    assert.equal((await reader.unread('9000000001')).reportUnread.morning,false);
+  }
 });

@@ -10,6 +10,14 @@ export function createReportReader(sql) {
   if (!sql?.begin)throw new Error('PostgreSQL query client required.');
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
+  async function verifiedAdmission(tx,profile) {
+    const admissionId=String(profile?.admission_id||'').trim();
+    const childId=String(profile?.child_id||'').trim();
+    if(!admissionId||!childId)return false;
+    const [[admission]]=await tx`SELECT child_id,status FROM admissions
+      WHERE admission_id=${admissionId}`;
+    return admission?.status==='active'&&same(admission.child_id,childId);
+  }
   function activePhone(phone) {
     if(!PHONE.test(String(phone||'')))throw new Error('Invalid parent phone.');
     return phone;
@@ -19,9 +27,10 @@ export function createReportReader(sql) {
     const fetchCurrent=()=>read(async tx=>{
       const [[profile]]=await tx`SELECT admission_id,child_id FROM parent_profiles WHERE phone10=${phone}`;
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
+      const canReadChild=await verifiedAdmission(tx,profile);
       const [rows]=await tx`SELECT kind,text,version,updated_at,admission_id
         FROM parent_current_reports WHERE phone10=${phone}`;
-      const reports=rows.filter(r=>same(r.admission_id,profile.admission_id)).map(row=>({
+      const reports=rows.filter(r=>canReadChild&&same(r.admission_id,profile.admission_id)).map(row=>({
         kind:row.kind,text:row.text||'',version:row.version||'',updatedAt:timestamp(row.updated_at)
       }));
       // Group therapy is shared with every currently registered, authenticated
@@ -63,8 +72,9 @@ export function createReportReader(sql) {
   async function history(phoneRaw){
     const phone=activePhone(phoneRaw);
     return read(async tx=>{
-      const [[profile]]=await tx`SELECT admission_id FROM parent_profiles WHERE phone10=${phone}`;
+      const [[profile]]=await tx`SELECT admission_id,child_id FROM parent_profiles WHERE phone10=${phone}`;
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
+      if(!await verifiedAdmission(tx,profile))return {ok:true,reports:[]};
       const [rows]=await tx`SELECT kind,report_date,text,captured_at,admission_id
         FROM parent_report_history WHERE phone10=${phone}`;
       const order={morning:0,psychology:1,evening:2};
@@ -79,12 +89,13 @@ export function createReportReader(sql) {
   async function unread(phoneRaw){
     const phone=activePhone(phoneRaw);
     return read(async tx=>{
-      const [[profile]]=await tx`SELECT admission_id FROM parent_profiles WHERE phone10=${phone}`;
+      const [[profile]]=await tx`SELECT admission_id,child_id FROM parent_profiles WHERE phone10=${phone}`;
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
+      const canReadChild=await verifiedAdmission(tx,profile);
       const [rows]=await tx`SELECT kind,version,read_version,admission_id
         FROM parent_current_reports WHERE phone10=${phone}`;
       const reportUnread={morning:false,evening:false,psychology:false};
-      for(const r of rows)if(KINDS.has(r.kind)&&same(r.admission_id,profile.admission_id)){
+      for(const r of rows)if(canReadChild&&KINDS.has(r.kind)&&same(r.admission_id,profile.admission_id)){
         reportUnread[r.kind]=Boolean(r.version)&&!same(r.version,r.read_version);
       }
       return {ok:true,reportUnread};
@@ -94,8 +105,9 @@ export function createReportReader(sql) {
     const phone=activePhone(phoneRaw);
     if(!KINDS.has(kind)||!version||String(version).length>180)throw new Error('Invalid report version.');
     return write(async tx=>{
-      const [[profile]]=await tx`SELECT admission_id FROM parent_profiles WHERE phone10=${phone}`;
+      const [[profile]]=await tx`SELECT admission_id,child_id FROM parent_profiles WHERE phone10=${phone}`;
       if(!profile)throw new Error('Inactive profile.');
+      if(!await verifiedAdmission(tx,profile))return {ok:true,skipped:true};
       const [[current]]=await tx`SELECT version,read_version,admission_id
         FROM parent_current_reports WHERE phone10=${phone} AND kind=${kind}`;
       if(!current||!same(current.admission_id,profile.admission_id)||

@@ -85,7 +85,12 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   const existing=matchRegisteredChild({childName,profiles,children,nameVariants});
   // When the parent supplied only a first name, a newly appeared namesake
   // makes even an old unique registered child ambiguous.
-  const source=currentStaffPublications(publications,today);
+  const available=currentStaffPublications(publications,today);
+  // The newest submitted report is the authoritative roster signal.
+  // A newer evening report with two explicit Sasha prefixes supersedes a
+  // morning bare "Sasha" without resurrecting either old identity.
+  const source=available.length?[...available].sort((a,b)=>
+    Number(b.submitted_at||0)-Number(a.submitted_at||0)).slice(0,1):[];
   const witnessed=source.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants)
     .map(b=>({...b,kind:r.kind}))).filter(b=>b.canonical===canonical);
   if(existing&&(!person.surname&&witnessed.some((b,i)=>i>0)))
@@ -93,7 +98,7 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   if(existing)return {status:'linked',...existing};
   // An existing current namesake with a conflicting surname cannot be
   // overridden by a bare heading; a second child needs explicit staff initials.
-  const selected=currentStaffPublications(publications,today);
+  const selected=source;
   if(!selected.length)return {status:'pending',reason:'no-current-publication'};
   const blocks=selected.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants)
     .map(b=>({...b,publicationId:r.publication_id,reportDate:r.report_date,kind:r.kind})));

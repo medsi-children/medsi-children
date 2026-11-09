@@ -21,12 +21,14 @@ export function displayCurrentStaffSource({rawText,children=[],profiles=[],
     try{record=JSON.parse(item.record_json)}catch{continue}
     if(record?.childId&&!record.blocked)owners.set(index,String(record.childId));
   }
+  const blocks=parseCurrentStaffBlocks(source,nameVariants);
+  const indexes=new Map(blocks.map((b,i)=>[b.lineIndex,i]));
   const lines=source.replace(/\r\n?/g,'\n').split('\n');
-  let index=0;
-  return lines.map(line=>{
+  return lines.map((line,lineIndex)=>{
+    if(!indexes.has(lineIndex))return line;
     const m=HEADER.exec(line);
     if(!m)return line;
-    const thisIndex=index++;
+    const thisIndex=indexes.get(lineIndex);
     const owner=byId.get(owners.get(thisIndex));
     if(!owner)return line;
     if(canonicalCurrentName(m[2],nameVariants)!==

@@ -6,7 +6,7 @@ const phone='9991112233';
 const payload={phone:'8'+phone,parentName:'Мария Тестовая',childName:'Лена Тестовая',
   attemptId:'reg_123456789012345678901234'};
 function fakeDatabase({matched=true,observed=false}={}) {
-  let attempt=null,profile=null,auth=null;
+  let attempt=null,profile=null,auth=null,recoveryReads=0;
   const created={children:[],admissions:[]};
   const sql={begin:async(_opts,fn)=>{
    const tx=async(strings,...values)=>{
@@ -14,6 +14,9 @@ function fakeDatabase({matched=true,observed=false}={}) {
     if(query.startsWith('SELECT')&&query.includes('FROM parent_deletion_queue'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_registration_attempts'))return [attempt?[attempt]:[]];
     if(query.startsWith('SELECT')&&query.includes('FROM parent_profiles'))return [profile?[profile]:[]];
+    if(query.startsWith('SELECT')&&query.includes('FROM parent_auth_profiles'))return [auth?[auth]:[]];
+    if(query.startsWith('SELECT')&&query.includes('FROM parent_current_reports')){recoveryReads++;return [[]]}
+    if(query.startsWith('SELECT')&&query.includes('FROM report_publication_head'))return [[]];
     if(query.startsWith('SELECT')&&query.includes('FROM children'))return [[
       {child_id:'child-1',registered_first_name:'Лена',surname:'Тестовая'}
     ]];
@@ -53,7 +56,7 @@ function fakeDatabase({matched=true,observed=false}={}) {
    tx.upsert=tx;
    return fn(tx);
   }};
-  return {sql,state:()=>({attempt,profile,auth,created})};
+  return {sql,state:()=>({attempt,profile,auth,created,recoveryReads})};
 }
 test('registration completes immediately and preserves current parent-facing API',async()=>{
   const fake=fakeDatabase();
@@ -67,7 +70,9 @@ test('registration completes immediately and preserves current parent-facing API
   assert.equal(fake.state().attempt.status,'COMPLETED');
   assert.ok(fake.state().auth.user_handle);
   assert.equal(issued,1);
+  assert.equal(fake.state().recoveryReads,1,'recovery runs on initial registration');
   const retry=await service.register(payload);
+  assert.equal(fake.state().recoveryReads,2,'recovery also retries on idempotent registration');
   assert.equal(retry.parentSession,'signed');
   const status=await service.status({phone:payload.phone,attemptId:payload.attemptId});
   assert.equal(status.status,'COMPLETED');

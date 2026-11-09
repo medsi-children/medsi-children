@@ -199,6 +199,7 @@ test('stand pinpoints service initialization versus protected router failures',a
   ]){
     const started=await startIsolatedStand({...env,PORT:'0'},{
       connect:async()=>({sql:{},driver:{destroy:async()=>{}}}),
+      prepareChildSchema:async()=>{},verifyChildSchema:async()=>{},
       makeServices:()=>breakAt==='services'
         ?(()=>{throw new Error('Synthetic service failure');})():fakeServices(),
       makeApp:()=>{throw new Error('Synthetic router failure');}

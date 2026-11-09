@@ -109,7 +109,7 @@ export function createNextServices({sql,env=process.env}) {
   });
   const reportReader=createReportReader(sql),reports=createReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
-  const orphanCleanup=createOrphanChildCleanup(sql);
+  const orphanCleanup=createOrphanChildCleanup(sql,{enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1'});
   const dashboard=createEducatorReportsDashboardStore(sql),roster=createEducatorRosterStore(sql),nameVariants=createNameVariantsStore(sql);
   const reportEdits=createEducatorReportEditsStore(sql);
   const push=createPushService({sql,env});

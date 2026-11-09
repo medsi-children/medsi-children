@@ -27,7 +27,7 @@ function harness(){
  return {sql:{begin:async(_opts,fn)=>fn(tx)},children,admissions,profiles,writes};
 }
 test('orphan cleanup preview is read-only and execution preserves linked and unlinked registered parents',async()=>{
- const h=harness(),service=createOrphanChildCleanup(h.sql,{now:()=>1000});
+ const h=harness(),service=createOrphanChildCleanup(h.sql,{now:()=>1000,enabled:true});
  assert.deepEqual(await service.preview(),{ok:true,candidates:1,removed:0,executed:false});
  assert.equal(h.writes.length,0);
  assert.deepEqual(await service.execute(),{ok:true,candidates:1,removed:1,executed:true});
@@ -42,3 +42,5 @@ test('deleted child source fence permits fresh publications and prevents old raw
  const reports=[{submitted_at:999},{submitted_at:1000},{submitted_at:1001}];
  assert.deepEqual(await sourcesAfterDeletion(tx,'Тест',reports),[reports[2]]);
 });
+
+test('bulk cleanup respects the production deletion gate',async()=>{const h=harness();await assert.rejects(()=>createOrphanChildCleanup(h.sql).execute(),/temporarily disabled/);assert.equal(h.writes.length,0);});

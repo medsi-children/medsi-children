@@ -2,8 +2,9 @@ import {purgeUnreferencedChild} from './parent-deletion.mjs';
 import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
 
-export function createOrphanChildCleanup(sql,{now=()=>Date.now()}={}){
+export function createOrphanChildCleanup(sql,{now=()=>Date.now(),enabled=false}={}){
   async function run({execute=false}={}){
+    if(execute&&!enabled)throw new Error('Parent deletion temporarily disabled until migration audit.');
     const result=await sql.begin({isolation:execute?'serializableReadWrite':'snapshotReadOnly',idempotent:true},async tx=>{
       const [[children],[admissions],[profiles]]=await Promise.all([
         tx`SELECT child_id FROM children`,

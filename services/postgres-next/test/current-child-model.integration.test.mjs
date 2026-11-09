@@ -5,6 +5,7 @@ import pg from 'pg';
 import {installSchema} from '../src/schema-cli.mjs';
 import {readPostgresConfig} from '../src/connection.mjs';
 import {connectPostgresNext} from '../src/connection.mjs';
+import {probePostgresNext} from '../src/probe-cli.mjs';
 import {createCurrentParentRegistrationService} from '../app/current-parent-registration.mjs';
 import {createCurrentReportPublisher} from '../app/current-report-publications.mjs';
 import {createCurrentParentReportReader} from '../app/current-parent-report-reader.mjs';
@@ -118,6 +119,13 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const [[dropped]]=await sql`SELECT to_regclass(${'public.admissions'}) IS NULL AS removed`;
     assert.equal(dropped.removed,true);
     assert.equal((await reader.current(phoneC)).reports.find(r=>r.kind==='psychology').text,therapy);
+    assert.match((await reader.current(phoneC)).reports.find(r=>r.kind==='evening').text,/Мерцалова/);
+    assert.equal((await reader.history(phoneC)).reports.some(r=>r.kind==='evening'),true);
+    const [[staffSource]]=await sql`SELECT raw_text FROM raw_reports WHERE publication_id=${p1.publicationId}`;
+    assert.equal(staffSource.raw_text,text);
+    const [[parentStillRegistered]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
+    assert.equal(parentStillRegistered.child_id,thirdProfile.child_id);
+    assert.equal((await probePostgresNext(env)).schemaReady,true);
     assert.deepEqual(await checkCurrentChildSchema(sql),{ok:true});
   }finally{await conn.driver.close()}
 });

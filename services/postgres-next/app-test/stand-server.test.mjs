@@ -108,6 +108,7 @@ test('Timeweb can scan HTTP port before a slow database connection, while data r
   let destroyed=0;
   const started=await startIsolatedStand({...env,PORT:'0'},{
     connect:()=>new Promise(resolve=>{release=resolve;}),
+    prepareChildSchema:async()=>{},verifyChildSchema:async()=>{},
     makeServices:()=>fakeServices(),
     makeApp:(services,options)=>createNextStandApp(services,options)
   });
@@ -137,6 +138,27 @@ test('Timeweb can scan HTTP port before a slow database connection, while data r
     await started.shutdown();
     assert.equal(destroyed,1);
   }
+});
+
+test('admission-free schema preparation failure keeps every patient route closed',async()=>{
+  const started=await startIsolatedStand({...env,PORT:'0'},{
+    connect:async()=>({sql:{},driver:{destroy:async()=>{}}}),
+    prepareChildSchema:async()=>{throw new Error('synthetic private database detail')},
+    verifyChildSchema:async()=>{},
+    makeServices:()=>{throw new Error('must never create services')}
+  });
+  try{
+    if(!started.server.listening)await new Promise(r=>started.server.once('listening',r));
+    await started.initialize;
+    const base='http://127.0.0.1:'+started.server.address().port;
+    const health=await fetch(base+'/__health');
+    assert.equal(health.status,503);
+    const data=await health.json();
+    assert.equal(data.code,'CURRENT_CHILD_SCHEMA_NOT_READY');
+    assert.equal(JSON.stringify(data).includes('synthetic private'),false);
+    const response=await fetch(base+'/lab/admin/reports/dashboard');
+    assert.equal(response.status,503);
+  }finally{await started.shutdown()}
 });
 
 test('stand exposes safe connection failure status and never uses legacy gateway',async()=>{
@@ -198,6 +220,7 @@ test('stand pinpoints service initialization versus protected router failures',a
   ]){
     const started=await startIsolatedStand({...env,PORT:'0'},{
       connect:async()=>({sql:{},driver:{destroy:async()=>{}}}),
+      prepareChildSchema:async()=>{},verifyChildSchema:async()=>{},
       makeServices:()=>breakAt==='services'
         ?(()=>{throw new Error('Synthetic service failure');})():fakeServices(),
       makeApp:()=>{throw new Error('Synthetic router failure');}

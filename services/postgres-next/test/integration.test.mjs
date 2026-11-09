@@ -11,6 +11,7 @@ import { importLegacyPushCapture } from '../app/push-continuity.mjs';
 import {probePostgresNext} from '../src/probe-cli.mjs';
 import { createECDH, createHash } from 'node:crypto';
 import { createNextStandApp, createNextServices } from '../app/stand-server.mjs';
+import {ensureCurrentChildColumns} from '../app/current-child-schema.mjs';
 import {createPushService} from '../app/push-service.mjs';
 
 const enabled = process.env.CI === 'true' && process.env.PG_TEST_INSECURE_LOCAL === '1';
@@ -189,11 +190,14 @@ test('real PostgreSQL HTTP: complete NEXT UI, protected endpoints and schema hea
   const conn = await connectPostgresNext(process.env);
   const env = {
     ...process.env, MEDSI_NEXT_STAND: '1', MEDSI_NEXT_PG_ENABLED: '1',
+    // Historical environment flags must never reactivate admission-based routes.
+    MEDSI_CURRENT_CHILD_MODEL: '0',
     NEXT_SESSION_SECRET: 'synthetic-ci-session-secret-1234567890',
     NEXT_TUTOR_LOGIN: 'fictional_ci_tutor',
     NEXT_TUTOR_PASSWORD: 'not-a-production-password',
     NEXT_TUTOR_VERSION: 'ci-1'
   };
+  await ensureCurrentChildColumns(conn.sql);
   const services = createNextServices({ sql: conn.sql, env });
   const app = createNextStandApp(services, { env });
   const server = await new Promise(resolve => {

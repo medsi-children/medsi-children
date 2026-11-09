@@ -54,6 +54,7 @@ test('stand handoff reuses the same prebound PM2 port without a second listen',a
   const stand=await startIsolatedStand(env,{
     externalServer:b.server,installHandler:b.activate,
     connect:async()=>({sql:{},driver:{destroy:async()=>{destroyed++;}}}),
+    prepareChildSchema:async()=>{},verifyChildSchema:async()=>{},
     makeServices:()=>fakeServices,
     makeApp:(services,opts)=>createNextStandApp(services,opts)
   });

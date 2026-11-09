@@ -20,7 +20,6 @@ async function closeDatabaseDriver(driver) {
   }finally{if(timer)clearTimeout(timer);}
 }
 import {createSessionService} from './session-auth.mjs';
-import {createReportReader} from './report-reader.mjs';
 import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
 import {ensureCurrentChildColumns} from './current-child-schema.mjs';
 import {createCurrentReportSubmissionService} from './current-report-submission-service.mjs';
@@ -28,17 +27,12 @@ import {createCurrentEducatorDashboardStore} from './current-educator-dashboard.
 import {createCurrentEducatorRosterStore} from './current-educator-roster.mjs';
 import {createCurrentEducatorReportEditsStore} from './current-educator-report-edits.mjs';
 import {createCurrentParentRegistrationService} from './current-parent-registration.mjs';
-import {createReportSubmissionService} from './report-submission-service.mjs';
 import {createChatStore} from './chat-store.mjs';
 import {createChatOperations} from './chat-operations.mjs';
-import {createEducatorReportsDashboardStore} from './educator-report-dashboard.mjs';
-import {createEducatorRosterStore} from './educator-roster.mjs';
-import {createEducatorReportEditsStore} from './educator-report-edits.mjs';
 import {createNameVariantsStore} from './name-variants-store.mjs';
 import {createPushService} from './push-service.mjs';
 import {createParentPasskeyService} from './parent-passkeys.mjs';
 import {createParentAccessService} from './parent-access.mjs';
-import {createParentRegistrationService} from './parent-registration.mjs';
 import {createParentDeletionService} from './parent-deletion.mjs';
 import {createMediaService} from './media-service.mjs';
 import {createNextLabRouter} from './api-router.mjs';
@@ -122,25 +116,26 @@ export async function checkCurrentChildSchema(sql) {
 }
 export function createNextServices({sql,env=process.env}) {
   requireEnv(env);
-  const currentChildMode=env.MEDSI_CURRENT_CHILD_MODEL==='1';
+  // Only registered-child identity is used by live routes. The former
+  // admission-based services are retained in source temporarily for older
+  // test fixtures but never instantiated by this server.
   const sessions=createSessionService({
     sql,secret:env.NEXT_SESSION_SECRET,login:env.NEXT_TUTOR_LOGIN,
     password:env.NEXT_TUTOR_PASSWORD,tutorVersion:env.NEXT_TUTOR_VERSION,
-    currentChildMode,...readLegacyAuthConfig(env)
+    currentChildMode:true,...readLegacyAuthConfig(env)
   });
-  const reportReader=currentChildMode?createCurrentParentReportReader(sql):createReportReader(sql);
-  const reports=currentChildMode?createCurrentReportSubmissionService(sql):createReportSubmissionService(sql);
+  const reportReader=createCurrentParentReportReader(sql);
+  const reports=createCurrentReportSubmissionService(sql);
   const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
-  const dashboard=currentChildMode?createCurrentEducatorDashboardStore(sql):createEducatorReportsDashboardStore(sql);
-  const roster=currentChildMode?createCurrentEducatorRosterStore(sql):createEducatorRosterStore(sql);
+  const dashboard=createCurrentEducatorDashboardStore(sql);
+  const roster=createCurrentEducatorRosterStore(sql);
   const nameVariants=createNameVariantsStore(sql);
-  const reportEdits=currentChildMode?createCurrentEducatorReportEditsStore(sql):createEducatorReportEditsStore(sql);
+  const reportEdits=createCurrentEducatorReportEditsStore(sql);
   const push=createPushService({sql,env});
-  const parentRegistration=currentChildMode?createCurrentParentRegistrationService({sql,sessions}):
-    createParentRegistrationService({sql,sessions});
+  const parentRegistration=createCurrentParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});
   const storage=require('../../../lib/s3-storage.js');
-  const parentDeletion=createParentDeletionService({sql,currentChildMode,
+  const parentDeletion=createParentDeletionService({sql,currentChildMode:true,
     enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1',
     removeMedia:async key=>{
       if(!storage.configured)throw new Error('Private S3 storage is not configured.');
@@ -153,9 +148,9 @@ export function createNextServices({sql,env=process.env}) {
        'registrationOptions','registrationVerify'].map(method=>[method,
       async()=>{throw new Error('Passkeys unavailable until origin and RP ID are configured.');}]));
   const media=createMediaService({sql,sessions,secret:env.NEXT_SESSION_SECRET,
-    storage,currentChildMode});
+    storage,currentChildMode:true});
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
-  const dbSchemaHealth=()=>currentChildMode?checkCurrentChildSchema(sql):checkNextTestSchema(sql);
+  const dbSchemaHealth=()=>checkCurrentChildSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,roster,
     nameVariants,reportEdits,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
@@ -297,6 +292,8 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
 // open before any network I/O. All data routes fail closed until NEXT is ready.
 export async function startIsolatedStand(env=process.env,{
   connect,
+  prepareChildSchema=ensureCurrentChildColumns,
+  verifyChildSchema=checkCurrentChildSchema,
   makeServices=createNextServices,
   makeApp=createNextStandApp,
   externalServer=null,
@@ -365,14 +362,12 @@ export async function startIsolatedStand(env=process.env,{
         return;
       }
       driver=connection.driver;
-      if(env.MEDSI_CURRENT_CHILD_MODEL==='1'){
-        // Opt-in only. Add two columns and migrate only proven associations;
-        // never delete patient rows, raw sources, or the old schema.
-        state.code='CURRENT_CHILD_COLUMNS_PENDING';
-        await ensureCurrentChildColumns(connection.sql);
-        await checkCurrentChildSchema(connection.sql);
-        console.log('MEDSI_CURRENT_CHILD_COLUMNS_READY');
-      }
+      // Apply only two additive, idempotent columns before exposing the
+      // current-child backend. Admission rows and authored reports are untouched.
+      state.code='CURRENT_CHILD_COLUMNS_PENDING';
+      await prepareChildSchema(connection.sql);
+      await verifyChildSchema(connection.sql);
+      console.log('MEDSI_CURRENT_CHILD_COLUMNS_READY');
       state.code='NEXT_SERVICES_PENDING';
       const services=makeServices({sql:connection.sql,env});
       state.code='NEXT_ROUTER_PENDING';
@@ -442,6 +437,7 @@ export async function startIsolatedStand(env=process.env,{
         ?'STAND_LEGACY_AUTH_INVALID'
         :msg.includes('PostgreSQL TLS probe failed')?'POSTGRES_CONNECT_FAILED'
         :failedAt==='POSTGRES_CONNECT_PENDING'?'POSTGRES_CONNECT_FAILED'
+        :failedAt==='CURRENT_CHILD_COLUMNS_PENDING'?'CURRENT_CHILD_SCHEMA_NOT_READY'
         :failedAt==='NEXT_SERVICES_PENDING'?'NEXT_SERVICES_INIT_FAILED'
         :failedAt==='NEXT_ROUTER_PENDING'?'NEXT_ROUTER_INIT_FAILED'
         :'NEXT_STARTUP_FAILED';

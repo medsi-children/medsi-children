@@ -44,6 +44,22 @@ export function linkedAdmissionsForMatching({admissions=[],profiles=[]}={}){
     .map(p=>String(p.child_id)+'|'+String(p.admission_id)));
   return admissions.filter(a=>a.status==='active'&&linked.has(String(a.child_id)+'|'+String(a.admission_id)));
 }
+// A single parentless imported row is not evidence of a second *currently
+// registered* child. Multiple separate same-name rows, however, are enough
+// ambiguity to block a bare heading. Retain them only as a conservative veto
+// when evaluating whether a staff report can enroll someone new.
+export function sourceAmbiguityAdmissions({childName,children=[],admissions=[],
+  linkedAdmissions=[],nameVariants=[]}={}){
+  const entered=enteredName(childName);
+  if(!entered)return linkedAdmissions;
+  const base=canonicalRegisteredName(entered.first,nameVariants);
+  if(!base)return linkedAdmissions;
+  const childById=new Map(children.map(c=>[String(c.child_id),c]));
+  const linked=new Set(linkedAdmissions.map(a=>String(a.admission_id)));
+  const orphanNamesakes=admissions.filter(a=>a.status==='active'&&!linked.has(String(a.admission_id))&&
+    canonicalRegisteredName(childById.get(String(a.child_id))?.registered_first_name,nameVariants)===base);
+  return orphanNamesakes.length>=2?admissions:linkedAdmissions;
+}
 export function findUniqueActiveAdmissionForParent({
   childName,children=[],admissions=[],nameVariants=[]
 }={}){
@@ -112,7 +128,10 @@ export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()
       if(!match){
         if(!reports)reports=await recentStaffSource(tx,now());
         match=await createAdmissionFromStaffReport(tx,{
-          childName:profile.child_name,children,admissions:linkedAdmissions,nameVariants,reports,now:now()
+          childName:profile.child_name,children,
+          admissions:sourceAmbiguityAdmissions({childName:profile.child_name,children,
+            admissions,linkedAdmissions,nameVariants}),
+          nameVariants,reports,now:now()
         });
         if(match){
           children.push({child_id:match.childId,registered_first_name:match.firstName,

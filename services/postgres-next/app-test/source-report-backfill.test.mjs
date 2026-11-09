@@ -65,7 +65,7 @@ test('persisted owner from another admission and blocked source cannot be reassi
 });
 
 function fakeDatabase({source='Аня — Была на группе.\nМиша К. — Собирал пазл.',
-  secondAnna=false,otherAdmission=false,expired=false}={}){
+  secondAnna=false,otherAdmission=false,expired=false,otherPublicationOwner=false}={}){
   const now=Date.parse('2026-11-08T13:00:00Z');
   const profiles=[{phone10:'9000000001',child_id:'child_anna',admission_id:'admission_anna'}];
   const admissions=[{admission_id:'admission_anna',child_id:'child_anna',status:'active'},
@@ -77,6 +77,9 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
   const current=[],history=[],writes=[];
   if(otherAdmission)history.push({phone10:profiles[0].phone10,kind:'morning',
     report_date:'2026-11-08',admission_id:'old_admission'});
+  if(otherPublicationOwner)history.push({phone10:'9000000009',kind:'morning',
+    report_date:'2026-11-08',admission_id:'old_admission',
+    publication_id:'publication_morning',text:'Аня: Была на группе.'});
   const heads=[{kind:'morning',publication_id:'publication_morning'}];
   const raw={publication_id:'publication_morning',kind:'morning',
     report_date:'2026-11-08',revision:5n,submitted_at:BigInt(now-(expired?9:1)*86400000),
@@ -92,6 +95,9 @@ function fakeDatabase({source='Аня — Была на группе.\nМиша 
       if(q.startsWith('SELECT kind,publication_id FROM report_publication_head'))return [heads];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [variants];
       if(q.startsWith('SELECT publication_id,kind,report_date,submitted_at,')&&q.includes('FROM raw_reports'))return [[raw]];
+      if(q.startsWith('SELECT admission_id,text FROM parent_report_history')){
+        return [history.filter(h=>h.publication_id===params[0]&&h.kind===params[1])];
+      }
       if(q.startsWith('SELECT admission_id FROM parent_report_history')){
         return [history.filter(h=>h.phone10===params[0]&&h.kind===params[1]&&h.report_date===params[2])];
       }
@@ -130,7 +136,8 @@ test('late linked parent receives current morning source in PostgreSQL exactly o
 });
 
 test('unsafe namesakes, expired sources and a historical admission collision are never backfilled',async()=>{
-  for(const config of [{secondAnna:true},{expired:true},{otherAdmission:true}]){
+  for(const config of [{secondAnna:true},{expired:true},{otherAdmission:true},
+    {otherPublicationOwner:true}]){
     const fake=fakeDatabase(config);
     assert.deepEqual(await backfill(fake.sql,{now:()=>fake.now}),{backfilled:0});
     assert.equal(fake.current.length,0);

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findUniqueActiveAdmissionForParent as find,
+  findUniqueRegisteredChildForParent as findRegistered,
   reconcileUnlinkedRegisteredParents as reconcile
 } from '../app/parent-admission-matching.mjs';
 
@@ -51,6 +52,40 @@ test('contradictory name, closed admission and overlapping alias never grant lin
 });
 test('no hospital record is invented from an unsupported raw report reference',()=>{
   assert.equal(find(opts('Аня',{children:[],admissions:[]})),null);
+});
+
+test('admission-free matching ignores deleted child rows and aliases names',()=>{
+  const profiles=[{child_id:'current_stepan',child_name:'Степан Сидоров'}];
+  assert.deepEqual(findRegistered({childName:'Степан Сидоров',profiles}),{childId:'current_stepan'});
+  assert.deepEqual(findRegistered({childName:'Степан',profiles}),{childId:'current_stepan'});
+  assert.equal(findRegistered({childName:'Степан Мерцалов',profiles}),null);
+  assert.equal(findRegistered({childName:'Степан',profiles:[]}),null);
+});
+test('admission-free matching blocks ambiguous initials and resolves extended prefixes',()=>{
+  const profiles=[
+    {child_id:'sasha1',child_name:'Александр Иванов'},
+    {child_id:'sasha2',child_name:'Саша Игнатьев'}
+  ];
+  const aliases=[{preferred_name:'александр',variants_json:'["саша"]'}];
+  const options={profiles,nameVariants:aliases};
+  assert.equal(findRegistered({...options,childName:'Саша'}),null);
+  assert.equal(findRegistered({...options,childName:'Саша И.'}),null);
+  assert.deepEqual(findRegistered({...options,childName:'Саша Ив.'}),{childId:'sasha1'});
+  assert.deepEqual(findRegistered({...options,childName:'Александр Иг.'}),{childId:'sasha2'});
+});
+test('two parents of same child are one identity; conflicting data fails closed',()=>{
+  const profiles=[
+    {child_id:'shared',child_name:'Аня Пономарёва'},
+    {child_id:'shared',child_name:'Анна Пономарёва'}
+  ];
+  const aliases=[{preferred_name:'анна',variants_json:'["аня"]'}];
+  assert.deepEqual(findRegistered({childName:'Аня',profiles,nameVariants:aliases}),{childId:'shared'});
+  assert.equal(findRegistered({childName:'Аня',profiles:[...profiles,
+    {child_id:'other',child_name:'Анна Петрова'}],nameVariants:aliases}),null);
+  assert.equal(findRegistered({childName:'Аня',profiles:[
+    {child_id:'shared',child_name:'Аня Пономарёва'},
+    {child_id:'shared',child_name:'Анна Петрова'}
+  ],nameVariants:aliases}),null);
 });
 
 function fakeReconciliation({rawOnly=false}={}){

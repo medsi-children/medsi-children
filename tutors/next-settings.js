@@ -482,24 +482,8 @@
       del.type='button';del.setAttribute('aria-label','Удалить ребёнка из справочника');del.title='Удалить ребёнка из справочника';
       del.innerHTML=deleteIcon;
       del.onclick=async()=>{
+        if(!parents.length)return;
         const childLabel=[child.firstName,child.surname].filter(Boolean).join(' ');
-        if(!parents.length){
-          if(!window.confirm('Удалить ребёнка '+childLabel+' из активного списка?\n\nЗапись ребёнка и связанные с ней отчёты будут удалены. Отменить действие нельзя.'))return;
-          del.disabled=true;
-          try{
-            const answer=await request('/lab/admin/roster/remove-unlinked-child','POST',{
-              childId:child.childId,admissionId:child.admissionId
-            });
-            if(answer?.removed!==true)throw new Error(answer?.message||'Не удалось удалить ребёнка.');
-            await refreshRoster();await refreshLibrary();
-            byId('medsiReportsFeedback').textContent='Ребёнок удалён из рабочего списка.';
-          }catch(error){
-            del.disabled=false;
-            byId('medsiReportsFeedback').textContent=String(error?.message||'Ошибка удаления.');
-            await refreshRoster();
-          }
-          return;
-        }
         const parentList=parents.map(p=>p.parentName||p.phone||'Родитель').join(', ');
         if(!window.confirm('Удалить ребёнка '+childLabel+' из справочника родителей?\n\nБудут удалены запись ребёнка, доступ, отчёты и переписки '+parents.length+' родительских профилей: '+parentList+'.\n\nЭто действие необратимо.'))return;
         del.disabled=true;
@@ -520,7 +504,7 @@
           const refreshed=await refreshRoster();
           if(!refreshed)throw new Error('Справочник не удалось обновить после удаления.');
           await refreshLibrary();
-          byId('medsiReportsFeedback').textContent='Ребёнок и связанные родительские профили исключены из активного списка. Очистка переписок и файлов продолжается.';
+          byId('medsiReportsFeedback').textContent='Ребёнок и родительские профили удалены. Очистка переписок и файлов поставлена в очередь.';
         }catch(error){
           del.disabled=false;
           await refreshRoster();

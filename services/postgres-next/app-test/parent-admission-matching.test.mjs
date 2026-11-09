@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   findUniqueActiveAdmissionForParent as find,
+  linkedAdmissionsForMatching,
   reconcileUnlinkedRegisteredParents as reconcile
 } from '../app/parent-admission-matching.mjs';
 
@@ -49,6 +50,21 @@ test('contradictory name, closed admission and overlapping alias never grant lin
     {preferred_name:'мария',variants_json:'["аня"]'}
   ]})),null);
 });
+test('orphan namesake is invisible to parent matching without deleting raw reports',()=>{
+  const names=[
+    {child_id:'child_old_stepan',registered_first_name:'Степан',surname:'Мерцалов'},
+    {child_id:'child_current_stepan',registered_first_name:'Степан',surname:'Сидоров'}
+  ];
+  const stays=[
+    {admission_id:'admission_old',child_id:'child_old_stepan',status:'active'},
+    {admission_id:'admission_current',child_id:'child_current_stepan',status:'active'}
+  ];
+  const live=linkedAdmissionsForMatching({admissions:stays,
+    profiles:[{phone10:'9000000001',child_id:'child_current_stepan',admission_id:'admission_current'}]});
+  assert.deepEqual(live.map(r=>r.admission_id),['admission_current']);
+  assert.equal(find({childName:'Степан',children:names,admissions:live})?.childId,'child_current_stepan');
+  assert.deepEqual(linkedAdmissionsForMatching({admissions:stays,profiles:[]}),[]);
+});
 test('no hospital record is invented from an unsupported raw report reference',()=>{
   assert.equal(find(opts('Аня',{children:[],admissions:[]})),null);
 });
@@ -57,8 +73,11 @@ function fakeReconciliation({rawOnly=false}={}){
   const profiles=[{
     phone10:'9000000055',child_name:'Анюта',
     child_id:'',admission_id:'',profile_generation:'reg_test_012345678901'
-  }];
-  const auth=[{phone10:profiles[0].phone10}];
+  },...(rawOnly?[]:[{
+    phone10:'9000000056',child_name:'Анна Пономарёва',
+    child_id:'child_anna1',admission_id:'adm_anna1',profile_generation:'reg_existing_parent'
+  }])];
+  const auth=profiles.map(p=>({phone10:p.phone10}));
   const attempts=[{attempt_id:profiles[0].profile_generation,phone10:profiles[0].phone10,status:'COMPLETED'}];
   let reportQueries=0,updates=0;
   const hospitalChildren=[...children],hospitalAdmissions=rawOnly

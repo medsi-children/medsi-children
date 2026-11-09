@@ -60,11 +60,13 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
         childName,children,admissions,nameVariants
       });
       let reports=null;
-      if(match&&!parseRegisteredChildName(childName)?.surnamePrefix){
+      const entered=parseRegisteredChildName(childName);
+      const matchedChild=match&&children.find(row=>String(row.child_id)===match.childId);
+      if(match&&(!entered?.surnamePrefix||!String(matchedChild?.surname||'').trim())){
         reports=await recentStaffSource(tx,timestamp);
         const child=children.find(row=>String(row.child_id)===match.childId);
         if(staffSourceContradictsExistingChild({
-          childName,surname:child?.surname,nameVariants,reports
+          childName:entered?.first,surname:child?.surname||entered?.surnamePrefix,nameVariants,reports
         }))match=null;
       }
       if(!match){

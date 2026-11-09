@@ -557,14 +557,17 @@
             'Утреннего отчёта нет'),
           statusButton('evening','?',
             '<path d="M20.5 15.5A9 9 0 0 1 8.5 3.5a9 9 0 1 0 12 12Z"/>',
-            'Вечернего отчёта нет'),
-          statusButton('link','0',
-            '<path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/><path d="m3 3 18 18"/>',
-            'Привязки не найдено')
+            'Вечернего отчёта нет')
         );
         const candidates=Array.isArray(parent.assignable)?parent.assignable:[];
+        const link=textNode('button','medsi-roster-status-icon medsi-roster-status-link','');
+        link.type='button';link.dataset.tooltip='Назначить ребёнка';
+        link.setAttribute('aria-label','Назначить ребёнка');link.setAttribute('aria-expanded','false');
+        link.innerHTML=icon('<path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/>');
+        link.onclick=()=>{byId('medsiReportsFeedback').textContent='В свежих сырых отчётах пока нет подходящего ребёнка для назначения.'};
+        actions.append(link);
         if(candidates.length){
-          const assignment=textNode('div','medsi-roster-assignment','');
+          const assignment=textNode('div','medsi-roster-assignment','');assignment.hidden=true;
           const select=document.createElement('select');
           select.setAttribute('aria-label','Выбрать ребёнка из свежих сырых отчётов');
           const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Выбрать ребёнка по сырому отчёту';select.append(placeholder);
@@ -590,6 +593,7 @@
             }
           };
           assignment.append(select,assign);info.append(assignment);
+          link.onclick=()=>{assignment.hidden=!assignment.hidden;link.setAttribute('aria-expanded',String(!assignment.hidden));if(!assignment.hidden)select.focus()};
         }
         card.append(info,actions);
         section.append(card);

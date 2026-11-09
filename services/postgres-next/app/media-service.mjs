@@ -39,8 +39,12 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
 
   async function activePhone(tx,phone10) {
-    const [[profile]]=await tx`SELECT phone10,admission_id FROM parent_profiles WHERE phone10=${phone10}`;
+    const [[profile]]=await tx`SELECT phone10,child_id,admission_id FROM parent_profiles WHERE phone10=${phone10}`;
     if(!profile)return false;
+    // Registration opens the chat before clinical matching is complete.
+    // Media follows that same chat eligibility, while partial/stale links
+    // still require a valid active admission.
+    if(!String(profile.child_id||'').trim()&&!String(profile.admission_id||'').trim())return true;
     const [[admission]]=await tx`SELECT status FROM admissions WHERE admission_id=${profile.admission_id}`;
     return admission?.status==='active';
   }

@@ -131,3 +131,12 @@ test('earlier registered parent is automatically connected after an educator fir
   assert.equal(fake.hospitalAdmissions.filter(x=>x.status==='active').length,1);
   assert.equal(fake.reportQueries,0);
 });
+
+
+test('sole active child without a known surname accepts a parent supplied surname; known contradiction and namesakes block',()=>{
+  const roster=[{child_id:'child_new',registered_first_name:'Степан',surname:''}];
+  const stays=[{admission_id:'admission_new',child_id:'child_new',status:'active'}];
+  assert.deepEqual(find({childName:'Степан Тестовый',children:roster,admissions:stays}),{childId:'child_new',admissionId:'admission_new'});
+  assert.equal(find({childName:'Степан Тестовый',children:[{...roster[0],surname:'Другой'}],admissions:stays}),null);
+  assert.equal(find({childName:'Степан Тестовый',children:[...roster,{child_id:'child_other',registered_first_name:'Степан',surname:''}],admissions:[...stays,{admission_id:'admission_other',child_id:'child_other',status:'active'}]}),null);
+});

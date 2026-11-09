@@ -1,11 +1,10 @@
 import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
-import {reconcileUnlinkedRegisteredParents,parseRegisteredChildName,canonicalRegisteredName} from './parent-admission-matching.mjs';
+import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 import {rawReportMentionsChild} from './source-report-backfill.mjs';
 // Educator-only roster. Report ownership remains on immutable IDs and admission IDs.
 const PHONE=/^\d{10}$/;
 const ID=/^[A-Za-z0-9_-]{8,128}$/;
 const name=value=>String(value||'').trim().normalize('NFC').replace(/\s+/g,' ');
-const normalized=value=>name(value).toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
 const validName=(value,max=90)=>{const result=name(value);if(!result||result.length>max||/[<>\x00-\x1f]/.test(result))throw new Error('Invalid roster name.');return result};
 const validId=value=>{const result=String(value||'');if(!ID.test(result))throw new Error('Invalid roster identifier.');return result};
 
@@ -36,12 +35,9 @@ export function assembleEducatorRoster({children=[],admissions=[],profiles=[],cu
     else if(!childId&&!admissionId){
       if(!parent.registered)continue;
       const assignable=[];
-      const entered=parseRegisteredChildName(parent.childName);
-      const enteredFirst=entered&&canonicalRegisteredName(entered.first,nameVariants);
       for(const admission of active.values()){
         const child=childrenById.get(admission.childId);
-        if(!child||!enteredFirst||canonicalRegisteredName(child.registered_first_name,nameVariants)!==enteredFirst||
-           (entered.surnamePrefix&&!normalized(child.surname).startsWith(normalized(entered.surnamePrefix))))continue;
+        if(!child)continue;
         const admissionCount=[...active.values()].filter(item=>item.childId===admission.childId).length;
         if(admissionCount!==1)continue;
         const evidence=rawReports.find(report=>(report.kind==='morning'||report.kind==='evening')&&
@@ -148,11 +144,8 @@ export function createEducatorRosterStore(sql,{now=()=>Date.now()}={}){
         const activeChildren=activeAdmissions.filter(a=>a.status==='active')
           .map(a=>children.find(c=>String(c.child_id)===String(a.child_id))).filter(Boolean);
         const child=children.find(c=>String(c.child_id)===childId);
-        const entered=parseRegisteredChildName(profile.child_name);
-        const namesMatch=entered&&canonicalRegisteredName(entered.first,nameVariants)===canonicalRegisteredName(child?.registered_first_name,nameVariants)&&
-          (!entered.surnamePrefix||normalized(child?.surname).startsWith(normalized(entered.surnamePrefix)));
         const admissionCount=activeAdmissions.filter(a=>a.status==='active'&&String(a.child_id)===childId).length;
-        const evidence=namesMatch&&admissionCount===1&&child&&rawReports.some(report=>(report.kind==='morning'||report.kind==='evening')&&
+        const evidence=admissionCount===1&&child&&rawReports.some(report=>(report.kind==='morning'||report.kind==='evening')&&
           rawReportMentionsChild({rawText:report.normalized_text||report.raw_text,child,activeChildren,nameVariants}));
         if(!evidence)throw new Error('Parent roster changed; reload before assigning.');
         const [rows]=await tx`UPDATE parent_profiles SET child_id=${childId},admission_id=${admissionId},updated_at=${BigInt(now())}

@@ -476,3 +476,5 @@ body.medsi-report-library-open {overflow:hidden}
 @media(prefers-reduced-motion:reduce){
   .medsi-settings-next .medsi-setting-tile,.medsi-raw-expand::after,.medsi-report-clickable{transition:none}
 }
+
+.medsi-roster-assignment[hidden]{display:none}

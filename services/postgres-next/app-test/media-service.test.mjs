@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {createMediaService} from '../app/media-service.mjs';
 
 const key='chat/'+'b'.repeat(64)+'.jpg', phone='9991112233', other='9994445566';
-function harness() {
+function harness({unlinked=false,closed=false}={}) {
   const state={media:new Map(),messages:new Map(),reads:0};
   const sql={begin:async(_opts,fn)=>{
    const tx=async(strings,...values)=>{
     const query=strings.join('?').replace(/\s+/g,' ');
-    if(query.includes('FROM parent_profiles'))return [[{phone10:values[0],admission_id:'adm'}]];
-    if(query.includes('FROM admissions'))return [[{status:'active'}]];
+    if(query.includes('FROM parent_profiles'))return [[{phone10:values[0],child_id:unlinked?'':'child',admission_id:unlinked?'':'adm'}]];
+    if(query.includes('FROM admissions'))return [[{status:closed?'closed':'active'}]];
     if(query.includes('FROM chat_media')){
       const row=state.media.get(values[0]);
       return [row?[row]:[]];
@@ -84,4 +84,22 @@ test('media cookies are HttpOnly and cannot reveal another parent chat',async()=
   assert.equal(result.statusCode,200);
   assert.deepEqual([...result.body],[1,2,3]);
   assert.equal(result.headers['cache-control'],'private, no-store');
+});
+
+
+test('unlinked registered chat supports photo uploads for parent and educator; closed admission stays denied',async()=>{
+  for(const token of ['parent','educator']){
+    const {service,state,response}=harness({unlinked:true});
+    const headers={'x-medsi-phone':phone,'x-medsi-chat-session':token,
+      'x-medsi-upload-id':'unlinked-photo-001','content-type':'image/jpeg','x-file-name':'synthetic.jpg'};
+    const res=response();
+    await service.upload({headers:{'content-length':'123'},get:k=>headers[k.toLowerCase()]},res);
+    assert.equal(res.statusCode,200);assert.equal(res.body.ok,true);
+    assert.equal(state.media.get('s3:'+key).phone10,phone);
+  }
+  const {service,state,response}=harness({closed:true});
+  const headers={'x-medsi-phone':phone,'x-medsi-chat-session':'parent'};
+  const denied=response();
+  await service.upload({headers:{'content-length':'123'},get:k=>headers[k.toLowerCase()]},denied);
+  assert.equal(denied.statusCode,401);assert.equal(state.media.size,0);
 });

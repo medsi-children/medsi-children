@@ -55,7 +55,7 @@ export function findUniqueActiveAdmissionForParent({
   // If the parent gave a surname or initial, it must agree; in particular,
   // never ignore contradictory data just because this is the only namesake.
   const matches=entered.surnamePrefix
-    ?candidates.filter(c=>c.surname.startsWith(entered.surnamePrefix))
+    ?candidates.filter(c=>c.surname.startsWith(entered.surnamePrefix)||(!c.surname&&candidates.length===1))
     :candidates;
   return matches.length===1
     ?{childId:matches[0].childId,admissionId:matches[0].admissionId}:null;
@@ -89,11 +89,13 @@ export async function reconcileUnlinkedRegisteredParents(sql,{now=()=>Date.now()
       let match=findUniqueActiveAdmissionForParent({
         childName:profile.child_name,children,admissions,nameVariants
       });
-      if(match&&!enteredName(profile.child_name)?.surnamePrefix){
+      const entered=enteredName(profile.child_name);
+      const matchedChild=match&&children.find(row=>String(row.child_id)===match.childId);
+      if(match&&(!entered?.surnamePrefix||!normalized(matchedChild?.surname))){
         if(!reports)reports=await recentStaffSource(tx,now());
         const child=children.find(row=>String(row.child_id)===match.childId);
         if(staffSourceContradictsExistingChild({
-          childName:profile.child_name,surname:child?.surname,nameVariants,reports
+          childName:entered?.first,surname:child?.surname||entered?.surnamePrefix,nameVariants,reports
         }))match=null;
       }
       if(!match){

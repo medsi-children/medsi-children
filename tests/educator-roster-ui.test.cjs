@@ -29,8 +29,8 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261109-parent-assignment-19/);
-  assert.match(html,/next-settings\.js\?v=20261109-parent-assignment-19/);
+  assert.match(html,/next-settings\.css\?v=20261109-parent-assignment-20/);
+  assert.match(html,/next-settings\.js\?v=20261109-parent-assignment-20/);
   assert.match(js,/Выбрать ребёнка по сырому отчёту/);
   assert.match(js,/Старая привязка — нужна проверка/);
   assert.doesNotMatch(js,/Родитель есть в боте/);
@@ -126,7 +126,7 @@ test('raw morning and evening reports visually separate child blocks but keep on
 });
 
 
-test('parent registered for an unlinked child remains visible in directory with no reports',()=>{
+test('unlinked parent rightmost action opens assignment and submits the selected child',async()=>{
   const source=read('tutors/next-settings.js');
   const begin=source.indexOf('function renderRoster(data){');
   const end=source.indexOf('  async function refreshRoster(){',begin);
@@ -139,15 +139,16 @@ test('parent registered for an unlinked child remains visible in directory with 
     setAttribute(){},
     classList:{add(){},remove(){},contains(){return false}}
   });
+  const requests=[],feedback={textContent:''};
   const render=new Function('byId','textNode','icon','deleteIcon','rosterEdit','request','refreshRoster',
     'refreshLibrary','window','setTimeout','document',
     source.slice(begin,end)+'\nreturn renderRoster;')(
-      id=>{assert.equal(id,'medsiRosterPane');return pane},node,()=>'<svg/>','',()=>{},
-      ()=>{throw new Error('Unlinked directory must never call report or mutation APIs')},
-      ()=>{},()=>{}, {},()=>{},{}
+      id=>id==='medsiReportsFeedback'?feedback:pane,node,()=>'<svg/>','',()=>{},
+      (...args)=>{requests.push(args);return Promise.resolve({ok:true})},
+      ()=>true,()=>{}, {confirm:()=>true},()=>{},{createElement:tag=>({...node(tag),focus(){}})}
     );
   const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
-    childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,hasChat:true};
+    childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,assignable:[{childId:'child_synthetic',admissionId:'admission_synthetic',label:'Новый ребёнок'}]};
   render({children:[],unlinked:[unlinked]});
   assert.equal(pane.children.length,1,'An unlinked profile must prevent the empty directory screen');
   const section=pane.children[0];
@@ -166,8 +167,14 @@ test('parent registered for an unlinked child remains visible in directory with 
   assert.equal(evening.dataset.present,'?');
   assert.equal(morning.dataset.tooltip,'Утреннего отчёта нет');
   assert.equal(evening.dataset.tooltip,'Вечернего отчёта нет');
-  assert.equal(link.dataset.tooltip,'Привязки не найдено');
+  assert.equal(link.dataset.tooltip,'Назначить ребёнка');
   for(const icon of actions.children)assert.equal(typeof icon.onclick,'function');
+  const assignment=card.children[0].children.find(e=>e.className==='medsi-roster-assignment');
+  assert.equal(assignment.hidden,true);link.onclick();assert.equal(assignment.hidden,false);
+  const [select,assign]=assignment.children;select.value='child_synthetic|admission_synthetic';select.onchange();
+  await assign.onclick();
+  assert.equal(requests.length,1);assert.equal(requests[0][2].kind,'assign');
+  assert.equal(requests[0][2].childId,'child_synthetic');
   assert.doesNotMatch(allText,/medsi-roster-line-delete|medsi-roster-form/);
   const css=read('tutors/next-settings.css');
   assert.match(css,/\.medsi-roster-line-unlinked\{/);
@@ -192,7 +199,7 @@ test('unlinked directory omits redundant bot-presence status',()=>{
   assert.doesNotMatch(js,/Родителя нет в боте|Регистрация родителя не подтверждена/);
   assert.match(js,/Утреннего отчёта нет/);
   assert.match(js,/Вечернего отчёта нет/);
-  assert.match(js,/Привязки не найдено/);
+  assert.match(js,/Назначить ребёнка/);
   assert.doesNotMatch(js,/В боте:|Чат:|Утренний: не определён|Вечерний: не определён|Привязка: нет/);
   assert.doesNotMatch(js,/Нет привязки к госпитализации'\)\)/);
 });

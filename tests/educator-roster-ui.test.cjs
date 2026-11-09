@@ -29,9 +29,9 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261109-child-deletion-21/);
-  assert.match(html,/next-settings\.js\?v=20261109-child-deletion-21/);
-  assert.match(js,/Выбрать ребёнка по сырому отчёту/);
+  assert.match(html,/next-settings\.css\?v=20261109-auto-link-only-22/);
+  assert.match(html,/next-settings\.js\?v=20261109-auto-link-only-22/);
+  assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.match(js,/Старая привязка — нужна проверка/);
   assert.doesNotMatch(js,/Родитель есть в боте/);
 });
@@ -126,7 +126,7 @@ test('raw morning and evening reports visually separate child blocks but keep on
 });
 
 
-test('unlinked parent rightmost action opens assignment and submits the selected child',async()=>{
+test('unlinked parent can be deleted without manual child assignment',async()=>{
   const source=read('tutors/next-settings.js');
   const begin=source.indexOf('function renderRoster(data){');
   const end=source.indexOf('  async function refreshRoster(){',begin);
@@ -144,14 +144,14 @@ test('unlinked parent rightmost action opens assignment and submits the selected
     'refreshLibrary','window','setTimeout','document',
     source.slice(begin,end)+'\nreturn renderRoster;')(
       id=>id==='medsiReportsFeedback'?feedback:pane,node,()=>'<svg/>','',()=>{},
-      (...args)=>{requests.push(args);return Promise.resolve({ok:true})},
+      (...args)=>{requests.push(args);return Promise.resolve({ok:true,accepted:true})},
       ()=>true,()=>{}, {confirm:()=>true},()=>{},{createElement:tag=>({...node(tag),focus(){}})}
     );
   const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
     childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,assignable:[{childId:'child_synthetic',admissionId:'admission_synthetic',label:'Новый ребёнок'}]};
   render({children:[],unlinked:[unlinked]});
-  assert.equal(pane.children.length,2,'Directory includes maintenance and the unlinked section');
-  const section=pane.children[1];
+  assert.equal(pane.children.length,1);
+  const section=pane.children[0];
   assert.match(section.className,/medsi-roster-unlinked/);
   assert.equal(section.children.filter(item=>item.tag==='article').length,1);
   const card=section.children.find(item=>item.tag==='article');
@@ -162,23 +162,20 @@ test('unlinked parent rightmost action opens assignment and submits the selected
   const actions=card.children.find(item=>item.className==='medsi-roster-line-actions');
   assert.ok(actions);
   assert.equal(actions.children.length,3);
-  const [morning,evening,link]=actions.children;
+  const [morning,evening,del]=actions.children;
   assert.equal(morning.dataset.present,'?');
   assert.equal(evening.dataset.present,'?');
   assert.equal(morning.dataset.tooltip,'Утреннего отчёта нет');
   assert.equal(evening.dataset.tooltip,'Вечернего отчёта нет');
-  assert.equal(link.dataset.tooltip,'Назначить ребёнка');
-  for(const icon of actions.children)assert.equal(typeof icon.onclick,'function');
-  const assignment=card.children[0].children.find(e=>e.className==='medsi-roster-assignment');
-  assert.equal(assignment.hidden,true);link.onclick();assert.equal(assignment.hidden,false);
-  const [select,assign]=assignment.children;select.value='child_synthetic|admission_synthetic';select.onchange();
-  await assign.onclick();
-  assert.equal(requests.length,1);assert.equal(requests[0][2].kind,'assign');
-  assert.equal(requests[0][2].childId,'child_synthetic');
-  assert.doesNotMatch(allText,/medsi-roster-line-delete|medsi-roster-form/);
+  assert.match(del.className,/medsi-roster-line-delete/);
+  await del.onclick();
+  assert.equal(requests.length,1);assert.equal(requests[0][0],'/lab/parent-delete');
+  assert.equal(requests[0][2].phone,unlinked.phone);
+  assert.match(requests[0][2].operationId,/^del_/);
+  assert.doesNotMatch(allText,/medsi-roster-assignment|Назначить ребёнка/);
   const css=read('tutors/next-settings.css');
   assert.match(css,/\.medsi-roster-line-unlinked\{/);
-  assert.match(css,/\.medsi-roster-status-link\{/);
+
 });
 
 test('linked child with zero reports remains in directory and unlinked parent is shown separately',()=>{
@@ -193,13 +190,11 @@ test('linked child with zero reports remains in directory and unlinked parent is
 
 test('unlinked directory omits redundant bot-presence status',()=>{
   const js=read('tutors/next-settings.js');
-  assert.match(js,/const candidates=Array\.isArray\(parent\.assignable\)/);
-  assert.match(js,/kind:'assign'/);
-  assert.match(js,/Отчёты прошлых госпитализаций переноситься не будут/);
+  assert.doesNotMatch(js,/parent\.assignable|kind:'assign'|Назначить ребёнка|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Родителя нет в боте|Регистрация родителя не подтверждена/);
   assert.match(js,/Утреннего отчёта нет/);
   assert.match(js,/Вечернего отчёта нет/);
-  assert.match(js,/Назначить ребёнка/);
+
   assert.doesNotMatch(js,/В боте:|Чат:|Утренний: не определён|Вечерний: не определён|Привязка: нет/);
   assert.doesNotMatch(js,/Нет привязки к госпитализации'\)\)/);
 });

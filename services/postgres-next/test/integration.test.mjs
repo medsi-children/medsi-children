@@ -323,3 +323,83 @@ test('real PostgreSQL push worker: deliver saved outbox and mark expired endpoin
     await conn.driver.close();
   }
 });
+
+test('real PostgreSQL: automatic late registration, earlier registration, duplicate names and deleted-source isolation', {
+  skip: enabled ? false : 'Disposable PostgreSQL CI only.'
+}, async()=>{
+  const {createParentRegistrationService}=await import('../app/parent-registration.mjs');
+  const {createReportReader}=await import('../app/report-reader.mjs');
+  const {createParentDeletionService}=await import('../app/parent-deletion.mjs');
+  const {moscowDate}=await import('../app/report-publications.mjs');
+  const conn=await connectPostgresNext(process.env);
+  try{
+    const {sql}=conn;let time=Date.now()-10000;
+    const now=()=>time;
+    const registration=createParentRegistrationService({sql,now,sessions:{issueParent:async()=>({token:'synthetic_session'})}});
+    const reader=createReportReader(sql);
+    const publishSource=async(kind,id,text)=>{
+      await sql.upsert`INSERT INTO raw_reports (publication_id,kind,report_date,raw_text,normalized_text,submitted_at,revision)
+        VALUES (${id},${kind},${moscowDate(time)},${text},${text},${BigInt(time)},${1n})`;
+      await sql.upsert`INSERT INTO report_publication_head (kind,publication_id,revision,submitted_at)
+        VALUES (${kind},${id},${1n},${BigInt(time)})`;
+    };
+    await sql.upsert`INSERT INTO name_variants (base_key,preferred_name,variants_json)
+      VALUES (${'ci_leonid'},${'Леонид'},${JSON.stringify(['лёня','леня'])})`;
+    await publishSource('morning','ci_late_morning','Лёня — Синтетическое утро.');
+    await publishSource('evening','ci_late_evening','Лёня — Синтетический вечер.');
+    time+=100;
+    const late={phone:'89990000025',parentName:'Тестовый родитель',childName:'Леонид Тестовый',attemptId:'reg_ci_late_123456789'};
+    assert.equal((await registration.register(late)).ok,true);
+    const [[profile]]=await sql`SELECT child_id,admission_id FROM parent_profiles WHERE phone10=${'9990000025'}`;
+    assert.ok(profile.child_id&&profile.admission_id);
+    const current=await reader.current('9990000025');
+    assert.equal(current.reports.length,2);
+    assert.deepEqual(new Set(current.reports.map(r=>r.kind)),new Set(['morning','evening']));
+    assert.ok(current.reports.every(r=>r.text.startsWith('Лёня:')));
+    assert.equal((await reader.history('9990000025')).reports.length,2);
+    await registration.register(late);
+    const [stays]=await sql`SELECT admission_id FROM admissions WHERE child_id=${profile.child_id}`;
+    assert.equal(stays.length,1,'registration retry does not create another child or stay');
+
+    // Parent registered before any source exists is connected on report read
+    // once the first unique bare-name source becomes available.
+    const early={phone:'89990000026',parentName:'Другой тестовый родитель',childName:'Руслан Тестовый',attemptId:'reg_ci_early_123456789'};
+    await registration.register(early);
+    const [[waiting]]=await sql`SELECT admission_id FROM parent_profiles WHERE phone10=${'9990000026'}`;
+    assert.equal(waiting.admission_id,'');
+    time+=100;
+    await publishSource('morning','ci_early_morning','Руслан — Новый синтетический отчёт.');
+    const earlyReports=await reader.current('9990000026');
+    assert.equal(earlyReports.reports.length,1);
+    assert.equal(earlyReports.reports[0].text,'Руслан: Новый синтетический отчёт.');
+
+    // A shared name is not ownership proof, even if it occurs only once in source.
+    for(const suffix of ['a','b']){
+      await sql.upsert`INSERT INTO children (child_id,registered_first_name,surname)
+        VALUES (${'ci_oleg_'+suffix},${'Олег'},${'Тестовый '+suffix})`;
+      await sql.upsert`INSERT INTO admissions (admission_id,child_id,status)
+        VALUES (${'ci_oleg_stay_'+suffix},${'ci_oleg_'+suffix},${'active'})`;
+    }
+    await publishSource('evening','ci_namesake_evening','Олег — Синтетический неподписанный блок.');
+    await registration.register({phone:'89990000027',parentName:'Тестовый родитель тёзки',childName:'Олег',attemptId:'reg_ci_namesake_123456789'});
+    const [[ambiguous]]=await sql`SELECT child_id,admission_id FROM parent_profiles WHERE phone10=${'9990000027'}`;
+    assert.equal(ambiguous.child_id,'');assert.equal(ambiguous.admission_id,'');
+    assert.equal((await reader.current('9990000027')).reports.length,0);
+
+    // Removing the last parent erases its roster identity. The retained raw
+    // source cannot enroll another same-named parent until a fresh publication.
+    time=Date.now()-5000;
+    const deletion=createParentDeletionService({sql,enabled:true,now,removeMedia:async()=>{}});
+    await deletion.enqueue({phone:early.phone,operationId:'del_ci_early_123456789'});
+    const [deletedChild]=await sql`SELECT child_id FROM children WHERE child_id=${(await sql`SELECT child_id FROM parent_deletion_queue WHERE operation_id=${'del_ci_early_123456789'}`)[0][0].child_id}`;
+    assert.equal(deletedChild.length,0);
+    const [[raw]]=await sql`SELECT raw_text FROM raw_reports WHERE publication_id=${'ci_early_morning'}`;
+    assert.equal(raw.raw_text,'Руслан — Новый синтетический отчёт.');
+    await registration.register({phone:'89990000028',parentName:'Новый тестовый родитель',childName:'Руслан Тестовый',attemptId:'reg_ci_afterdelete_123456789'});
+    const [[fenced]]=await sql`SELECT admission_id FROM parent_profiles WHERE phone10=${'9990000028'}`;
+    assert.equal(fenced.admission_id,'');
+    time+=1000;
+    await publishSource('morning','ci_newstay_morning','Руслан — Новое синтетическое поступление.');
+    assert.equal((await reader.current('9990000028')).reports[0].text,'Руслан: Новое синтетическое поступление.');
+  }finally{await conn.driver.close();}
+});

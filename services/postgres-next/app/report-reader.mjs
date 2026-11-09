@@ -1,4 +1,5 @@
 import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
+import {createHash} from 'node:crypto';
 import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 const PHONE=/^\d{10}$/;
 const KINDS=new Set(['morning','evening','psychology']);
@@ -20,10 +21,30 @@ export function createReportReader(sql) {
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};
       const [rows]=await tx`SELECT kind,text,version,updated_at,admission_id
         FROM parent_current_reports WHERE phone10=${phone}`;
+      const reports=rows.filter(r=>same(r.admission_id,profile.admission_id)).map(row=>({
+        kind:row.kind,text:row.text||'',version:row.version||'',updatedAt:timestamp(row.updated_at)
+      }));
+      // Group therapy is shared with every currently registered, authenticated
+      // parent. It is not child-specific: always serve the most recent
+      // publication directly, including parents who registered afterward.
+      // The router verifies the parent's own session and phone first.
+      const [[head]]=await tx`SELECT publication_id FROM report_publication_head
+        WHERE kind=${'psychology'}`;
+      if(head?.publication_id){
+        const [[published]]=await tx`SELECT normalized_text,submitted_at FROM raw_reports
+          WHERE publication_id=${head.publication_id} AND kind=${'psychology'}`;
+        const text=String(published?.normalized_text||'');
+        if(text.trim()){
+          const version=createHash('sha256')
+            .update('psychology'+'\u0000'+String(profile.admission_id||'')+'\u0000'+text,'utf8')
+            .digest('hex');
+          const index=reports.findIndex(r=>r.kind==='psychology');
+          if(index>=0)reports.splice(index,1);
+          reports.push({kind:'psychology',text,version,updatedAt:timestamp(published.submitted_at)});
+        }
+      }
       return {ok:true,unlinked:!String(profile.admission_id||'')&&!String(profile.child_id||''),
-        reports:rows.filter(r=>same(r.admission_id,profile.admission_id)).map(row=>({
-          kind:row.kind,text:row.text||'',version:row.version||'',updatedAt:timestamp(row.updated_at)
-        }))};
+        reports};
     });
     const first=await fetchCurrent();
     // Returning parent: retry unique admission matching before retrieving

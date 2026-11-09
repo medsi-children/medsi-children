@@ -337,8 +337,9 @@ body.medsi-report-library-open {overflow:hidden}
 .medsi-roster-unlinked-phone{font-size:12px;color:#698a96;overflow-wrap:anywhere}
 .medsi-roster-line-unlinked .medsi-roster-line-actions{align-self:center}
 .medsi-roster-line-unlinked .medsi-roster-status-icon{flex-shrink:0}
-.medsi-roster-status-account[data-present="1"]{background:#e0f6ee;border-color:#bde9dc;color:#328d77}
-.medsi-roster-status-account[data-present="?"]{background:#eaf5f8;border-color:#cbe5ea;color:#5394a6}
+.medsi-roster-assignment{display:flex;gap:7px;flex-wrap:wrap;margin-top:6px}
+.medsi-roster-assignment select{min-width:190px;max-width:100%;border:1px solid #d7e2e7;border-radius:9px;background:#fff;padding:8px 10px;color:#24404a;font:inherit;font-size:12px}
+.medsi-roster-review-note{font-size:11px;color:#9a6a3a}
 .medsi-roster-status-link{background:#fff4e5;border-color:#f5deb4;color:#be9144}
 .medsi-roster-line-unlinked .medsi-roster-status-morning[data-present="?"],
 .medsi-roster-line-unlinked .medsi-roster-status-evening[data-present="?"]{

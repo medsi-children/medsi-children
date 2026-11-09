@@ -29,8 +29,11 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261108-raw-child-blocks-18/);
-  assert.match(html,/next-settings\.js\?v=20261108-natural-roster-tooltips-16/);
+  assert.match(html,/next-settings\.css\?v=20261109-parent-assignment-19/);
+  assert.match(html,/next-settings\.js\?v=20261109-parent-assignment-19/);
+  assert.match(js,/Выбрать ребёнка по сырому отчёту/);
+  assert.match(js,/Старая привязка — нужна проверка/);
+  assert.doesNotMatch(js,/Родитель есть в боте/);
 });
 
 test('deleting the final linked parent removes the child directory row',()=>{
@@ -157,11 +160,8 @@ test('parent registered for an unlinked child remains visible in directory with 
   assert.match(allText,/89000000091/);
   const actions=card.children.find(item=>item.className==='medsi-roster-line-actions');
   assert.ok(actions);
-  assert.equal(actions.children.length,4);
-  const [account,morning,evening,link]=actions.children;
-  assert.match(account.className,/medsi-roster-status-account/);
-  assert.equal(account.dataset.present,'1');
-  assert.equal(account.dataset.tooltip,'Родитель есть в боте');
+  assert.equal(actions.children.length,3);
+  const [morning,evening,link]=actions.children;
   assert.equal(morning.dataset.present,'?');
   assert.equal(evening.dataset.present,'?');
   assert.equal(morning.dataset.tooltip,'Утреннего отчёта нет');
@@ -171,26 +171,25 @@ test('parent registered for an unlinked child remains visible in directory with 
   assert.doesNotMatch(allText,/medsi-roster-line-delete|medsi-roster-form/);
   const css=read('tutors/next-settings.css');
   assert.match(css,/\.medsi-roster-line-unlinked\{/);
-  assert.match(css,/\.medsi-roster-status-account\[data-present="1"\]/);
   assert.match(css,/\.medsi-roster-status-link\{/);
 });
 
 test('linked child with zero reports remains in directory and unlinked parent is shown separately',()=>{
   const js=read('tutors/next-settings.js');
   assert.match(js,/const unlinked=Array\.isArray\(data\?\.unlinked\)/);
-  assert.match(js,/if\(!children\.length&&!unlinked\.length\)/);
+  assert.match(js,/if\(!children\.length&&!unlinked\.length&&!needsReview\.length\)/);
   assert.match(js,/for\(const child of children\)/);
   assert.match(js,/for\(const parent of unlinked\)/);
   assert.match(js,/\/lab\/admin\/roster/);
 });
 
 
-test('unlinked account with no confirmed registration is not falsely marked as in bot',()=>{
+test('unlinked directory omits redundant bot-presence status',()=>{
   const js=read('tutors/next-settings.js');
-  assert.match(js,/const registration=parent\.registered===true/);
-  assert.match(js,/const chat=parent\.hasChat===true/);
-  assert.match(js,/Родителя нет в боте/);
-  assert.match(js,/Регистрация родителя не подтверждена/);
+  assert.match(js,/const candidates=Array\.isArray\(parent\.assignable\)/);
+  assert.match(js,/kind:'assign'/);
+  assert.match(js,/Отчёты прошлых госпитализаций переноситься не будут/);
+  assert.doesNotMatch(js,/Родителя нет в боте|Регистрация родителя не подтверждена/);
   assert.match(js,/Утреннего отчёта нет/);
   assert.match(js,/Вечернего отчёта нет/);
   assert.match(js,/Привязки не найдено/);

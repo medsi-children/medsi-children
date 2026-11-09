@@ -1,5 +1,5 @@
 import {randomBytes} from 'node:crypto';
-import {findUniqueActiveAdmissionForParent,parseRegisteredChildName} from './parent-admission-matching.mjs';
+import {findUniqueActiveAdmissionForParent,parseRegisteredChildName,linkedAdmissionsForMatching} from './parent-admission-matching.mjs';
 import {createAdmissionFromStaffReport,recentStaffSource,staffSourceContradictsExistingChild} from './report-observed-admission.mjs';
 import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
 import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
@@ -51,13 +51,15 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
       if(existing)return {ok:true,duplicate:true};
       const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
       const [admissions]=await tx`SELECT admission_id,child_id,status FROM admissions`;
+      const [linkedParents]=await tx`SELECT child_id,admission_id FROM parent_profiles`;
+      const matchingAdmissions=linkedAdmissionsForMatching({admissions,profiles:linkedParents});
       const [nameVariants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
       // Nicknames are resolved through the existing canonical variants table.
       // A full surname must agree and the active admission must be unique.
       // Never infer a child's clinical identity from one raw report mention.
       const timestamp=now();
       let match=findUniqueActiveAdmissionForParent({
-        childName,children,admissions,nameVariants
+        childName,children,admissions:matchingAdmissions,nameVariants
       });
       let reports=null;
       const entered=parseRegisteredChildName(childName);
@@ -74,7 +76,7 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
         // report, create their hospital identity if the name is unique.
         if(!reports)reports=await recentStaffSource(tx,timestamp);
         match=await createAdmissionFromStaffReport(tx,{
-          childName,children,admissions,nameVariants,reports,now:timestamp
+          childName,children,admissions:matchingAdmissions,nameVariants,reports,now:timestamp
         });
       }
       const userHandle=randomBytes(32).toString('base64url');

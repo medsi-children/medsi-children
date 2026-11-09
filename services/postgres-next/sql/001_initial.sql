@@ -1,3 +1,8 @@
+-- HISTORICAL BOOTSTRAP SCHEMA / LEGACY CI ONLY.
+-- Active Timeweb runtime is admission-free: prepareCurrentChildSchema()
+-- upgrades report ownership to child_id and permanently drops admissions
+-- and all admission_id columns. Do not use these historical objects in
+-- new application logic. See AGENTS.md.
 -- MEDSI NEXT PostgreSQL 18 schema, derived from PostgreSQL NEXT data model.
 -- APPLY ONLY TO AN EMPTY, EXPLICITLY APPROVED DATABASE.
 -- All timestamps are UTC Unix milliseconds; IDs and phones are opaque text.

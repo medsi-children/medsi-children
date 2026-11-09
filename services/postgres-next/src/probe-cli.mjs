@@ -1,6 +1,6 @@
 import pg from 'pg';
 import {readPostgresConfig} from './connection.mjs';
-import {SCHEMA_INDEXES,schemaMatches} from './schema-contract.mjs';
+import {SCHEMA_INDEXES,SCHEMA_TABLES,schemaMatches} from './schema-contract.mjs';
 
 // Read-only check for the purchased Timeweb PostgreSQL instance.
 // Absolutely no patient records, passwords or connection URIs are printed.
@@ -22,10 +22,27 @@ export async function probePostgresNext(env=process.env) {
           AND n.nspname NOT LIKE 'pg_toast_temp_%'
           AND c.relkind IN ('r','p','v','m','S','f','i','I')`)
     ]);
-    const tables=tableResult.rows.length;
-    return {ok:true,major:18,tables,indexes:SCHEMA_INDEXES.length,
-      schemaReady:schemaMatches(tableResult.rows.map(row=>row.table_name),
-        indexResult.rows.map(row=>row.indexname),otherRelations.rows[0]?.n)};
+    const actualTables=tableResult.rows.map(row=>String(row.table_name));
+    const actualIndexes=new Set(indexResult.rows.map(row=>String(row.indexname)));
+    const legacyReady=schemaMatches(actualTables,[...actualIndexes],otherRelations.rows[0]?.n);
+    // After the optional DDL-only contract, admissions is the ONLY missing
+    // legacy table. Existing indexes and both child_id report columns remain.
+    const currentTables=SCHEMA_TABLES.filter(name=>name!=='admissions');
+    const physicalSchemaReady=Number(otherRelations.rows[0]?.n)===0&&
+      actualTables.length===currentTables.length&&
+      currentTables.every(name=>actualTables.includes(name))&&
+      SCHEMA_INDEXES.every(name=>actualIndexes.has(name));
+    let currentReady=false;
+    if(physicalSchemaReady){
+      const columns=await pool.query(`SELECT table_name,column_name FROM information_schema.columns
+        WHERE table_schema='public' AND table_name IN
+        ('parent_current_reports','parent_report_history')`);
+      const keys=new Set(columns.rows.map(x=>x.table_name+'.'+x.column_name));
+      currentReady=keys.has('parent_current_reports.child_id')&&
+        keys.has('parent_report_history.child_id');
+    }
+    return {ok:true,major:18,tables:actualTables.length,indexes:SCHEMA_INDEXES.length,
+      schemaReady:legacyReady||currentReady};
   } catch (_) {
     // CA, account names and connection URLs may be part of native pg errors.
     throw new Error('PostgreSQL TLS probe failed; review Timeweb network, CA and credentials securely.');

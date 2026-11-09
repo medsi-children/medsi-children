@@ -429,7 +429,8 @@
     // did not exactly match an active admission at registration time.
     // The server returns such valid profiles separately; do not hide them.
     const unlinked=Array.isArray(data?.unlinked)?data.unlinked.filter(parent=>parent&&parent.phone10):[];
-    if(!children.length&&!unlinked.length){pane.append(textNode('p','medsi-reports-empty','В справочнике пока нет родительских профилей.'));return;}
+    const needsReview=Array.isArray(data?.review)?data.review:[];
+    if(!children.length&&!unlinked.length&&!needsReview.length){pane.append(textNode('p','medsi-reports-empty','В справочнике пока нет родительских профилей.'));return;}
     for(const child of children){
       const parents=Array.isArray(child.parents)?child.parents:[];
       const card=textNode('article','medsi-roster-line',''),info=textNode('div','medsi-roster-line-info','');
@@ -550,15 +551,7 @@
           [(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
         const actions=textNode('div','medsi-roster-line-actions','');
-        const registration=parent.registered===true;
-        const chat=parent.hasChat===true;
-        const botHint=registration
-          ?'Родитель есть в боте'
-          :chat?'Регистрация родителя не подтверждена'
-            :'Родителя нет в боте';
         actions.append(
-          statusButton('account',registration?'1':chat?'?':'0',
-            '<circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/>',botHint),
           statusButton('morning','?',
             '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/>',
             'Утреннего отчёта нет'),
@@ -569,8 +562,51 @@
             '<path d="M10 13a5 5 0 0 0 7 .5l3-3a5 5 0 0 0-7-7l-1.7 1.7M14 11a5 5 0 0 0-7-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/><path d="m3 3 18 18"/>',
             'Привязки не найдено')
         );
+        const candidates=Array.isArray(parent.assignable)?parent.assignable:[];
+        if(candidates.length){
+          const assignment=textNode('div','medsi-roster-assignment','');
+          const select=document.createElement('select');
+          select.setAttribute('aria-label','Выбрать ребёнка из свежих сырых отчётов');
+          const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent='Выбрать ребёнка по сырому отчёту';select.append(placeholder);
+          for(const candidate of candidates){
+            const option=document.createElement('option');option.value=candidate.childId+'|'+candidate.admissionId;
+            option.textContent=candidate.label;select.append(option);
+          }
+          const assign=textNode('button','medsi-inline-save','Назначить');assign.type='button';assign.disabled=true;
+          select.onchange=()=>{assign.disabled=!select.value};
+          assign.onclick=async()=>{
+            const selected=candidates.find(candidate=>select.value===candidate.childId+'|'+candidate.admissionId);
+            if(!selected)return;
+            if(!window.confirm('Связать профиль '+(parent.parentName||parent.phone)+' с ребёнком '+selected.label+' по свежему сырому отчёту? Отчёты прошлых госпитализаций переноситься не будут.'))return;
+            assign.disabled=true;select.disabled=true;
+            try{
+              await request('/lab/admin/roster/edit','POST',{kind:'assign',phone10:parent.phone10,
+                childId:selected.childId,admissionId:selected.admissionId});
+              await refreshRoster();refreshLibrary();
+              byId('medsiReportsFeedback').textContent='Родитель привязан к выбранному ребёнку. Доступные текущие отчёты проверены.';
+            }catch(error){
+              byId('medsiReportsFeedback').textContent=error.message||'Не удалось назначить ребёнка.';
+              assign.disabled=false;select.disabled=false;
+            }
+          };
+          assignment.append(select,assign);info.append(assignment);
+        }
         card.append(info,actions);
         section.append(card);
+      }
+      pane.append(section);
+    }
+    if(needsReview.length){
+      const section=textNode('section','medsi-roster-unlinked','');
+      section.append(textNode('h3','medsi-roster-unlinked-heading','Старая привязка — нужна проверка'));
+      for(const parent of needsReview){
+        const card=textNode('article','medsi-roster-line medsi-roster-line-unlinked','');
+        const info=textNode('div','medsi-roster-line-info','');
+        info.append(textNode('div','medsi-roster-line-name',String(parent.childName||'').trim()||'Ребёнок не указан'));
+        info.append(textNode('div','medsi-roster-line-parent',[(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
+        info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
+        info.append(textNode('div','medsi-roster-review-note','Профиль связан с прежним поступлением. Отчёты не перенесены.'));
+        card.append(info);section.append(card);
       }
       pane.append(section);
     }

@@ -1,6 +1,8 @@
 import {randomBytes} from 'node:crypto';
 import {findUniqueActiveAdmissionForParent,parseRegisteredChildName} from './parent-admission-matching.mjs';
 import {createAdmissionFromStaffReport,recentStaffSource,staffSourceContradictsExistingChild} from './report-observed-admission.mjs';
+import {reconcileUnlinkedRegisteredParents} from './parent-admission-matching.mjs';
+import {backfillRecentEducatorReports} from './source-report-backfill.mjs';
 
 const PHONE=/^\d{10}$/;
 const ATTEMPT=/^reg_[A-Za-z0-9_-]{12,125}$/;
@@ -90,8 +92,19 @@ export function createParentRegistrationService({sql,sessions,now=()=>Date.now()
           ${''},${numeric(timestamp)},${numeric(timestamp)})`;
       return {ok:true,completed:true};
     });
-    if(!result.ok||result.duplicate)return result;
+    if(!result.ok)return result;
+    // Registration itself must reconcile an unlinked parent and recover
+    // eligible recent source reports. Do not rely on the parent opening
+    // the report screen or an educator refreshing the roster first.
+    // A failed recovery must not invalidate a committed registration;
+    // authenticated report reads will retry the same guarded repair.
+    const recover=async()=>{
+      try{await reconcileUnlinkedRegisteredParents(sql,{phone10,now})}catch(_){}
+      try{await backfillRecentEducatorReports(sql,{phone10,now})}catch(_){}
+    };
+    if(result.duplicate){await recover();return result}
     const session=await sessions.issueParent(phone10);
+    await recover();
     return {ok:true,duplicate:false,phone:'8'+phone10,parentName,childName,
       parentSession:session.token,d1Session:{ok:true,...session},registrationAttemptId:attemptId};
   }

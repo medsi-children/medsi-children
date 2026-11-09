@@ -108,8 +108,21 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
       WHERE publication_id=${p1.publicationId}`;
     assert.equal(unaltered.raw_text,text);
 
-    // Production cleanup is DDL-only, automatic, and idempotent.
-    assert.equal((await retireHospitalAdmissions(sql)).retired,true);
+    // Rehearse migrating a legacy-linked report: its original owner must
+    // survive both the identity backfill and physical schema contraction.
+    const legacyStay='synthetic_legacy_stay_C';
+    await sql.upsert`INSERT INTO admissions
+      (admission_id,child_id,status,admitted_at)
+      VALUES (${legacyStay},${thirdProfile.child_id},${'active'},${BigInt(clock)})`;
+    await sql`UPDATE parent_profiles SET admission_id=${legacyStay}
+      WHERE phone10=${phoneC}`;
+    await sql`UPDATE parent_current_reports
+      SET child_id=${''},admission_id=${legacyStay}
+      WHERE phone10=${phoneC} AND kind=${'evening'}`;
+    await sql`UPDATE parent_report_history
+      SET child_id=${''},admission_id=${legacyStay}
+      WHERE phone10=${phoneC} AND kind=${'evening'}`;
+    assert.equal((await prepareCurrentChildSchema(sql)).retired,true);
     assert.equal((await retireHospitalAdmissions(sql)).retired,false);
     assert.equal((await prepareCurrentChildSchema(sql)).deferred,undefined);
     const [[dropped]]=await sql`SELECT to_regclass(${'public.admissions'}) IS NULL AS removed`;

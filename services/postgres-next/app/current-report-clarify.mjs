@@ -36,7 +36,9 @@ export function reviewCurrentReport({kind,rawText,profiles=[],children=[],nameVa
   });
   const rosterKey=roster.map(c=>[String(c.child_id),norm(c.registered_first_name),norm(c.surname)])
     .sort((a,b)=>a[0].localeCompare(b[0]));
-  const token=hash({kind,rawText,correctionOf,headId,rosterKey,
+  const profileKey=profiles.map(p=>[String(p.phone10||''),String(p.child_id||'')])
+    .sort((a,b)=>a[0].localeCompare(b[0]));
+  const token=hash({kind,rawText,correctionOf,headId,rosterKey,profileKey,
     variants:nameVariants.map(v=>[v.base_key,v.preferred_name,v.variants_json])});
   return {ok:true,token,conflicts};
 }

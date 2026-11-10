@@ -123,7 +123,7 @@
   function showStart(){setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');show('screenStart')}
   function showNames(){setHeader('Регистрация родителя','Укажите данные ребёнка и родителя.');show('screenNames')}
   function showPhoneReg(){setHeader('Телефон для входа','Введите номер, с которым будете входить в систему.');show('screenPhoneReg')}
-  function showAuth(){setHeader('Авторизация','Введите номер телефона для входа.');preparedPasskeyLogin=null;selectedPasskeyPhone='';$('passkeyRequiredPanel').classList.add('hidden');$('passkeyLoginError').classList.add('hidden');$('authBtn').disabled=false;show('screenAuth')}
+  function showAuth(){setHeader('Авторизация','Введите номер телефона для входа.');$('phoneErrorAuth').classList.add('hidden');$('authUnknownRegisterBtn').classList.add('hidden');preparedPasskeyLogin=null;selectedPasskeyPhone='';$('passkeyRequiredPanel').classList.add('hidden');$('passkeyLoginError').classList.add('hidden');$('authBtn').disabled=false;show('screenAuth')}
   function showPasskeyRequired(phone){showAuth();$('phoneInputAuth').value=phone;selectedPasskeyPhone=onlyDigits(phone).slice(-10);$('passkeyRequiredPanel').classList.remove('hidden');$('authBtn').disabled=true;preparePasskeyLogin()}
   function applyBootstrap(res){if(!res||!res.ok||!res.parentSession)return false;currentPhone=onlyDigits(res.phone||currentPhone);parentName=String(res.parentName||parentName||'').trim();childName=String(res.childName||childName||'').trim();parentSession=String(res.parentSession);if(res.d1Session&&res.d1Session.token)saveD1Session(res.d1Session);safeSet(PARENT_SESSION_KEY,parentSession);safeSet(PHONE_KEY,currentPhone);safeSet(LEGACY_PHONE_KEY,currentPhone);safeSet(PARENT_KEY,parentName);safeSet(CHILD_KEY,childName);applyUnread(res);syncPushIdentity();return true}
   function showChoose(){if(window.MedsiParentChatScreen)MedsiParentChatScreen.close();setHeader('Медси Бот','Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.');$('waitNote').classList.toggle('hidden',!justRegistered);prewarmAll(true);show('screenChoose');openRequestedDestination()}
@@ -233,6 +233,18 @@
   async function register(){const digits=onlyDigits($('phoneInputReg').value),err=$('phoneErrorReg'),info=$('alreadyRegistered');err.classList.add('hidden');info.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}const snapshot={phone:digits,parentName:regParentName,childName:regChildName};const saved=readJson(REG_ATTEMPT_KEY);snapshot.attemptId=saved&&saved.fingerprint===registrationFingerprint(snapshot)?saved.attemptId:makeFlowId('reg');snapshot.fingerprint=registrationFingerprint(snapshot);safeSet(REG_ATTEMPT_KEY,JSON.stringify(snapshot));runRegistrationFlow(snapshot)}
   function resetAuthPendingUi(){const screen=$('screenAuthPending');screen.classList.remove('is-approved');$('authPendingSpinner').classList.remove('hidden');$('authApprovedIcon').classList.add('hidden');$('authPendingTitle').textContent='Проверяем доступ';$('authPendingText').textContent='Пожалуйста, подождите…';$('authRequestCode').textContent='••••';$('authRequestCodeWrap').classList.add('hidden');$('authPendingBackBtn').classList.add('hidden')}
   function showAuthApproved(res){if(!applyBootstrap(res))throw new Error('Не удалось сохранить подтверждённый вход.');safeRemove(REAUTH_KEY);prewarmAll();const screen=$('screenAuthPending');screen.classList.add('is-approved');$('authPendingSpinner').classList.add('hidden');$('authApprovedIcon').classList.remove('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent='Авторизация подтверждена!';$('authPendingText').textContent='Вход сохранён на этом устройстве.';const approvedRun=flowRun;Promise.all([wait(1800),Promise.resolve(window.MedsiAssistantReady)]).then(()=>{if(flowRun===approvedRun&&document.body.dataset.screen==='screenAuthPending'){justRegistered=false;showChoose()}})}
+  const UNKNOWN_PHONE_TITLE='Номер телефона не найден';
+  const UNKNOWN_PHONE_MESSAGE='Указанный номер телефона пока не зарегистрирован в системе. Если ваш ребёнок только поступил в отделение, сначала нажмите кнопку «Регистрация» и заполните необходимые данные. Если вы уже регистрировались, проверьте правильность номера телефона или обратитесь к сотруднику отделения.';
+  function showUnknownPhone(phone){
+    safeRemove(REAUTH_KEY);
+    resetAuthPendingUi();
+    showAuth();
+    $('phoneInputAuth').value=phone;
+    const error=$('phoneErrorAuth');
+    error.textContent=UNKNOWN_PHONE_TITLE+'. '+UNKNOWN_PHONE_MESSAGE;
+    error.classList.remove('hidden');
+    $('authUnknownRegisterBtn').classList.remove('hidden');
+  }
   function showAuthStopped(status,message){$('authPendingSpinner').classList.add('hidden');$('authRequestCodeWrap').classList.add('hidden');$('authPendingTitle').textContent=status==='DENIED'?'Авторизация отклонена':status==='NOT_FOUND'?'Номер не найден':status==='CONSUMED'?'Запрос уже использован':'Срок запроса истёк';$('authPendingText').textContent=message||'Вы можете отправить новый запрос.';$('authPendingBackBtn').classList.remove('hidden')}
   async function runReauthorizationFlow(data,createFirst){
     const run=++flowRun;resetAuthPendingUi();let shouldCreate=!!createFirst,pollDelay=2000;
@@ -246,15 +258,13 @@
         let res=await callBackendAccess(!shouldCreate,data);
         if(run!==flowRun)return;
         if(res&&res.code==='NOT_FOUND'&&res.ok===false){
-          restoreButton();safeRemove(REAUTH_KEY);showAuth();$('phoneInputAuth').value=data.phone;
-          $('phoneErrorAuth').textContent='Этот номер не найден среди активных родителей.';
-          $('phoneErrorAuth').classList.remove('hidden');return;
+          restoreButton();showUnknownPhone(data.phone);return;
         }
         // If the backend changes how it packages a passkey requirement,
         // handle both status and code before the generic failure branch.
         if(res&&(res.status==='PASSKEY_REQUIRED'||res.code==='PASSKEY_REQUIRED')){restoreButton();safeRemove(REAUTH_KEY);showPasskeyRequired(data.phone);return}
         if(!res||res.ok===false)throw new Error((res&&res.message)||'Не удалось проверить авторизацию.');
-        if(res.status==='NOT_FOUND'){shouldCreate=true;continue}
+        if(res.status==='NOT_FOUND'){restoreButton();showUnknownPhone(data.phone);return}
         restoreButton();
         if(!pendingVisible){show('screenAuthPending');pendingVisible=true}
         shouldCreate=false;
@@ -265,12 +275,12 @@
         if(res.status==='CONSUMED'){safeRemove(REAUTH_KEY);showAuthStopped('CONSUMED','Этот запрос уже использован. Начните вход ещё раз.');return}
         if(res.status==='EXPIRED'){safeRemove(REAUTH_KEY);showAuthStopped('EXPIRED','Запрос больше не действует. Отправьте новый запрос на вход.');return}
         if(res.status==='NOT_FOUND')shouldCreate=true;
-      }catch(e){if(run!==flowRun)return;if(e&&e.code==='PASSKEY_REQUIRED'){restoreButton();safeRemove(REAUTH_KEY);showPasskeyRequired(data.phone);return}restoreButton();if(!pendingVisible){show('screenAuthPending');pendingVisible=true}$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}
+      }catch(e){if(run!==flowRun)return;if(e&&e.code==='NOT_FOUND'){restoreButton();showUnknownPhone(data.phone);return}if(e&&e.code==='PASSKEY_REQUIRED'){restoreButton();safeRemove(REAUTH_KEY);showPasskeyRequired(data.phone);return}restoreButton();if(!pendingVisible){show('screenAuthPending');pendingVisible=true}$('authPendingText').textContent='Связь временно прервана. Продолжаем проверять запрос…'}
       await wait(pollDelay);pollDelay=Math.min(8000,pollDelay+1000);
     }
   }
   async function beginReauthorization(phoneRaw,forceNew){const digits=onlyDigits(phoneRaw);if(!validPhone(digits))return;let saved=readJson(REAUTH_KEY);if(forceNew||!saved||onlyDigits(saved.phone).slice(-10)!==digits.slice(-10)||!saved.requestSecret)saved={phone:digits,requestId:makeFlowId('auth'),requestSecret:makeAccessSecret()};safeSet(REAUTH_KEY,JSON.stringify(saved));runReauthorizationFlow(saved,true)}
-  async function auth(){const digits=onlyDigits($('phoneInputAuth').value),err=$('phoneErrorAuth');err.classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}beginReauthorization(digits,true)}
+  async function auth(){const digits=onlyDigits($('phoneInputAuth').value),err=$('phoneErrorAuth');err.classList.add('hidden');$('authUnknownRegisterBtn').classList.add('hidden');if(!validPhone(digits)){err.textContent='Введите номер — минимум 10 цифр.';err.classList.remove('hidden');return}beginReauthorization(digits,true)}
   function extractSession(res){if(res&&res.token)return res;if(res&&res.session&&res.session.token)return res.session;return null}
   function saveD1Session(session){if(!session||!session.token)return null;d1Session=session;safeSet(D1_KEY,JSON.stringify({phone:onlyDigits(currentPhone).slice(-10),session}));return session}
   function loadCachedD1Session(phone){try{const saved=JSON.parse(safeGet(D1_KEY)||'null'),session=extractSession(saved),savedPhone=onlyDigits(saved&&saved.phone||phone).slice(-10);if(session&&savedPhone===onlyDigits(phone).slice(-10)&&Number(session.expiresAt||0)>Date.now()+30000)return saveD1Session(session)}catch(_){}return null}
@@ -413,7 +423,7 @@
   }
 
   $('btnGoRegister').onclick=()=>showNames();$('btnGoAuth').onclick=()=>showAuth();$('startHelpBtn').onclick=()=>{const p=$('startHelpPanel'),open=p.classList.toggle('is-open');p.setAttribute('aria-hidden',open?'false':'true')};
-  $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authMainBackBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);showStart()};$('phoneInputAuth').addEventListener('input',()=>{if(selectedPasskeyPhone){selectedPasskeyPhone='';preparedPasskeyLogin=null;$('passkeyRequiredPanel').classList.add('hidden');$('authBtn').disabled=false;$('passkeyLoginError').classList.add('hidden')}});$('passkeyLoginBtn').onclick=loginWithPasskey;
+  $('namesBackBtn').onclick=showStart;$('namesAuthBtn').onclick=showAuth;$('phoneRegBackBtn').onclick=showNames;$('authMainBackBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);showStart()};$('authUnknownRegisterBtn').onclick=()=>{flowRun++;safeRemove(REAUTH_KEY);showNames()};$('phoneInputAuth').addEventListener('input',()=>{if(selectedPasskeyPhone){selectedPasskeyPhone='';preparedPasskeyLogin=null;$('passkeyRequiredPanel').classList.add('hidden');$('authBtn').disabled=false;$('passkeyLoginError').classList.add('hidden')}});$('passkeyLoginBtn').onclick=loginWithPasskey;
   $('toPhoneReg').onclick=()=>{const pFirst=$('parentFirst').value.trim(),pLast=$('parentLast').value.trim(),cFirst=$('childFirst').value.trim(),cLast=$('childLast').value.trim(),err=$('namesError');if(!pFirst||!cFirst){err.textContent='Введите имя родителя и имя ребёнка.';err.classList.remove('hidden');return}if(!cLast){err.textContent='Введите фамилию ребёнка. Она может отличаться от фамилии родителя.';err.classList.remove('hidden');return}if(![pFirst,pLast,cFirst,cLast].filter(Boolean).every(isSingleWord)){err.textContent='В каждое поле вводите только имя или фамилию, без отчества.';err.classList.remove('hidden');return}err.classList.add('hidden');regParentName=[pFirst,pLast].filter(Boolean).join(' ');regChildName=[cFirst,cLast].filter(Boolean).join(' ');showPhoneReg()};
   $('registerBtn').onclick=register;$('authBtn').onclick=auth;$('btnChat').onclick=openChat;$('btnMorning').onclick=()=>openReport('morning');$('btnEvening').onclick=()=>openReport('evening');$('btnPsychology').onclick=()=>openReport('psychology');$('btnSchedule').onclick=showSchedule;
   $('reportCopyBtn').onclick=()=>copyText(currentReportText,$('reportCopyBtn'));$('reportHistoryBtn').onclick=openReportHistory;$('historyBackBtn').onclick=()=>{setHeader(reportTitle(currentReportKind),'');show('screenReport')};$('reportHistoryModalClose').onclick=closeHistoryModal;$('reportHistoryModal').onclick=e=>{if(e.target===$('reportHistoryModal'))closeHistoryModal()};

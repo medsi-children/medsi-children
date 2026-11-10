@@ -9,7 +9,7 @@ function environment(fetch){
   const elements=new Map(),storage=new Map(),timers=new Map(),intervals=new Map();let timerId=0,intervalId=0;
   const noop=()=>{};
   const node=()=>({classList:{add:noop,remove:noop,toggle:noop,contains:()=>false},style:{},dataset:{},addEventListener:noop,setAttribute:noop,scrollTo:noop,replaceChildren:noop,appendChild:noop,querySelector:()=>null,value:'',textContent:''});
-  const ctx={console,AbortController,URL,fetch,localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{fetch,scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
+  const ctx={console,AbortController,URL,fetch,crypto:require('node:crypto').webcrypto,btoa:value=>Buffer.from(value,'binary').toString('base64'),localStorage:{getItem:k=>storage.get(k)||null,setItem:(k,v)=>storage.set(k,v),removeItem:k=>storage.delete(k)},document:{getElementById:id=>{if(!elements.has(id))elements.set(id,node());return elements.get(id)},createElement:node,addEventListener:noop,body:node(),hidden:false},window:{fetch,scrollTo:noop,addEventListener:noop},navigator:{},alert:message=>{throw new Error('Unexpected alert: '+message)},requestAnimationFrame:noop,setTimeout:(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id},clearTimeout:id=>timers.delete(id),setInterval:(fn,ms)=>{const id=++intervalId;intervals.set(id,{fn,ms});return id},clearInterval:id=>intervals.delete(id)};
   vm.createContext(ctx);return {ctx,elements,storage,timers,intervals};
 }
 function parent(fetch){
@@ -231,4 +231,30 @@ test('opening a report bypasses a fresh cached result while preserving it if the
   healthy=false;
   assert.equal(await env.api.warmReport('morning',true),null);
   assert.equal(env.api.cache.morning.text,'Current report');
+});
+
+test('unknown login phone exits spinner, shows registration guidance and never polls forever',async()=>{
+  let calls=0;
+  const env=parent(async(url)=>{
+    calls++;
+    assert.match(url,/parent-auth\/request/);
+    return response({ok:false,code:'NOT_FOUND',message:'not registered'});
+  });
+  env.elements.get('phoneInputAuth').value='89990000000';
+  await env.elements.get('authBtn').onclick();
+  await tick();await tick();
+  assert.equal(calls,1,'unknown phone must not trigger repeated auth requests');
+  assert.match(env.elements.get('phoneErrorAuth').textContent,/Номер телефона не найден/);
+  assert.match(env.elements.get('phoneErrorAuth').textContent,/«Регистрация»/);
+  assert.equal(env.ctx.document.body.dataset.screen,'screenAuth');
+  assert.equal(env.storage.has('medsi_parent_reauthorization_v1'),false);
+  assert.equal(typeof env.elements.get('authUnknownRegisterBtn').onclick,'function');
+  env.elements.get('authUnknownRegisterBtn').onclick();
+  assert.equal(env.ctx.document.body.dataset.screen,'screenNames');
+});
+test('temporary login network error is not incorrectly presented as an unregistered phone',async()=>{
+  const env=parent(async()=>{throw new Error('Network unavailable')});
+  env.elements.get('phoneInputAuth').value='89990000000';
+  await env.elements.get('authBtn').onclick();await tick();await tick();
+  assert.doesNotMatch(env.elements.get('phoneErrorAuth').textContent,/Номер телефона не найден/);
 });

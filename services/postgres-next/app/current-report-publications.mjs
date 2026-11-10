@@ -17,12 +17,12 @@ export function createCurrentReportPublisher(sql){
   if(!sql?.begin)throw new Error('PostgreSQL required.');
   async function preview({kind,rawText,correctionOf=''}={}){
     return sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
-      const [[profiles],[children],[variants],[head]]=await Promise.all([
-        tx`SELECT phone10,child_id FROM parent_profiles`,
-        tx`SELECT child_id,registered_first_name,surname FROM children`,
-        tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
-        tx`SELECT publication_id FROM report_publication_head WHERE kind=${kind}`
-      ]);
+      // Do not issue concurrent queries on one pg transaction client.
+      // In particular the head must be read deterministically for edits.
+      const [profiles]=await tx`SELECT phone10,child_id FROM parent_profiles`;
+      const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
+      const [variants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
+      const [[head]]=await tx`SELECT publication_id FROM report_publication_head WHERE kind=${kind}`;
       if(correctionOf&&head?.publication_id!==correctionOf)
         throw new Error('Report source changed. Reload before editing.');
       return reviewCurrentReport({kind,rawText,correctionOf,
@@ -46,12 +46,13 @@ export function createCurrentReportPublisher(sql){
         return {ok:true,status:'duplicate',publicationId:priorSubmission.publication_id,
           revision:Number(priorSubmission.revision)};
       }
-      const [[profiles],[children],[variants],[head]]=await Promise.all([
-        tx`SELECT phone10,child_id FROM parent_profiles`,
-        tx`SELECT child_id,registered_first_name,surname FROM children`,
-        tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
-        tx`SELECT publication_id,revision,submitted_at FROM report_publication_head WHERE kind=${kind}`
-      ]);
+      // PostgreSQL transactions share one client; sequential reads avoid
+      // interleaving different result sets during a source correction.
+      const [profiles]=await tx`SELECT phone10,child_id FROM parent_profiles`;
+      const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
+      const [variants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
+      const [[head]]=await tx`SELECT publication_id,revision,submitted_at
+        FROM report_publication_head WHERE kind=${kind}`;
       if(correctionOf&&head?.publication_id!==correctionOf)
         throw new Error('Report source changed. Reload before editing.');
       if(!correctionOf&&head?.submitted_at&&submittedAt<=Number(head.submitted_at))

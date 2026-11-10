@@ -192,6 +192,9 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     // The previously distributed current/history rows are withdrawn as part
     // of the same revision transaction; the authored original survives.
     clock+=2000;
+    const [[latestEveningHead]]=await sql`SELECT publication_id FROM report_publication_head WHERE kind=${'evening'}`;
+    assert.equal(latestEveningHead?.publication_id,chosen.publicationId,
+      'the correction must target the unchanged latest report publication');
     const corrected='Степан Ме. — Синтетический текст Мерцалова после уточнения.';
     const edit=await publisher.publish({
       kind:'evening',rawText:corrected,submissionId:'ci_current_source_edit_0001',

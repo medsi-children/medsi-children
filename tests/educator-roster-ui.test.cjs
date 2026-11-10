@@ -29,7 +29,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261110-name-clarify-1/);
+  assert.match(html,/next-settings\.css\?v=20261110-roster-unified-1/);
   assert.match(html,/next-settings\.js\?v=20261110-name-clarify-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);

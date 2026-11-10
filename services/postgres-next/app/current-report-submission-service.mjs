@@ -3,7 +3,8 @@ import {findLegacyReportReceipt} from './legacy-report-receipts.mjs';
 const ID=/^[A-Za-z0-9_-]{8,128}$/;
 export function createCurrentReportSubmissionService(sql){
   const publisher=createCurrentReportPublisher(sql);
-  async function submit({kind,rawText,submissionId,authorId,submittedAt=Date.now(),correctionOf}={}){
+  async function submit({kind,rawText,submissionId,authorId,submittedAt=Date.now(),
+    correctionOf,clarification}={}){
     const legacy=await sql.begin({isolation:'snapshotReadOnly',idempotent:true},
       tx=>findLegacyReportReceipt(tx,submissionId));
     if(legacy){
@@ -12,7 +13,8 @@ export function createCurrentReportSubmissionService(sql){
       if(legacy.row.status==='failed')throw new Error('LEGACY_REPORT_REVIEW_REQUIRED');
       return {...legacy.result,ok:true,status:'duplicate',legacy:true};
     }
-    const result=await publisher.publish({kind,rawText,submissionId,authorId,submittedAt,correctionOf});
+    const result=await publisher.publish({kind,rawText,submissionId,authorId,submittedAt,
+      correctionOf,clarification});
     return {ok:true,...result,validation:{ok:true,
       ambiguousNames:[],skippedBlocks:Number(result.unresolvedBlocks||0)}};
   }
@@ -31,5 +33,5 @@ export function createCurrentReportSubmissionService(sql){
         {status:'not_found'};
     });
   }
-  return {submit,status};
+  return {submit,status,preview:publisher.preview};
 }

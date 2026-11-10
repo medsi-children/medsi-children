@@ -171,11 +171,18 @@
     if(!validation.ok)throw Object.assign(new Error(validation.message),{code:validation.code});
     if(!window.MedsiOverlayTransport||!MedsiOverlayTransport.reportSubmit)throw new Error('Не загрузилась отправка отчёта. Обновите страницу и попробуйте ещё раз.');
     const session=await ensureD1Fresh();
-    // The Timeweb PostgreSQL response confirms durable publication.
-    // No Google Apps Script, Sheets or Cloudflare fallback is involved.
-    const queued=await MedsiOverlayTransport.reportSubmit(session,{reportType:type,text,submissionId});
-    if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
-    return {accepted:true,submissionId};
+    const clarifier=window.MedsiReportClarifier;
+    if(!clarifier?.prepare)throw new Error('Не загрузилось уточнение имён. Обновите страницу.');
+    const decision=await clarifier.prepare({kind:type,text});
+    // PostgreSQL validates selected child IDs against the current roster
+    // again, in the same transaction as publishing this source.
+    const queued=await MedsiOverlayTransport.reportSubmit(session,{
+      reportType:type,text,submissionId,clarification:decision.clarification
+    });
+    if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)
+      throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
+    const warning=await clarifier.finish(decision.deletions,session);
+    return {accepted:true,submissionId,warning};
   }
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');
@@ -184,11 +191,18 @@
     // An uncertain network result must reuse the same ID on another attempt.
     if(!reportAttempt||reportAttempt.type!==type||reportAttempt.text!==text)reportAttempt={type,text,id:reportSubmissionId()};
     btn.disabled=true;btn.textContent='Отправляем…';
-    try { await submitReportPayload(type,text,reportAttempt.id); reportAttempt=null;showReportSent(); }
+    try {
+      const sent=await submitReportPayload(type,text,reportAttempt.id);
+      reportAttempt=null;showReportSent(sent.warning);
+    }
     catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message,e&&e.code==='REPORT_FORMAT_ERROR')}
     finally{btn.disabled=false;btn.textContent='Отправить'}
   }
-  function showReportSent(){$('doneText').textContent='Готово.';setScreen('screenDone','Готово','Отчёт сохранён. Можно закрыть приложение.')}
+  function showReportSent(warning=''){
+    $('doneText').textContent=warning||'Готово.';
+    setScreen('screenDone','Готово',warning?'Отчёт сохранён. Проверьте удаление детей.':
+      'Отчёт сохранён. Можно закрыть приложение.');
+  }
   function showReportError(text,isFormatError=false){const el=$('reportError');el.textContent=(isFormatError?'⚠️ ':'')+text;el.classList.toggle('report-validation-warning',!!isFormatError);el.classList.remove('hidden')}
 
   async function prewarmParents(){

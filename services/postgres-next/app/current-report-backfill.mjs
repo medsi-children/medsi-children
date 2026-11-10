@@ -18,7 +18,6 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       const [[profiles],[children],[variants],[raw]]=await Promise.all([
         tx`SELECT phone10,child_id FROM parent_profiles`,
         tx`SELECT child_id,registered_first_name,surname FROM children`,
-        tx`SELECT child_id FROM parent_profiles`,
         tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
         tx`SELECT r.publication_id,r.kind,r.report_date,r.normalized_text,r.submitted_at,r.revision
           FROM report_publication_head AS h

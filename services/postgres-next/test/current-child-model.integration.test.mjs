@@ -92,7 +92,7 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
       'current source must match single registered child');
     const [[p0Owner]]=await sql`SELECT record_json FROM report_ownership
       WHERE owner_key=${'CURRENT_BLOCK_'+p0.publicationId+'_0'}`;
-    assert.equal(JSON.parse(p0Owner.record_json).pending,true);
+    assert.equal(JSON.parse(p0Owner.record_json).childId,firstProfile.child_id);
     await createCurrentReportBackfill(sql,{now}).recover({phone10:phoneA});
     const [[preReadCurrent]]=await sql`SELECT publication_id,child_id
       FROM parent_current_reports WHERE phone10=${phoneA} AND kind=${'morning'}`;

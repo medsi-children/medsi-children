@@ -7,6 +7,8 @@ import {createCurrentParentRegistrationService} from '../app/current-parent-regi
 import {createCurrentReportPublisher} from '../app/current-report-publications.mjs';
 import {createCurrentParentReportReader} from '../app/current-parent-report-reader.mjs';
 import {createCurrentReportBackfill} from '../app/current-report-backfill.mjs';
+import {currentStaffPublications} from '../app/current-child-identity.mjs';
+import {planCurrentReport} from '../app/current-report-plan.mjs';
 import {purgeCurrentRegisteredChild} from '../app/current-child-deletion.mjs';
 import {checkCurrentChildSchema} from '../app/stand-server.mjs';
 import {ensureCurrentChildColumns,retireHospitalAdmissions,prepareCurrentChildSchema} from '../app/current-child-schema.mjs';
@@ -73,6 +75,24 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const [[morningHead]]=await sql`SELECT publication_id FROM report_publication_head
       WHERE kind=${'morning'}`;
     assert.equal(morningHead.publication_id,p0.publicationId,'latest morning source must be current');
+    const [[people],[kids],[nameAliases],[liveSources]]=await Promise.all([
+      sql`SELECT phone10,child_id FROM parent_profiles`,
+      sql`SELECT child_id,registered_first_name,surname FROM children`,
+      sql`SELECT base_key,preferred_name,variants_json FROM name_variants`,
+      sql`SELECT r.publication_id,r.kind,r.report_date,r.normalized_text,r.submitted_at
+        FROM report_publication_head h JOIN raw_reports r ON h.publication_id=r.publication_id`
+    ]);
+    const sourceDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
+      year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(clock));
+    const recent=currentStaffPublications(liveSources,sourceDate);
+    assert.equal(recent.some(r=>r.publication_id===p0.publicationId),true,
+      'currentStaffPublications must retain latest report date');
+    assert.equal(planCurrentReport({kind:'morning',rawText:source,
+      profiles:people,children:kids,nameVariants:nameAliases}).recipients.length,1,
+      'current source must match single registered child');
+    const [[p0Owner]]=await sql`SELECT record_json FROM report_ownership
+      WHERE owner_key=${'CURRENT_BLOCK_'+p0.publicationId+'_0'}`;
+    assert.equal(JSON.parse(p0Owner.record_json).pending,true);
     await createCurrentReportBackfill(sql,{now}).recover({phone10:phoneA});
     const [[preReadCurrent]]=await sql`SELECT publication_id,child_id
       FROM parent_current_reports WHERE phone10=${phoneA} AND kind=${'morning'}`;

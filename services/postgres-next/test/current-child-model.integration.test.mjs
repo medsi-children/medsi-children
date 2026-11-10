@@ -145,11 +145,11 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const firstEvening=(await reader.current(phoneA)).reports.find(r=>r.kind==='evening');
     const thirdEvening=(await reader.current(phoneC)).reports.find(r=>r.kind==='evening');
     assert.match(firstEvening.text,/Сидорова/);
-    assert.match(firstEvening.text,/Сидорова, продолжил занятия\\./);
+    assert.match(firstEvening.text,/Сидорова, продолжил занятия\./);
     const [[sourceAfterPublication]]=await sql`SELECT raw_text,normalized_text
       FROM raw_reports WHERE publication_id=${p1.publicationId}`;
     assert.equal(sourceAfterPublication.raw_text,text);
-    assert.match(sourceAfterPublication.normalized_text,/Сидорова, продолжил занятия\\./);
+    assert.match(sourceAfterPublication.normalized_text,/Сидорова, продолжил занятия\./);
     assert.equal((await reader.history(phoneA)).reports.find(r=>r.kind==='evening')
       ?.text,firstEvening.text);
     assert.doesNotMatch(firstEvening.text,/Мерцалова/);

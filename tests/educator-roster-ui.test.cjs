@@ -139,22 +139,21 @@ test('unlinked parent can be deleted without manual child assignment',async()=>{
     setAttribute(){},
     classList:{add(){},remove(){},contains(){return false}}
   });
-  const requests=[],feedback={textContent:''};
+  const requests=[],confirms=[],feedback={textContent:''};
   const render=new Function('byId','textNode','icon','deleteIcon','rosterEdit','request','refreshRoster',
     'refreshLibrary','window','setTimeout','document',
     source.slice(begin,end)+'\nreturn renderRoster;')(
       id=>id==='medsiReportsFeedback'?feedback:pane,node,()=>'<svg/>','',()=>{},
       (...args)=>{requests.push(args);return Promise.resolve({ok:true,accepted:true})},
-      ()=>true,()=>{}, {confirm:()=>true},()=>{},{createElement:tag=>({...node(tag),focus(){}})}
+      ()=>true,()=>{}, {confirm:message=>{confirms.push(message);return true}},()=>{},{createElement:tag=>({...node(tag),focus(){}})}
     );
   const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
     childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,assignable:[{childId:'child_synthetic',admissionId:'admission_synthetic',label:'Новый ребёнок'}]};
   render({children:[],unlinked:[unlinked]});
   assert.equal(pane.children.length,1);
-  const section=pane.children[0];
-  assert.match(section.className,/medsi-roster-unlinked/);
-  assert.equal(section.children.filter(item=>item.tag==='article').length,1);
-  const card=section.children.find(item=>item.tag==='article');
+  const card=pane.children[0];
+  assert.equal(card.tag,'article');
+  assert.match(card.className,/medsi-roster-line-unlinked/);
   const allText=JSON.stringify(card);
   assert.match(allText,/Новый ребёнок/);
   assert.match(allText,/Тестовый родитель/);
@@ -169,6 +168,8 @@ test('unlinked parent can be deleted without manual child assignment',async()=>{
   assert.equal(evening.dataset.tooltip,'Вечернего отчёта нет');
   assert.match(del.className,/medsi-roster-line-delete/);
   await del.onclick();
+  assert.equal(confirms[0],
+    'Удалить ребёнка Новый ребёнок из бота?\nЧат с родителем исчезнет, доступ к боту закроется.');
   assert.equal(requests.length,1);assert.equal(requests[0][0],'/lab/parent-delete');
   assert.equal(requests[0][2].phone,unlinked.phone);
   assert.match(requests[0][2].operationId,/^del_/);
@@ -178,12 +179,14 @@ test('unlinked parent can be deleted without manual child assignment',async()=>{
 
 });
 
-test('linked child with zero reports remains in directory and unlinked parent is shown separately',()=>{
+test('linked child remains in the shared directory and unlinked parents are appended last',()=>{
   const js=read('tutors/next-settings.js');
   assert.match(js,/const unlinked=Array\.isArray\(data\?\.unlinked\)/);
   assert.match(js,/if\(!children\.length&&!unlinked\.length&&!needsReview\.length\)/);
   assert.match(js,/for\(const child of children\)/);
   assert.match(js,/for\(const parent of unlinked\)/);
+  assert.doesNotMatch(js,/section\.append\(textNode\('h3','medsi-roster-unlinked-heading'/);
+  assert.match(js,/pane\.append\(card\)/);
   assert.match(js,/\/lab\/admin\/roster/);
 });
 

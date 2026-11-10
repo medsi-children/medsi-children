@@ -26,7 +26,8 @@ export function reviewCurrentReport({kind,rawText,profiles=[],children=[],nameVa
     const candidate=b.prefix?family.filter(c=>norm(c.surname).startsWith(norm(b.prefix))):family;
     // A unique, fully-qualified child is safe; a bare name with competing
     // registered children is not. Unregistered children cannot be guessed.
-    if(candidate.length<2&&!(family.length>1&&!b.prefix))return;
+    if(candidate.length<2&&!(family.length>1&&!b.prefix)&&
+      !(groups.get(b.canonical)>1&&!b.prefix&&candidate.length>0))return;
     conflicts.push({index,name:b.name,heading:b.name+(b.prefix?' '+b.prefix+'.':''),
       excerpt:b.body.join('\n').slice(0,350),
       candidates:candidate.map(c=>({childId:String(c.child_id),

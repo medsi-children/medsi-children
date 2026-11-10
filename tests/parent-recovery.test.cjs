@@ -232,3 +232,29 @@ test('opening a report bypasses a fresh cached result while preserving it if the
   assert.equal(await env.api.warmReport('morning',true),null);
   assert.equal(env.api.cache.morning.text,'Current report');
 });
+
+test('unknown login phone exits spinner, shows registration guidance and never polls forever',async()=>{
+  let calls=0;
+  const env=parent(async(url)=>{
+    calls++;
+    assert.match(url,/parent-auth\/request/);
+    return response({ok:false,code:'NOT_FOUND',message:'not registered'});
+  });
+  env.elements.get('phoneInputAuth').value='89990000000';
+  await env.elements.get('authBtn').onclick();
+  await tick();await tick();
+  assert.equal(calls,1,'unknown phone must not trigger repeated auth requests');
+  assert.match(env.elements.get('phoneErrorAuth').textContent,/Номер телефона не найден/);
+  assert.match(env.elements.get('phoneErrorAuth').textContent,/«Регистрация»/);
+  assert.equal(env.ctx.document.body.dataset.screen,'screenAuth');
+  assert.equal(env.storage.has('medsi_parent_reauthorization_v1'),false);
+  assert.equal(typeof env.elements.get('authUnknownRegisterBtn').onclick,'function');
+  env.elements.get('authUnknownRegisterBtn').onclick();
+  assert.equal(env.ctx.document.body.dataset.screen,'screenNames');
+});
+test('temporary login network error is not incorrectly presented as an unregistered phone',async()=>{
+  const env=parent(async()=>{throw new Error('Network unavailable')});
+  env.elements.get('phoneInputAuth').value='89990000000';
+  await env.elements.get('authBtn').onclick();await tick();await tick();
+  assert.doesNotMatch(env.elements.get('phoneErrorAuth').textContent,/Номер телефона не найден/);
+});

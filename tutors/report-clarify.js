@@ -73,11 +73,19 @@
         const discharge=await question(
           others.length===1?names+' выписалась?':names+' выписались?',
           'Удаление закроет доступ родителям выбранных детей и удалит их переписки.',[
-            {label:'Да, удалить из бота',value:'yes'},
+            {label:others.length>1?'Да, удалить всех':'Да, удалить из бота',value:'yes'},
+            ...(others.length>1?[{label:'Удалить только одного',value:'one'}]:[]),
             {label:'Нет, оставить',value:'no'}
           ]);
         if(discharge===null)throw stop();
         if(discharge==='yes')for(const child of others)deleteByChild.set(child.childId,child);
+        if(discharge==='one'){
+          const which=await question('Кого удалить?',null,
+            others.map(c=>({label:c.name,value:c.childId})));
+          if(which===null)throw stop();
+          const only=others.find(c=>c.childId===which);
+          if(only)deleteByChild.set(only.childId,only);
+        }
         continue;
       }
       const newArrival=await question('Это новое поступление?',

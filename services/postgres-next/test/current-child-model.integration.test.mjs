@@ -44,7 +44,12 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     // Qualified initials allow safe recovery; a second, unrelated surname
     // must never be assigned to the registered child.
     const todayClock=clock;
-    clock-=2*86400000;
+    clock-=3*86400000;
+    const bare=await publish('morning',
+      'Степан — Прежнее наблюдение без фамильного подтверждения.',
+      'ci_current_historical_bare0001');
+    assert.equal(bare.status,'published');
+    clock=todayClock-2*86400000;
     const oldDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
       year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(clock));
     const past=await publish('evening',
@@ -111,6 +116,9 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.match(thirdEvening.text,/Мерцалова/);
     assert.doesNotMatch(thirdEvening.text,/Сидорова/);
     assert.equal((await reader.history(phoneC)).reports.some(r=>r.reportDate===oldDate),false);
+    // A formerly unregistered bare heading from three days ago is still
+    // unclaimed: a matching first name today cannot prove historical owner.
+    assert.equal(firstHistory.reports.some(r=>r.text.includes('без фамильного')),false);
     const [[thirdProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
     assert.ok(thirdProfile.child_id&&thirdProfile.child_id!==firstProfile.child_id);
 

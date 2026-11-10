@@ -1,4 +1,5 @@
 import {createHash} from 'node:crypto';
+import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
 import {canonicalCurrentName,parseCurrentStaffBlocks,registeredChildRoster} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const norm=v=>String(v||'').normalize('NFC').trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
@@ -14,6 +15,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
   if(!KINDS.has(kind))throw new Error('Unknown report kind.');
   if(typeof rawText!=='string'||!rawText.trim()||rawText.length>240000)
     throw new Error('Invalid staff source.');
+  const normalizedText=normalizeCurrentReportPunctuation(rawText);
   const registered=profiles.filter(p=>PHONE.test(String(p.phone10||'')));
   const parentIds=new Set();
   for(const p of registered){
@@ -21,13 +23,13 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
     parentIds.add(p.phone10);
   }
   if(kind==='psychology'){
-    return {kind,normalizedText:rawText,rawText,
-      recipients:registered.map(p=>({phone10:p.phone10,childId:'',text:rawText})),
+    return {kind,normalizedText,rawText,
+      recipients:registered.map(p=>({phone10:p.phone10,childId:'',text:normalizedText})),
       owners:[],unresolved:[]};
   }
   const roster=registeredChildRoster({profiles:registered,children});
   const childById=new Map(roster.map(c=>[String(c.child_id),c]));
-  const sourceBlocks=parseCurrentStaffBlocks(rawText,nameVariants)
+  const sourceBlocks=parseCurrentStaffBlocks(normalizedText,nameVariants)
     .map((b,index)=>({...b,index,bodyText:b.body.join('\n').trim()}));
   const groups=new Map();
   for(const b of sourceBlocks){
@@ -76,7 +78,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
         reason:pending?'awaiting-parent':'unresolved-or-ambiguous'});
     }
   }
-  return {kind,rawText,normalizedText:rawText,owners,unresolved,
+  return {kind,rawText,normalizedText,owners,unresolved,
     recipients:registered.flatMap(p=>{
       const childId=String(p.child_id||''),block=assigned.get(childId);
       const child=childById.get(childId);

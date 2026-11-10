@@ -54,8 +54,11 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           const [[current]]=await tx`SELECT child_id,publication_id,text
             FROM parent_current_reports WHERE phone10=${recipient.phone10}
               AND kind=${source.kind}`;
+          // Preserve authored per-recipient edits and read markers for an
+          // already delivered source, even if display punctuation was fixed
+          // after this publication. Corrections publish a NEW source ID.
           if(current&&current.child_id===recipient.childId&&
-            current.publication_id===source.publication_id&&current.text===recipient.text)continue;
+            current.publication_id===source.publication_id)continue;
           const at=BigInt(source.submitted_at||now());
           await tx.upsert`INSERT INTO parent_current_reports
             (phone10,kind,child_id,publication_id,revision,text,version,read_version,updated_at)

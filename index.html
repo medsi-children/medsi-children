@@ -49,7 +49,8 @@
     <div class="registration-fields">
       <div class="field-block"><label for="phoneInputAuth">Номер телефона</label><input id="phoneInputAuth" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (999) 123-45-67"></div>
     </div>
-    <p id="phoneErrorAuth" class="error hidden" role="alert"></p>
+    <p id="phoneErrorAuth" class="error hidden" role="alert" style="white-space:pre-line"></p>
+    <button id="authUnknownRegisterBtn" class="btn btn-outline-teal hidden" type="button" style="margin:10px 0 12px;width:100%">Перейти к регистрации</button>
     <button id="authBtn" class="btn btn-teal medsi-auth-continue" type="button">Продолжить</button>
     <div id="passkeyRequiredPanel" class="medsi-passkey-prompt hidden">
       <div class="medsi-passkey-head"><span class="medsi-passkey-symbol" aria-hidden="true">✦</span><strong>Ключ доступа подключён</strong></div>
@@ -158,7 +159,7 @@
   window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261012-group-therapy-label-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261107-parent-report-freshness-4').then(function(){
+  load('/parents/full-web.js?v=20261110-auth-unknown-phone-1').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){

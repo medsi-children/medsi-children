@@ -193,7 +193,7 @@
     btn.disabled=true;btn.textContent='Отправляем…';
     try {
       const sent=await submitReportPayload(type,text,reportAttempt.id);
-      reportAttempt=null;showReportSent(sent.warning);
+      reportAttempt=null;showReportSent(sent?.warning);
     }
     catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message,e&&e.code==='REPORT_FORMAT_ERROR')}
     finally{btn.disabled=false;btn.textContent='Отправить'}

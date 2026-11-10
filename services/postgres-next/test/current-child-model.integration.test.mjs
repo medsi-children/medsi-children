@@ -162,6 +162,57 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const [[thirdProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
     assert.ok(thirdProfile.child_id&&thirdProfile.child_id!==firstProfile.child_id);
 
+    // An educator clarifies one bare namesake before publication. Revisions
+    // must never silently send it to the other registered child.
+    clock+=2000;
+    const unclear='Степан — Наблюдение при совпадении имён.';
+    const review=await publisher.preview({kind:'evening',rawText:unclear});
+    assert.equal(review.conflicts.length,1);
+    assert.equal(review.conflicts[0].candidates.length,2);
+    await assert.rejects(()=>publisher.publish({
+      kind:'evening',rawText:unclear,submissionId:'ci_current_invalid_choice_001',
+      authorId:'educator_ci_v2_0001',submittedAt:clock,
+      clarification:{token:review.token,choices:[
+        {index:0,choice:'child',childId:'child_fake_user'}
+      ]}
+    }),/Invalid child/);
+    const chosen=await publisher.publish({
+      kind:'evening',rawText:unclear,submissionId:'ci_current_clarified_0001',
+      authorId:'educator_ci_v2_0001',submittedAt:clock,
+      clarification:{token:review.token,choices:[
+        {index:0,choice:'child',childId:firstProfile.child_id}
+      ]}
+    });
+    assert.equal(chosen.recipients,2);
+    assert.match((await reader.current(phoneA)).reports.find(x=>x.kind==='evening').text,
+      /Наблюдение при совпадении/);
+    assert.doesNotMatch((await reader.current(phoneC)).reports.find(x=>x.kind==='evening').text,
+      /Наблюдение при совпадении/);
+    // The educator can change the heading and/or remove an existing block.
+    // The previously distributed current/history rows are withdrawn as part
+    // of the same revision transaction; the authored original survives.
+    clock+=2000;
+    const corrected='Степан Ме. — Синтетический текст Мерцалова после уточнения.';
+    const edit=await publisher.publish({
+      kind:'evening',rawText:corrected,submissionId:'ci_current_source_edit_0001',
+      authorId:'educator_ci_v2_0001',submittedAt:clock,correctionOf:chosen.publicationId
+    });
+    assert.equal(edit.status,'published');
+    assert.equal(edit.recipients,1);
+    assert.equal((await reader.current(phoneA)).reports.some(x=>x.kind==='evening'),false);
+    assert.equal((await reader.history(phoneA)).reports.some(x=>x.kind==='evening'&&
+      x.text.includes('совпадении')),false);
+    assert.match((await reader.current(phoneC)).reports.find(x=>x.kind==='evening').text,
+      /Мерцалова после уточнения/);
+    const [[keptOriginal]]=await sql`SELECT raw_text FROM raw_reports
+      WHERE publication_id=${chosen.publicationId}`;
+    assert.equal(keptOriginal.raw_text,unclear);
+    clock+=2000;
+    await assert.rejects(()=>publisher.publish({
+      kind:'evening',rawText:corrected,submissionId:'ci_current_stale_edit_0001',
+      authorId:'educator_ci_v2_0001',submittedAt:clock,correctionOf:chosen.publicationId
+    }),/Report source changed/);
+
     // Latest shared group therapy remains available independently of child link.
     clock+=2000;
     const therapy='Групповая терапия: синтетическое занятие.\n\nВыводы.';

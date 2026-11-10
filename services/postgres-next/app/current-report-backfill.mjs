@@ -18,6 +18,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       const [[profiles],[children],[variants],[raw]]=await Promise.all([
         tx`SELECT phone10,child_id FROM parent_profiles`,
         tx`SELECT child_id,registered_first_name,surname FROM children`,
+        tx`SELECT child_id FROM parent_profiles`,
         tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
         tx`SELECT r.publication_id,r.kind,r.report_date,r.normalized_text,r.submitted_at,r.revision
           FROM report_publication_head AS h
@@ -91,7 +92,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
     const today=moscowDate(now());
     const cutoff=moscowDate(now()-45*86400000);
     return sql.begin({isolation:'serializableReadWrite',idempotent:true},async tx=>{
-      const [[[profile]],[children],[variants],[raw],[ownership],[existing]]=await Promise.all([
+      const [[[profile]],[children],[allProfiles],[variants],[raw],[ownership],[existing]]=await Promise.all([
         tx`SELECT child_id FROM parent_profiles WHERE phone10=${phone10}`,
         tx`SELECT child_id,registered_first_name,surname FROM children`,
         tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
@@ -108,7 +109,8 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       if(!childId||!child)return {ok:true,backfilled:0};
       const canonical=canonicalCurrentName(child.registered_first_name,variants);
       if(!canonical)return {ok:true,backfilled:0};
-      const roster=children.filter(c=>children.some(x=>x.child_id===c.child_id));
+      const used=new Set(allProfiles.map(x=>String(x.child_id||'')).filter(Boolean));
+      const roster=children.filter(c=>used.has(String(c.child_id)));
       const norm=v=>String(v||'').trim().normalize('NFC')
         .toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
       const already=new Set(existing.map(x=>String(x.kind)+'/'+String(x.report_date)));

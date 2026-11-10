@@ -181,8 +181,7 @@
     });
     if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)
       throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
-    const warning=await clarifier.finish(decision.deletions,session);
-    return {accepted:true,submissionId,warning};
+    return {accepted:true,submissionId};
   }
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');
@@ -192,16 +191,15 @@
     if(!reportAttempt||reportAttempt.type!==type||reportAttempt.text!==text)reportAttempt={type,text,id:reportSubmissionId()};
     btn.disabled=true;btn.textContent='Отправляем…';
     try {
-      const sent=await submitReportPayload(type,text,reportAttempt.id);
-      reportAttempt=null;showReportSent(sent?.warning);
+      await submitReportPayload(type,text,reportAttempt.id);
+      reportAttempt=null;showReportSent();
     }
     catch(e){const message=String(e&&e.message||e);showReportError(['TIMEOUT','NETWORK','BAD_RESPONSE'].includes(e&&e.code)?'Связь прервалась. Нажмите «Отправить» ещё раз — тот же отчёт не продублируется.':message,e&&e.code==='REPORT_FORMAT_ERROR')}
     finally{btn.disabled=false;btn.textContent='Отправить'}
   }
-  function showReportSent(warning=''){
-    $('doneText').textContent=warning||'Готово.';
-    setScreen('screenDone','Готово',warning?'Отчёт сохранён. Проверьте удаление детей.':
-      'Отчёт сохранён. Можно закрыть приложение.');
+  function showReportSent(){
+    $('doneText').textContent='Готово.';
+    setScreen('screenDone','Готово','Отчёт сохранён. Можно закрыть приложение.');
   }
   function showReportError(text,isFormatError=false){const el=$('reportError');el.textContent=(isFormatError?'⚠️ ':'')+text;el.classList.toggle('report-validation-warning',!!isFormatError);el.classList.remove('hidden')}
 

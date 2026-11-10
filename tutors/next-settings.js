@@ -255,9 +255,8 @@
         actions.append(submit,cancel);form.append(area,actions);wrap.replaceChildren(form);area.style.height=Math.min(600,Math.max(140,area.scrollHeight+4))+'px';area.focus({preventScroll:true});
         form.onsubmit=async event=>{event.preventDefault();if(area.value===String(originalSource||'')){display();return;}submit.disabled=true;cancel.disabled=true;
           try{
-            const updated=await save(area.value);value=area.value;originalSource=area.value;
+            await save(area.value);value=area.value;originalSource=area.value;
             display();await refreshLibrary();
-            if(updated?.warning)byId('medsiReportsFeedback').textContent=updated.warning;
           }catch(error){
             byId('medsiReportsFeedback').textContent=error.message||'Не удалось сохранить. Повторите попытку.';
             submit.disabled=false;cancel.disabled=false;
@@ -337,8 +336,7 @@
               clarification:decision.clarification});
             if(result.status!=='published'&&result.status!=='duplicate')
               throw new Error('Исходный отчёт изменился. Обновите его перед повторной правкой.');
-            const session=await window.MedsiEducatorSession.get();
-            return {warning:await clarifier.finish(decision.deletions,session)};
+            return result;
           },kind,entry.rawText||entry.normalizedText||''));
         const toggle=textNode('button','medsi-raw-expand','');
         toggle.type='button';toggle.setAttribute('aria-label','Развернуть отчёт');toggle.setAttribute('aria-expanded','false');

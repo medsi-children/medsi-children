@@ -6,34 +6,75 @@
     if(text!==undefined)node.textContent=String(text);
     return node;
   };
-  const onlyUnique=values=>[...new Set(values.filter(Boolean))];
   const stop=()=>Object.assign(new Error('Выбор получателя отменён. Отчёт не отправлен.'),{
     code:'REPORT_CLARIFICATION_CANCELLED'
   });
-  // A modal never changes the report text. Identifiers are accepted only
-  // after a second live-roster check inside the PostgreSQL transaction.
-  function question(title,description,options){
+  // One brief question per ambiguous block. No discharge/deletion actions:
+  // clinical report delivery and parent profile lifecycle are separate tasks.
+  function clarifyBlock(conflict,{editing=false}={}){
     return new Promise((resolve,reject)=>{
       const dialog=el('dialog','medsi-clarify-dialog');
       const content=el('div','medsi-clarify-content');
-      content.append(el('h3','',title));
-      if(description)content.append(el('p','medsi-clarify-excerpt',description));
-      const choices=el('div','medsi-clarify-options');
-      const exit=selection=>{
-        dialog.close();dialog.remove();resolve(selection);
+      const title=el('h3','',
+        'В отчете найден блок с именем '+String(conflict.name||'')+'. Какой это ребенок?');
+      content.append(title);
+      const options=el('div','medsi-clarify-options');
+      const alternatives=el('div','medsi-clarify-options medsi-clarify-alternatives');
+      alternatives.hidden=true;
+      const more=el('button','medsi-clarify-more','Другое');
+      more.type='button';more.setAttribute('aria-expanded','false');
+      more.setAttribute('aria-controls','medsi-report-clarify-alternatives');
+      alternatives.id='medsi-report-clarify-alternatives';
+      const submit=el('button','medsi-clarify-continue',
+        editing?'Сохранить изменения':'Продолжить отправку');
+      submit.type='button';submit.disabled=true;
+      let selected=null,closed=false;
+      const allChoices=[];
+      const addChoice=(container,label,decision)=>{
+        const button=el('button','medsi-clarify-choice',label);
+        button.type='button';
+        button.setAttribute('aria-pressed','false');
+        allChoices.push(button);
+        button.onclick=()=>{
+          selected=decision;
+          for(const other of allChoices){
+            const current=other===button;
+            other.classList.toggle('is-selected',current);
+            other.setAttribute('aria-pressed',String(current));
+          }
+          submit.disabled=false;
+        };
+        container.append(button);
       };
-      for(const option of options){
-        const button=el('button','medsi-clarify-choice',option.label);
-        button.type='button';button.onclick=()=>exit(option.value);
-        choices.append(button);
+      for(const child of conflict.candidates||[]){
+        addChoice(options,child.name,{index:conflict.index,
+          choice:'child',childId:child.childId});
       }
-      content.append(choices);
-      const cancel=el('button','medsi-clarify-cancel','Отменить отправку');
-      cancel.type='button';cancel.onclick=()=>exit(null);content.append(cancel);
+      addChoice(alternatives,'Новый ребёнок',
+        {index:conflict.index,choice:'other-new'});
+      addChoice(alternatives,'Пока неизвестно',
+        {index:conflict.index,choice:'other-later'});
+      more.onclick=()=>{
+        alternatives.hidden=!alternatives.hidden;
+        const expanded=!alternatives.hidden;
+        more.classList.toggle('is-expanded',expanded);
+        more.setAttribute('aria-expanded',String(expanded));
+      };
+      const done=value=>{
+        if(closed)return;
+        closed=true;
+        dialog.close();dialog.remove();resolve(value);
+      };
+      submit.onclick=()=>{if(selected)done(selected)};
+      const cancel=el('button','medsi-clarify-cancel','Отмена');
+      cancel.type='button';cancel.onclick=()=>done(null);
+      const footer=el('div','medsi-clarify-footer');
+      footer.append(submit,cancel);
+      content.append(options,more,alternatives,footer);
       dialog.append(content);
-      dialog.addEventListener('cancel',event=>{event.preventDefault();exit(null)});
+      dialog.addEventListener('cancel',event=>{event.preventDefault();done(null)});
       document.body.append(dialog);
-      try{dialog.showModal()}catch(err){dialog.remove();reject(err)}
+      try{dialog.showModal()}catch(error){dialog.remove();reject(error)}
     });
   }
   async function previewReport({kind,text,publicationId}){
@@ -49,105 +90,18 @@
     return data;
   }
   async function prepare({kind,text,publicationId=''}) {
-    if(kind==='psychology')return {clarification:null,deletions:[]};
+    if(kind==='psychology')return {clarification:null};
     const review=await previewReport({kind,text,publicationId});
-    if(!review.conflicts.length)return {clarification:null,deletions:[]};
-    const choices=[],deleteByChild=new Map();
+    if(!review.conflicts.length)return {clarification:null};
+    const choices=[];
     for(const conflict of review.conflicts){
-      const childOptions=conflict.candidates.map(child=>({
-        label:child.name,value:'child:'+child.childId
-      }));
-      const answer=await question(
-        'Кому принадлежит блок «'+conflict.name+'»?',
-        conflict.excerpt||'',[
-          ...childOptions,{label:'Другое',value:'other'}
-        ]);
-      if(answer===null)throw stop();
-      if(answer!=='other'){
-        const selected=conflict.candidates.find(child=>answer==='child:'+child.childId);
-        if(!selected)throw stop();
-        choices.push({index:conflict.index,choice:'child',childId:selected.childId});
-        const others=conflict.candidates.filter(c=>c.childId!==selected.childId);
-        if(!others.length)continue;
-        const names=others.map(c=>c.name).join(', ');
-        const discharge=await question(
-          others.length===1?names+' выписалась?':names+' выписались?',
-          'Удаление закроет доступ родителям выбранных детей и удалит их переписки.',[
-            {label:others.length>1?'Да, удалить всех':'Да, удалить из бота',value:'yes'},
-            ...(others.length>1?[{label:'Удалить только одного',value:'one'}]:[]),
-            {label:'Нет, оставить',value:'no'}
-          ]);
-        if(discharge===null)throw stop();
-        if(discharge==='yes')for(const child of others)deleteByChild.set(child.childId,child);
-        if(discharge==='one'){
-          const which=await question('Кого удалить?',null,
-            others.map(c=>({label:c.name,value:c.childId})));
-          if(which===null)throw stop();
-          const only=others.find(c=>c.childId===which);
-          if(only)deleteByChild.set(only.childId,only);
-        }
-        continue;
-      }
-      const newArrival=await question('Это новое поступление?',
-        'Пока не будем назначать блок ни одному из зарегистрированных родителей.',[
-          {label:'Да, новое поступление',value:'yes'},
-          {label:'Нет, разберёмся позже',value:'no'}
-        ]);
-      if(newArrival===null)throw stop();
-      choices.push({index:conflict.index,
-        choice:newArrival==='yes'?'other-new':'other-later'});
-      if(newArrival!=='yes'||!conflict.candidates.length)continue;
-      const existing=conflict.candidates;
-      const names=existing.map(c=>c.name).join(' и ');
-      const answerRemoval=await question(
-        'Удалить '+(existing.length===1?'ребёнка ':'детей ')+names+' из бота?',
-        'Сначала сохраним отчёт. Удаление отдельно закроет доступ и очистит чаты.',[
-          {label:existing.length===1?'Да, удалить':'Да, удалить всех',value:'all'},
-          ...(existing.length>1?[{label:'Удалить только одного',value:'one'}]:[]),
-          {label:'Нет, оставить',value:'none'}
-        ]);
-      if(answerRemoval===null)throw stop();
-      if(answerRemoval==='all')for(const child of existing)deleteByChild.set(child.childId,child);
-      if(answerRemoval==='one'){
-        const which=await question('Кого удалить?',null,[
-          ...existing.map(c=>({label:c.name,value:c.childId}))
-        ]);
-        if(which===null)throw stop();
-        const selected=existing.find(c=>c.childId===which);
-        if(selected)deleteByChild.set(selected.childId,selected);
-      }
+      const choice=await clarifyBlock(conflict,{editing:!!publicationId});
+      if(choice===null)throw stop();
+      choices.push(choice);
     }
-    return {
-      clarification:{token:review.token,choices},
-      deletions:[...deleteByChild.values()].map(c=>({
-        childId:c.childId,name:c.name,phones:onlyUnique(c.phones||[])
-      }))
-    };
+    // Keep the original source untouched. The server checks every selected
+    // child ID and the live roster token in the publication transaction.
+    return {clarification:{token:review.token,choices}};
   }
-  async function finish(deletions,session) {
-    if(!deletions?.length)return '';
-    const transport=window.MedsiOverlayTransport;
-    if(!transport?.parentDelete)return 'Удаление детей не выполнено: нет подключения.';
-    const missing=[];
-    const processed=new Set();
-    for(const child of deletions){
-      if(!child.phones?.length){missing.push(child.name);continue}
-      for(const phone of child.phones){
-        if(processed.has(phone))continue;
-        processed.add(phone);
-        const operationId='del_'+crypto.randomUUID().replace(/-/g,'');
-        try{
-          const result=await transport.parentDelete(session,{
-            phone:'8'+String(phone).replace(/\D/g,'').slice(-10),operationId
-          });
-          if(result?.accepted!==true)missing.push(child.name);
-        }catch(error){missing.push(child.name)}
-      }
-    }
-    window.MedsiEducatorPrewarm?.clear?.();
-    return missing.length
-      ?'Отчёт сохранён, но удаление не подтверждено для: '+onlyUnique(missing).join(', ')+'. Проверьте раздел «Дети и родители».'
-      :'';
-  }
-  window.MedsiReportClarifier=Object.freeze({prepare,finish});
+  window.MedsiReportClarifier=Object.freeze({prepare});
 })();

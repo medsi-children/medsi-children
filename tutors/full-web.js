@@ -267,7 +267,7 @@
   }
   async function deleteParent(row,card){
     const child=String(row.childName||'ребёнка').trim();
-    if(!confirm('Удалить ребёнка '+child+' из бота?\n\nВся история сообщений будет удалена.'))return;
+    if(!confirm('Удалить ребёнка '+child+' из бота?\nЧат с родителем исчезнет, доступ к боту закроется.'))return;
     const snapshot=removePhoneCardOptimistically(row,card);
     let operationId='';
     try{

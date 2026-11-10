@@ -421,13 +421,16 @@
   }
   function renderRoster(data){
     const pane=byId('medsiRosterPane');pane.replaceChildren();
-    // The parent directory displays only active children with at least one linked parent.
-    // Deleting the final parent profile removes the entire directory row on refresh;
-    // clinical child and admission records remain governed by their own lifecycle.
+    // All parent profiles share one directory. Unlinked and review-needed
+    // profiles follow linked children as muted rows, with no separate header.
+    const deletionPrompt=(childName,parentCount=1)=>
+      'Удалить ребёнка '+(String(childName||'').trim()||'без имени')+' из бота?\n'+
+      (parentCount>1
+        ?'Чаты с родителями исчезнут, доступ к боту закроется.'
+        :'Чат с родителем исчезнет, доступ к боту закроется.');
     const children=Array.isArray(data?.children)?data.children.filter(child=>Array.isArray(child.parents)&&child.parents.length>0):[];
-    // A parent can have an active chat even when their registered child name
-    // did not exactly match an active admission at registration time.
-    // The server returns such valid profiles separately; do not hide them.
+    // Unlinked parents retain their own authenticated profile and chat;
+    // they are shown below linked children without suggesting report access.
     const unlinked=Array.isArray(data?.unlinked)?data.unlinked.filter(parent=>parent&&parent.phone10):[];
     const needsReview=Array.isArray(data?.review)?data.review:[];
     if(!children.length&&!unlinked.length&&!needsReview.length){pane.append(textNode('p','medsi-reports-empty','В справочнике пока нет родительских профилей.'));return;}
@@ -484,8 +487,7 @@
       del.onclick=async()=>{
         if(!parents.length)return;
         const childLabel=[child.firstName,child.surname].filter(Boolean).join(' ');
-        const parentList=parents.map(p=>p.parentName||p.phone||'Родитель').join(', ');
-        if(!window.confirm('Удалить ребёнка '+childLabel+' из справочника родителей?\n\nБудут удалены запись ребёнка, доступ, отчёты и переписки '+parents.length+' родительских профилей: '+parentList+'.\n\nЭто действие необратимо.'))return;
+        if(!window.confirm(deletionPrompt(childLabel,parents.length)))return;
         del.disabled=true;
         let accepted=0;
         try{
@@ -518,13 +520,9 @@
       actions.append(del);
       card.append(info,actions);pane.append(card);
     }
-    // Unlinked parent profiles still belong in the directory. Report status
-    // cannot be attributed to a child without an admission ID. Keep clickable
-    // tooltips like the existing sun/moon buttons instead of a blanket warning.
+    // Show unlinked parents after all linked children, in the same list.
+    // Report status stays unknown until the child's identity is verified.
     if(unlinked.length){
-      const section=textNode('section','medsi-roster-unlinked','');
-      section.append(textNode('h3','medsi-roster-unlinked-heading','Без привязки'));
-
       const statusButton=(kind,present,svg,tooltip)=>{
         const button=textNode('button','medsi-roster-status-icon medsi-roster-status-'+kind,'');
         button.type='button';
@@ -562,7 +560,7 @@
         const del=textNode('button','medsi-roster-line-delete','');
         del.type='button';del.innerHTML=deleteIcon;del.setAttribute('aria-label','Удалить профиль родителя');
         del.onclick=async()=>{
-          if(!window.confirm('Удалить профиль '+(parent.parentName||parent.phone)+'? Доступ, переписка и файлы этого родителя будут удалены.'))return;
+          if(!window.confirm(deletionPrompt(parent.childName)))return;
           del.disabled=true;
           try{
             const uuid=window.crypto&&typeof window.crypto.randomUUID==='function'
@@ -575,23 +573,20 @@
         };
         actions.append(del);
         card.append(info,actions);
-        section.append(card);
+        pane.append(card);
       }
-      pane.append(section);
     }
     if(needsReview.length){
-      const section=textNode('section','medsi-roster-unlinked','');
-      section.append(textNode('h3','medsi-roster-unlinked-heading','Старая привязка — нужна проверка'));
       for(const parent of needsReview){
         const card=textNode('article','medsi-roster-line medsi-roster-line-unlinked','');
         const info=textNode('div','medsi-roster-line-info','');
         info.append(textNode('div','medsi-roster-line-name',String(parent.childName||'').trim()||'Ребёнок не указан'));
         info.append(textNode('div','medsi-roster-line-parent',[(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
-        info.append(textNode('div','medsi-roster-review-note','Профиль связан с прежним поступлением. Отчёты не перенесены.'));
-        card.append(info);section.append(card);
+        info.append(textNode('div','medsi-roster-review-note','Нужна проверка привязки'));
+        card.title='Требуется проверка профиля перед предоставлением доступа к индивидуальным отчётам';
+        card.append(info);pane.append(card);
       }
-      pane.append(section);
     }
   }
   async function refreshRoster(){

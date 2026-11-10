@@ -201,3 +201,69 @@ test('unlinked directory omits redundant bot-presence status',()=>{
   assert.doesNotMatch(js,/В боте:|Чат:|Утренний: не определён|Вечерний: не определён|Привязка: нет/);
   assert.doesNotMatch(js,/Нет привязки к госпитализации'\)\)/);
 });
+
+test('linked children first, muted unlinked and review profiles last; multi-parent deletion remains per profile',async()=>{
+  const source=read('tutors/next-settings.js');
+  const begin=source.indexOf('function renderRoster(data){');
+  const end=source.indexOf('  async function refreshRoster(){',begin);
+  assert.ok(begin>=0&&end>begin);
+  const pane={children:[],replaceChildren(...items){this.children=[...items]},append(...items){this.children.push(...items)}};
+  const node=(tag,className='',value='')=>({
+    tag,className,textContent:String(value??''),children:[],dataset:{},
+    append(...items){this.children.push(...items)},
+    replaceChildren(...items){this.children=[...items]},
+    setAttribute(){},
+    classList:{add(){},remove(){},contains(){return false}}
+  });
+  const requests=[],confirms=[],feedback={textContent:''};
+  const render=new Function('byId','textNode','icon','deleteIcon','rosterEdit','request','refreshRoster',
+    'refreshLibrary','window','setTimeout','document',
+    source.slice(begin,end)+'\nreturn renderRoster;')(
+    id=>id==='medsiReportsFeedback'?feedback:pane,node,()=>'<svg/>','',()=>{},
+    (...args)=>{requests.push(args);return Promise.resolve({ok:true,accepted:true})},
+    ()=>true,()=>{}, {confirm:message=>{confirms.push(message);return true}},()=>{},
+    {createElement:tag=>({...node(tag),focus(){}})}
+  );
+  render({
+    children:[{
+      childId:'child_arina',admissionId:'child_arina',
+      firstName:'Арина',surname:'Халитова',morning:true,evening:false,
+      parents:[
+        {phone10:'9000000001',phone:'89000000001',parentName:'Мама',relationship:'Мама'},
+        {phone10:'9000000002',phone:'89000000002',parentName:'Папа',relationship:'Папа'}
+      ]
+    }],
+    unlinked:[{
+      phone10:'9000000003',phone:'89000000003',childName:'Артём Тестов',
+      parentName:'Другой родитель',relationship:'Мама'
+    }],
+    review:[{
+      phone10:'9000000004',phone:'89000000004',childName:'Тестовый профиль',
+      parentName:'Родитель для проверки',relationship:'Папа'
+    }]
+  });
+  assert.equal(pane.children.length,3,'all profiles should be peer rows without category sections');
+  assert.match(pane.children[0].className,/medsi-roster-line/);
+  assert.doesNotMatch(pane.children[0].className,/medsi-roster-line-unlinked/);
+  assert.match(pane.children[1].className,/medsi-roster-line-unlinked/);
+  assert.match(pane.children[2].className,/medsi-roster-line-unlinked/);
+  assert.match(JSON.stringify(pane.children[0]),/Арина/);
+  assert.match(JSON.stringify(pane.children[1]),/Артём Тестов/);
+  assert.match(JSON.stringify(pane.children[2]),/Тестовый профиль/);
+  const actions=pane.children[0].children.find(x=>x.className==='medsi-roster-line-actions');
+  const del=actions.children.find(x=>x.className==='medsi-roster-line-delete');
+  await del.onclick();
+  assert.equal(confirms[0],
+    'Удалить ребёнка Арина Халитова из бота?\nЧаты с родителями исчезнут, доступ к боту закроется.');
+  assert.deepEqual(requests.map(x=>x[2].phone),['89000000001','89000000002']);
+  assert.ok(requests.every(x=>x[0]==='/lab/parent-delete'));
+  const css=read('tutors/next-settings.css');
+  assert.match(css,/\.medsi-roster-line-unlinked\{[^}]*background:#f7f9fa/);
+  assert.doesNotMatch(css,/\.medsi-roster-unlinked-heading/);
+});
+
+test('educator settings deletion uses the same short parent-access warning',()=>{
+  const js=read('tutors/full-web.js');
+  assert.match(js,/Чат с родителем исчезнет, доступ к боту закроется/);
+  assert.doesNotMatch(js,/Вся история сообщений будет удалена/);
+});

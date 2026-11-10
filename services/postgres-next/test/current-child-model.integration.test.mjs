@@ -6,6 +6,7 @@ import {probePostgresNext} from '../src/probe-cli.mjs';
 import {createCurrentParentRegistrationService} from '../app/current-parent-registration.mjs';
 import {createCurrentReportPublisher} from '../app/current-report-publications.mjs';
 import {createCurrentParentReportReader} from '../app/current-parent-report-reader.mjs';
+import {createCurrentReportBackfill} from '../app/current-report-backfill.mjs';
 import {purgeCurrentRegisteredChild} from '../app/current-child-deletion.mjs';
 import {checkCurrentChildSchema} from '../app/stand-server.mjs';
 import {ensureCurrentChildColumns,retireHospitalAdmissions,prepareCurrentChildSchema} from '../app/current-child-schema.mjs';
@@ -69,6 +70,14 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(first.ok,true);
     const [[firstProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneA}`;
     assert.ok(firstProfile.child_id);
+    const [[morningHead]]=await sql`SELECT publication_id FROM report_publication_head
+      WHERE kind=${'morning'}`;
+    assert.equal(morningHead.publication_id,p0.publicationId,'latest morning source must be current');
+    await createCurrentReportBackfill(sql,{now}).recover({phone10:phoneA});
+    const [[preReadCurrent]]=await sql`SELECT publication_id,child_id
+      FROM parent_current_reports WHERE phone10=${phoneA} AND kind=${'morning'}`;
+    assert.equal(preReadCurrent?.publication_id,p0.publicationId,'backfill must create the current morning row');
+    assert.equal(preReadCurrent?.child_id,firstProfile.child_id);
     const firstReport=await reader.current(phoneA);
     assert.equal(firstReport.reports.find(r=>r.kind==='morning').text,
       'Степан: Синтетический текст утра.');

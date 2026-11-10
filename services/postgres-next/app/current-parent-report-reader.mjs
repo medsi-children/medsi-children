@@ -61,6 +61,12 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
   }
   async function history(phoneRaw){
     const p=phone(phoneRaw);
+    // A parent can open history before ever opening today's report.
+    // Identity and missing-day recovery are best-effort; a failed repair
+    // must never erase or hide previously saved reports.
+    try{await link.reconcile({phone10:p})}catch(_){}
+    try{await backfill.recover({phone10:p})}catch(_){}
+    try{await backfill.recoverHistory({phone10:p})}catch(_){}
     return read(async tx=>{
       const [[profile]]=await tx`SELECT child_id FROM parent_profiles WHERE phone10=${p}`;
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};

@@ -6,6 +6,9 @@ import {probePostgresNext} from '../src/probe-cli.mjs';
 import {createCurrentParentRegistrationService} from '../app/current-parent-registration.mjs';
 import {createCurrentReportPublisher} from '../app/current-report-publications.mjs';
 import {createCurrentParentReportReader} from '../app/current-parent-report-reader.mjs';
+import {createCurrentReportBackfill} from '../app/current-report-backfill.mjs';
+import {currentStaffPublications} from '../app/current-child-identity.mjs';
+import {planCurrentReport} from '../app/current-report-plan.mjs';
 import {purgeCurrentRegisteredChild} from '../app/current-child-deletion.mjs';
 import {checkCurrentChildSchema} from '../app/stand-server.mjs';
 import {ensureCurrentChildColumns,retireHospitalAdmissions,prepareCurrentChildSchema} from '../app/current-child-schema.mjs';
@@ -40,6 +43,24 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
   const phoneA='9991000011',phoneB='9991000022',phoneC='9991000033';
   try{
     assert.deepEqual(await checkCurrentChildSchema(sql),{ok:true});
+    // A historical source exists two days BEFORE parent registration.
+    // Qualified initials allow safe recovery; a second, unrelated surname
+    // must never be assigned to the registered child.
+    const todayClock=clock;
+    clock-=3*86400000;
+    const bare=await publish('morning',
+      'Степан — Прежнее наблюдение без фамильного подтверждения.',
+      'ci_current_historical_bare0001');
+    assert.equal(bare.status,'published');
+    clock=todayClock-2*86400000;
+    const oldDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
+      year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(clock));
+    const past=await publish('evening',
+      'Степан Си. — Старый синтетический отчёт Сидорова.\n'+
+      'Степан Ив. — Чужое наблюдение за Ивановым.',
+      'ci_current_historical_0001');
+    assert.equal(past.status,'published');
+    clock=todayClock;
     // The source is publishable even before ANY parent registered.
     const source='Степан — Синтетический текст утра.';
     const p0=await publish('morning',source,'ci_current_source0001');
@@ -51,10 +72,48 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(first.ok,true);
     const [[firstProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneA}`;
     assert.ok(firstProfile.child_id);
+    const [[morningHead]]=await sql`SELECT publication_id FROM report_publication_head
+      WHERE kind=${'morning'}`;
+    assert.equal(morningHead.publication_id,p0.publicationId,'latest morning source must be current');
+    const [[people],[kids],[nameAliases],[liveSources]]=await Promise.all([
+      sql`SELECT phone10,child_id FROM parent_profiles`,
+      sql`SELECT child_id,registered_first_name,surname FROM children`,
+      sql`SELECT base_key,preferred_name,variants_json FROM name_variants`,
+      sql`SELECT r.publication_id,r.kind,r.report_date,r.normalized_text,r.submitted_at
+        FROM report_publication_head h JOIN raw_reports r ON h.publication_id=r.publication_id`
+    ]);
+    const sourceDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
+      year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(clock));
+    const recent=currentStaffPublications(liveSources,sourceDate);
+    assert.equal(recent.some(r=>r.publication_id===p0.publicationId),true,
+      'currentStaffPublications must retain latest report date');
+    assert.equal(planCurrentReport({kind:'morning',rawText:source,
+      profiles:people,children:kids,nameVariants:nameAliases}).recipients.length,1,
+      'current source must match single registered child');
+    const [[p0Owner]]=await sql`SELECT record_json FROM report_ownership
+      WHERE owner_key=${'CURRENT_BLOCK_'+p0.publicationId+'_0'}`;
+    assert.equal(JSON.parse(p0Owner.record_json).childId,firstProfile.child_id);
+    await createCurrentReportBackfill(sql,{now}).recover({phone10:phoneA});
+    const [[preReadCurrent]]=await sql`SELECT publication_id,child_id
+      FROM parent_current_reports WHERE phone10=${phoneA} AND kind=${'morning'}`;
+    assert.equal(preReadCurrent?.publication_id,p0.publicationId,'backfill must create the current morning row');
+    assert.equal(preReadCurrent?.child_id,firstProfile.child_id);
     const firstReport=await reader.current(phoneA);
     assert.equal(firstReport.reports.find(r=>r.kind==='morning').text,
       'Степан: Синтетический текст утра.');
-    assert.equal((await reader.history(phoneA)).reports.length,1);
+    const firstHistory=await reader.history(phoneA);
+    assert.equal(firstHistory.reports.length,2);
+    assert.equal(firstHistory.reports.find(r=>r.reportDate===oldDate&&r.kind==='evening')
+      ?.text,'Степан: Старый синтетический отчёт Сидорова.');
+    assert.equal(firstHistory.reports.some(r=>r.text.includes('Ивановым')),false);
+    const [[claimedHistoryOwner]]=await sql`SELECT record_json FROM report_ownership
+      WHERE owner_key=${'CURRENT_BLOCK_'+past.publicationId+'_0'}`;
+    assert.deepEqual(JSON.parse(claimedHistoryOwner.record_json),
+      {childId:firstProfile.child_id,pending:false,blocked:false});
+    // Recovering history must not move the current report backward to day -2.
+    assert.equal((await reader.current(phoneA)).reports.find(r=>r.kind==='morning').text,
+      'Степан: Синтетический текст утра.');
+    assert.equal((await reader.history(phoneA)).reports.length,2);
 
     // Second guardian joins the same current registered child, no new child.
     const second=await signup('8'+phoneB,'Степан Сидоров','reg_current_second_0001');
@@ -63,6 +122,9 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(secondProfile.child_id,firstProfile.child_id);
     assert.equal((await reader.current(phoneB)).reports.find(r=>r.kind==='morning').text,
       'Степан: Синтетический текст утра.');
+    assert.equal((await reader.history(phoneB)).reports.find(r=>
+      r.reportDate===oldDate&&r.kind==='evening')?.text,
+      'Степан: Старый синтетический отчёт Сидорова.');
     const [onlyOne]=await sql`SELECT child_id FROM children`;
     assert.equal(onlyOne.length,1);
 
@@ -86,6 +148,10 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.doesNotMatch(firstEvening.text,/Мерцалова/);
     assert.match(thirdEvening.text,/Мерцалова/);
     assert.doesNotMatch(thirdEvening.text,/Сидорова/);
+    assert.equal((await reader.history(phoneC)).reports.some(r=>r.reportDate===oldDate),false);
+    // A formerly unregistered bare heading from three days ago is still
+    // unclaimed: a matching first name today cannot prove historical owner.
+    assert.equal(firstHistory.reports.some(r=>r.text.includes('без фамильного')),false);
     const [[thirdProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
     assert.ok(thirdProfile.child_id&&thirdProfile.child_id!==firstProfile.child_id);
 

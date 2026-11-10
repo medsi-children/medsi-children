@@ -1,6 +1,7 @@
 import {createCurrentChildLinkStore} from './current-child-link-store.mjs';
 import {createCurrentReportBackfill} from './current-report-backfill.mjs';
 import {currentReportVersion} from './current-report-plan.mjs';
+import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
 const PHONE=/^\d{10}$/;
 const CHILD_KINDS=new Set(['morning','evening']);
 const KINDS=new Set(['morning','evening','psychology']);
@@ -27,10 +28,11 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
       INNER JOIN raw_reports r ON r.publication_id=h.publication_id
       WHERE h.kind=${'psychology'} AND r.kind=${'psychology'}`;
     if(!publication||!String(publication.normalized_text||'').trim())return null;
-    const text=String(publication.normalized_text);
+    const storedText=String(publication.normalized_text);
+    const text=normalizeCurrentReportPunctuation(storedText);
     return {kind:'psychology',text,
       publicationId:publication.publication_id,
-      version:currentReportVersion({kind:'psychology',text,publicationId:publication.publication_id}),
+      version:currentReportVersion({kind:'psychology',text:storedText,publicationId:publication.publication_id}),
       updatedAt:stamp(publication.submitted_at)};
   }
   async function current(phoneRaw){
@@ -51,7 +53,7 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
       const headByKind=new Map(heads.map(x=>[x.kind,x.publication_id]));
       const reports=rows.filter(row=>CHILD_KINDS.has(row.kind)&&childId&&
         same(row.child_id,childId)&&same(row.publication_id,headByKind.get(row.kind)))
-        .map(row=>({kind:row.kind,text:row.text||'',version:row.version||'',
+        .map(row=>({kind:row.kind,text:normalizeCurrentReportPunctuation(row.text||''),version:row.version||'',
           updatedAt:stamp(row.updated_at)}));
       const therapy=await latestTherapy(tx);
       if(therapy)reports.push({kind:therapy.kind,text:therapy.text,
@@ -78,7 +80,7 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
           childId&&CHILD_KINDS.has(r.kind)&&same(r.child_id,childId))
         .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date))||
           (order[a.kind]??9)-(order[b.kind]??9)).slice(0,180)
-        .map(r=>({kind:r.kind,reportDate:r.report_date,text:r.text||'',
+        .map(r=>({kind:r.kind,reportDate:r.report_date,text:normalizeCurrentReportPunctuation(r.text||''),
           capturedAt:stamp(r.captured_at)}))};
     });
   }

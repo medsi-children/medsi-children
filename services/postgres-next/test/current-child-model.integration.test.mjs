@@ -40,6 +40,19 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
   const phoneA='9991000011',phoneB='9991000022',phoneC='9991000033';
   try{
     assert.deepEqual(await checkCurrentChildSchema(sql),{ok:true});
+    // A historical source exists two days BEFORE parent registration.
+    // Qualified initials allow safe recovery; a second, unrelated surname
+    // must never be assigned to the registered child.
+    const todayClock=clock;
+    clock-=2*86400000;
+    const oldDate=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
+      year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(clock));
+    const past=await publish('evening',
+      'Степан Си. — Старый синтетический отчёт Сидорова.\n'+
+      'Степан Ив. — Чужое наблюдение за Ивановым.',
+      'ci_current_historical_0001');
+    assert.equal(past.status,'published');
+    clock=todayClock;
     // The source is publishable even before ANY parent registered.
     const source='Степан — Синтетический текст утра.';
     const p0=await publish('morning',source,'ci_current_source0001');
@@ -54,7 +67,15 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const firstReport=await reader.current(phoneA);
     assert.equal(firstReport.reports.find(r=>r.kind==='morning').text,
       'Степан: Синтетический текст утра.');
-    assert.equal((await reader.history(phoneA)).reports.length,1);
+    const firstHistory=await reader.history(phoneA);
+    assert.equal(firstHistory.reports.length,2);
+    assert.equal(firstHistory.reports.find(r=>r.reportDate===oldDate&&r.kind==='evening')
+      ?.text,'Степан: Старый синтетический отчёт Сидорова.');
+    assert.equal(firstHistory.reports.some(r=>r.text.includes('Ивановым')),false);
+    // Recovering history must not move the current report backward to day -2.
+    assert.equal((await reader.current(phoneA)).reports.find(r=>r.kind==='morning').text,
+      'Степан: Синтетический текст утра.');
+    assert.equal((await reader.history(phoneA)).reports.length,2);
 
     // Second guardian joins the same current registered child, no new child.
     const second=await signup('8'+phoneB,'Степан Сидоров','reg_current_second_0001');
@@ -63,6 +84,9 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(secondProfile.child_id,firstProfile.child_id);
     assert.equal((await reader.current(phoneB)).reports.find(r=>r.kind==='morning').text,
       'Степан: Синтетический текст утра.');
+    assert.equal((await reader.history(phoneB)).reports.find(r=>
+      r.reportDate===oldDate&&r.kind==='evening')?.text,
+      'Степан: Старый синтетический отчёт Сидорова.');
     const [onlyOne]=await sql`SELECT child_id FROM children`;
     assert.equal(onlyOne.length,1);
 
@@ -86,6 +110,7 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.doesNotMatch(firstEvening.text,/Мерцалова/);
     assert.match(thirdEvening.text,/Мерцалова/);
     assert.doesNotMatch(thirdEvening.text,/Сидорова/);
+    assert.equal((await reader.history(phoneC)).reports.some(r=>r.reportDate===oldDate),false);
     const [[thirdProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
     assert.ok(thirdProfile.child_id&&thirdProfile.child_id!==firstProfile.child_id);
 

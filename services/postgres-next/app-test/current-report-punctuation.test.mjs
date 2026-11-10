@@ -11,9 +11,9 @@ test('restores legacy Apps Script comma, period and parenthesis spacing without 
 });
 
 test('does not change decimal numbers, times, abbreviations, headers, or authored paragraph breaks',()=>{
-  const input='Саша Ив. — 1,5 часа в 12:30.ЭЭГ прошла.\n\nАлександр: играл в 3,5 игры.';
+  const input='Саша Ив. — 1,5 часа в 12:30. была.ЭЭГ прошла.\n\nАлександр: играл в 3,5 игры.';
   assert.equal(clean(input),
-    'Саша Ив. — 1,5 часа в 12:30. ЭЭГ прошла.\n\nАлександр: играл в 3,5 игры.');
+    'Саша Ив. — 1,5 часа в 12:30. была. ЭЭГ прошла.\n\nАлександр: играл в 3,5 игры.');
   assert.equal(clean(clean(input)),clean(input));
 });
 

@@ -1,4 +1,5 @@
 import {displayCurrentStaffSource} from './current-educator-source-display.mjs';
+import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
 const PHONE=/^\d{10}$/;
 const KINDS=['morning','evening','psychology'];
 export function assembleCurrentEducatorDashboard({profiles=[],children=[],current=[],
@@ -23,9 +24,9 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     const reports={morning:'',evening:'',psychology:''};
     for(const r of current)if(r.phone10===p.phone10&&r.child_id===childId&&
       ['morning','evening'].includes(r.kind)&&r.publication_id===headByKind.get(r.kind))
-      reports[r.kind]=String(r.text||'');
+      reports[r.kind]=normalizeCurrentReportPunctuation(r.text||'');
     const therapy=headByKind.get('psychology')&&rawByPublication.get(headByKind.get('psychology'));
-    if(therapy)reports.psychology=String(therapy.normalized_text||'');
+    if(therapy)reports.psychology=normalizeCurrentReportPunctuation(therapy.normalized_text||'');
     card.parentViews.push({phone:parent.phone,phone10:p.phone10,
       admissionId:childId,parentName:parent.parentName,reports});
   }
@@ -35,12 +36,12 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     const source=publicationId&&rawByPublication.get(publicationId);
     raw[kind]=source?{
       reportDate:String(source.report_date||''),
-      normalizedText:String(source.normalized_text||''),
+      normalizedText:normalizeCurrentReportPunctuation(source.normalized_text||''),
       rawText:String(source.raw_text||''),
-      displayText:kind==='psychology'?String(source.raw_text||''):
-        displayCurrentStaffSource({rawText:String(source.normalized_text||''),
+      displayText:kind==='psychology'?normalizeCurrentReportPunctuation(source.raw_text||''):
+        normalizeCurrentReportPunctuation(displayCurrentStaffSource({rawText:String(source.normalized_text||''),
           children,profiles,ownerRecords:ownerByPublication.get(publicationId)||[],
-          nameVariants}),
+          nameVariants})),
       publicationId
     }:{reportDate:'',normalizedText:'',rawText:'',displayText:''};
   }

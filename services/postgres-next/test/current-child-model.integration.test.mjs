@@ -186,8 +186,8 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(chosen.recipients,2);
     assert.match((await reader.current(phoneA)).reports.find(x=>x.kind==='evening').text,
       /Наблюдение при совпадении/);
-    assert.doesNotMatch((await reader.current(phoneC)).reports.find(x=>x.kind==='evening').text,
-      /Наблюдение при совпадении/);
+    assert.equal((await reader.current(phoneC)).reports.some(x=>x.kind==='evening'&&
+      x.text.includes('Наблюдение при совпадении')),false);
     // The educator can change the heading and/or remove an existing block.
     // The previously distributed current/history rows are withdrawn as part
     // of the same revision transaction; the authored original survives.

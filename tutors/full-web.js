@@ -181,8 +181,7 @@
     });
     if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)
       throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
-    const warning=await clarifier.finish(decision.deletions,session);
-    return {accepted:true,submissionId,warning};
+    return {accepted:true,submissionId};
   }
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');

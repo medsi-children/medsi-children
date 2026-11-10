@@ -77,6 +77,10 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(firstHistory.reports.find(r=>r.reportDate===oldDate&&r.kind==='evening')
       ?.text,'Степан: Старый синтетический отчёт Сидорова.');
     assert.equal(firstHistory.reports.some(r=>r.text.includes('Ивановым')),false);
+    const [[claimedHistoryOwner]]=await sql`SELECT record_json FROM report_ownership
+      WHERE owner_key=${'CURRENT_BLOCK_'+past.publicationId+'_0'}`;
+    assert.deepEqual(JSON.parse(claimedHistoryOwner.record_json),
+      {childId:firstProfile.child_id,pending:false,blocked:false});
     // Recovering history must not move the current report backward to day -2.
     assert.equal((await reader.current(phoneA)).reports.find(r=>r.kind==='morning').text,
       'Степан: Синтетический текст утра.');

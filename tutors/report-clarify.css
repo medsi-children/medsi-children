@@ -1,10 +1,18 @@
 .medsi-clarify-dialog{width:min(460px,calc(100vw - 28px));max-height:min(82vh,720px);border:1px solid #c8e8ec;border-radius:24px;background:#fff;color:#234852;box-shadow:0 14px 50px rgba(29,76,91,.18);padding:0;overflow:auto;overscroll-behavior:contain}
 .medsi-clarify-dialog::backdrop{background:rgba(19,50,65,.37);backdrop-filter:blur(3px)}
-.medsi-clarify-content{padding:25px 22px;display:grid;gap:14px}
-.medsi-clarify-content h3{font-size:21px;line-height:1.25;margin:0;font-weight:750;color:#17414b}
-.medsi-clarify-excerpt{margin:0;padding:12px 14px;border-radius:12px;background:#f3f9fa;font-size:14px;line-height:1.5;color:#52737d;white-space:pre-wrap;overflow-wrap:anywhere}
+.medsi-clarify-content{padding:25px 22px;display:grid;gap:12px}
+.medsi-clarify-content h3{font-size:19px;line-height:1.35;margin:0 0 5px;font-weight:750;color:#17414b}
 .medsi-clarify-options{display:grid;gap:9px}
-.medsi-clarify-choice{width:100%;border:1px solid #d0e7e9;border-radius:14px;padding:14px 15px;text-align:left;background:#f7fbfb;color:#207c87;font:inherit;font-weight:650;min-height:48px;cursor:pointer}
+.medsi-clarify-alternatives{padding:0 0 0 22px}
+.medsi-clarify-alternatives[hidden]{display:none!important}
+.medsi-clarify-choice{width:100%;border:1px solid #d0e7e9;border-radius:14px;padding:13px 15px;text-align:left;background:#f7fbfb;color:#207c87;font:inherit;font-weight:650;min-height:48px;cursor:pointer}
 .medsi-clarify-choice:hover,.medsi-clarify-choice:focus-visible{background:#e9f7f8;border-color:#7acdd4;outline:none}
+.medsi-clarify-choice.is-selected{border-color:#4aaeba;background:#e6f6f7;box-shadow:0 0 0 1px #4aaeba}
+.medsi-clarify-more{display:flex;align-items:center;gap:10px;width:max-content;min-height:40px;border:0;background:transparent;color:#5a8790;font:inherit;font-weight:650;cursor:pointer;padding:5px 4px}
+.medsi-clarify-more::before{content:'';display:block;width:8px;height:8px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s ease}
+.medsi-clarify-more.is-expanded::before{transform:rotate(45deg)}
+.medsi-clarify-footer{display:grid;gap:6px;margin-top:7px}
+.medsi-clarify-continue{width:100%;min-height:46px;padding:12px 15px;border:0;border-radius:13px;background:#318e9c;color:#fff;font:inherit;font-weight:700;cursor:pointer}
+.medsi-clarify-continue:disabled{background:#c7d8dc;cursor:default}
 .medsi-clarify-cancel{padding:10px 14px;border:0;background:transparent;color:#8c9ca1;font:inherit;cursor:pointer}
 @media(max-width:480px){.medsi-clarify-content{padding:19px 16px}.medsi-clarify-dialog{border-radius:20px}}

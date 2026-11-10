@@ -326,18 +326,16 @@ body.medsi-report-library-open {overflow:hidden}
 .medsi-roster-form label {min-width:0}
 .medsi-roster-line .medsi-roster-form {width:100%;max-width:100%}
 
-/* Registered chat profiles whose admission association is not verified.
-   Keep them visible in the directory, without implying report ownership. */
-.medsi-roster-unlinked{display:grid;gap:10px;margin-top:9px;min-width:0}
-.medsi-roster-unlinked-heading{margin:6px 0 0;font-size:15px;font-weight:800;color:#3f6973}
-.medsi-roster-unlinked-intro{margin:0 0 3px;font-size:12px;line-height:1.5;color:#77919b}
-.medsi-roster-line-unlinked{grid-template-columns:minmax(0,1fr) auto;gap:9px;background:#fbfdfe;border-style:dashed}
-.medsi-roster-line-unlinked .medsi-roster-line-name{cursor:default}
+/* Unlinked / review-needed parents stay in the same directory, after
+   linked children. Muted cards distinguish their unavailable child link. */
+.medsi-roster-line-unlinked{grid-template-columns:minmax(0,1fr) auto;gap:9px;background:#f7f9fa;border-color:#e6ebee;box-shadow:none}
+.medsi-roster-line-unlinked .medsi-roster-line-name{cursor:default;color:#84969f}
 .medsi-roster-line-unlinked .medsi-roster-line-name:hover{text-decoration:none}
-.medsi-roster-unlinked-phone{font-size:12px;color:#698a96;overflow-wrap:anywhere}
+.medsi-roster-line-unlinked .medsi-roster-line-parent{color:#a0adb5}
+.medsi-roster-unlinked-phone{font-size:12px;color:#a0adb5;overflow-wrap:anywhere}
 .medsi-roster-line-unlinked .medsi-roster-line-actions{align-self:center}
 .medsi-roster-line-unlinked .medsi-roster-status-icon{flex-shrink:0}
-.medsi-roster-review-note{font-size:11px;color:#9a6a3a}
+.medsi-roster-review-note{font-size:11px;color:#9aa9b0}
 .medsi-roster-line-unlinked .medsi-roster-status-morning[data-present="?"],
 .medsi-roster-line-unlinked .medsi-roster-status-evening[data-present="?"]{
   background:#f4f7f9;border-color:#e3ebee;color:#9bb3bc

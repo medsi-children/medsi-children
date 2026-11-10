@@ -127,7 +127,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       const snapshots=[];
       for(const source of latest.values()){
         const prefix='CURRENT_BLOCK_'+source.publication_id+'_';
-        const saved=new Map();
+        const saved=new Map(),originals=new Map();
         for(const row of ownership){
           if(!String(row.owner_key).startsWith(prefix))continue;
           const index=Number(String(row.owner_key).slice(prefix.length));
@@ -135,15 +135,17 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           let record;
           try{record=JSON.parse(String(row.record_json||''))}catch{record={blocked:true}}
           saved.set(index,record);
+          originals.set(index,{key:row.owner_key,raw:row.record_json});
         }
         if(!saved.size)continue;
-        snapshots.push({source,saved,blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants)});
+        snapshots.push({source,saved,originals,
+          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants)});
       }
       const anchors=snapshots.filter(({saved})=>[...saved.values()].some(r=>
         r&&!r.blocked&&String(r.childId||'')===childId))
         .map(({source})=>Date.parse(source.report_date+'T00:00:00Z')).filter(Number.isFinite);
       let backfilled=0;
-      for(const {source,saved,blocks} of snapshots){
+      for(const {source,saved,originals,blocks} of snapshots){
         const kind=String(source.kind),date=String(source.report_date);
         if(already.has(kind+'/'+date))continue;
         const eligible=blocks.flatMap((b,index)=>{
@@ -170,9 +172,21 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // A source with two potentially relevant blocks is deliberately
         // skipped rather than silently choosing one.
         if(eligible.length!==1)continue;
-        const {block}=eligible[0];
+        const {block,index,owned}=eligible[0];
         const text=(child.registered_first_name||block.name)+': '+block.body.join('\n').trim();
         const at=BigInt(source.submitted_at||now());
+        if(!owned){
+          // Claim the exact historic source block at the same time as the
+          // recipient's history row. A later namesake cannot inherit it.
+          const original=originals.get(index);
+          if(!original)throw new Error('Missing original block ownership.');
+          const replacement=JSON.stringify({childId,pending:false,blocked:false});
+          const [changed]=await tx`UPDATE report_ownership SET
+            record_json=${replacement},updated_at=${BigInt(now())}
+            WHERE owner_key=${original.key} AND record_json=${original.raw}
+            RETURNING owner_key`;
+          if(changed.length!==1)throw new Error('Historical block ownership changed.');
+        }
         await tx.upsert`INSERT INTO parent_report_history
           (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
           VALUES (${phone10},${kind},${date},${childId},${source.publication_id},

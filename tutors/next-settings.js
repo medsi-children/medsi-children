@@ -240,7 +240,7 @@
       target.append(block);
     }
   }
-  function inlineReport(value,label,save,sourceKind=''){
+  function inlineReport(value,label,save,sourceKind='',originalSource=value){
     const wrap=textNode('div','medsi-inline-report','');
     function display(){
       const body=textNode('div','medsi-report-body medsi-report-clickable',reportText(value));
@@ -248,13 +248,20 @@
       body.tabIndex=0;body.setAttribute('role','button');body.setAttribute('aria-label','Редактировать: '+label);
       const open=()=>{
         const form=document.createElement('form');form.className='medsi-inline-form';
-        const area=document.createElement('textarea');area.value=value||'';area.maxLength=240000;area.setAttribute('aria-label',label);
+        const area=document.createElement('textarea');area.value=originalSource||'';area.maxLength=240000;area.setAttribute('aria-label',label);
         const actions=textNode('div','medsi-inline-actions','');
         const submit=textNode('button','medsi-inline-save','✓ Сохранить');submit.type='submit';
         const cancel=textNode('button','medsi-inline-cancel','Отмена');cancel.type='button';cancel.onclick=display;
         actions.append(submit,cancel);form.append(area,actions);wrap.replaceChildren(form);area.style.height=Math.min(600,Math.max(140,area.scrollHeight+4))+'px';area.focus({preventScroll:true});
-        form.onsubmit=async event=>{event.preventDefault();if(area.value===String(value||'')){display();return;}submit.disabled=true;cancel.disabled=true;
-          try{await save(area.value);value=area.value;display();await refreshLibrary();}catch(error){byId('medsiReportsFeedback').textContent=error.message||'Не удалось сохранить. Повторите попытку.';submit.disabled=false;cancel.disabled=false;}
+        form.onsubmit=async event=>{event.preventDefault();if(area.value===String(originalSource||'')){display();return;}submit.disabled=true;cancel.disabled=true;
+          try{
+            const updated=await save(area.value);value=area.value;originalSource=area.value;
+            display();await refreshLibrary();
+            if(updated?.warning)byId('medsiReportsFeedback').textContent=updated.warning;
+          }catch(error){
+            byId('medsiReportsFeedback').textContent=error.message||'Не удалось сохранить. Повторите попытку.';
+            submit.disabled=false;cancel.disabled=false;
+          }
         };
       };
       body.onclick=open;body.onkeydown=event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();open();}};wrap.replaceChildren(body);
@@ -318,7 +325,21 @@
       card.append(wave);
       if(entry.publicationId){
         card.classList.add('medsi-raw-collapsed');
-        card.append(inlineReport(kind==='psychology'?entry.rawText:(entry.displayText||entry.normalizedText||entry.rawText||''),reportTypeLabel(kind),text=>request('/lab/admin/reports/raw','POST',{kind,text,publicationId:entry.publicationId,submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID())}),kind));
+        card.append(inlineReport(
+          kind==='psychology'?entry.rawText:(entry.displayText||entry.normalizedText||entry.rawText||''),
+          reportTypeLabel(kind),async text=>{
+            const clarifier=window.MedsiReportClarifier;
+            if(!clarifier?.prepare)throw new Error('Не загрузилось уточнение имён. Обновите страницу.');
+            const decision=await clarifier.prepare({kind,text,publicationId:entry.publicationId});
+            const result=await request('/lab/admin/reports/raw','POST',{kind,text,
+              publicationId:entry.publicationId,
+              submissionId:entry.pendingSubmissionId||(entry.pendingSubmissionId=crypto.randomUUID()),
+              clarification:decision.clarification});
+            if(result.status!=='published'&&result.status!=='duplicate')
+              throw new Error('Исходный отчёт изменился. Обновите его перед повторной правкой.');
+            const session=await window.MedsiEducatorSession.get();
+            return {warning:await clarifier.finish(decision.deletions,session)};
+          },kind,entry.rawText||entry.normalizedText||''));
         const toggle=textNode('button','medsi-raw-expand','');
         toggle.type='button';toggle.setAttribute('aria-label','Развернуть отчёт');toggle.setAttribute('aria-expanded','false');
         toggle.onclick=()=>{const open=card.classList.toggle('medsi-raw-expanded');toggle.setAttribute('aria-label',open?'Свернуть отчёт':'Развернуть отчёт');toggle.setAttribute('aria-expanded',String(open));};

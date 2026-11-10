@@ -24,10 +24,13 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
         });
         return;
       }
-      // Never echo internal/PostgreSQL exception bodies or medical report contents.
-      const known=/^(Invalid |Unsupported |Bad |Forbidden|Unauthorized|Only own |Reply target|Chat is closed|Message not found|Subscription belongs|Report blocked|Parent roster changed|Report ownership changed)/.test(safe);
-      if(!res.headersSent)return res.status(known?400:503).json({
-        ok:false,message:known?safe:'Операция временно недоступна. Повторите позже.'
+      // Expose only deliberately authored, non-clinical clarification errors.
+      const stale=/^Report (source changed|roster changed|clarification)/.test(safe);
+      const known=/^(Invalid |Unsupported |Bad |Forbidden|Unauthorized|Only own |Reply target|Chat is closed|Message not found|Subscription belongs|Report blocked|Parent roster changed|Report ownership changed|Report clarification|Invalid child selected)/.test(safe);
+      if(!res.headersSent)return res.status(stale?409:known?400:503).json({
+        ok:false,code:stale?'REPORT_RELOAD_REQUIRED':undefined,
+        message:stale?'Отчёт или список детей изменился. Обновите страницу и повторите выбор.':
+          known?safe:'Операция временно недоступна. Повторите позже.'
       });
     }
   };
@@ -137,9 +140,15 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(typeof roster?.update!=='function')throw new Error('Roster unavailable.');
     return roster.update(req.body||{});
   }));
+  router.post('/report-clarify',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    return reports.preview({kind:req.body?.reportType||req.body?.kind,
+      rawText:req.body?.text,correctionOf:req.body?.publicationId||''});
+  }));
   router.post('/admin/reports/raw',run(async(req,res)=>{
     if(!await educator(req,res))return;
-    return reports.submit({...req.body,rawText:req.body.text,authorId:'educator_edit',correctionOf:req.body.publicationId});
+    return reports.submit({...req.body,rawText:req.body.text,authorId:'educator_edit',
+      correctionOf:req.body.publicationId,clarification:req.body.clarification});
   }));
   router.post('/admin/reports/edit',run(async(req,res)=>{
     if(!await educator(req,res))return;
@@ -256,8 +265,8 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     const auth=await educator(req,res);if(!auth)return;
     const token=String(req.get('X-Medsi-Chat-Session')||'');
     const authorId='educator_'+createHash('sha256').update(token).digest('hex').slice(0,20);
-    const {text,reportType,submissionId}=req.body||{};
-    const result=await reports.submit({kind:reportType,rawText:text,submissionId,authorId});
+    const {text,reportType,submissionId,clarification}=req.body||{};
+    const result=await reports.submit({kind:reportType,rawText:text,submissionId,authorId,clarification});
     return {ok:true,accepted:true,submissionId,status:'completed',result};
   }));
   router.get('/report-submit/status',run(async(req,res)=>{

@@ -1,5 +1,7 @@
 import {randomUUID,createHash} from 'node:crypto';
 import {planCurrentReport,currentReportVersion} from './current-report-plan.mjs';
+import {reviewCurrentReport,remapCurrentBlockOwners,checkedCurrentResolutions}
+  from './current-report-clarify.mjs';
 const ID=/^[A-Za-z0-9_-]{8,128}$/;
 const sha=s=>createHash('sha256').update(s,'utf8').digest('hex');
 const dateMoscow=value=>{
@@ -13,8 +15,22 @@ const dateMoscow=value=>{
 // NO admissions relation. Suitable for schema 002 expansion and later contract.
 export function createCurrentReportPublisher(sql){
   if(!sql?.begin)throw new Error('PostgreSQL required.');
+  async function preview({kind,rawText,correctionOf=''}={}){
+    return sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
+      // Do not issue concurrent queries on one pg transaction client.
+      // In particular the head must be read deterministically for edits.
+      const [profiles]=await tx`SELECT phone10,child_id FROM parent_profiles`;
+      const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
+      const [variants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
+      const [[head]]=await tx`SELECT publication_id FROM report_publication_head WHERE kind=${kind}`;
+      if(correctionOf&&head?.publication_id!==correctionOf)
+        throw new Error('Report source changed. Reload before editing.');
+      return reviewCurrentReport({kind,rawText,correctionOf,
+        profiles,children,nameVariants:variants,headId:head?.publication_id||''});
+    });
+  }
   async function publish({kind,rawText,submissionId,authorId,submittedAt=Date.now(),
-    correctionOf}={}){
+    correctionOf,clarification}={}){
     if(!['morning','evening','psychology'].includes(kind)||!ID.test(String(submissionId||''))||
       !ID.test(String(authorId||''))||typeof rawText!=='string'||!rawText.trim()||
       rawText.length>240000||!Number.isSafeInteger(submittedAt)||
@@ -30,39 +46,61 @@ export function createCurrentReportPublisher(sql){
         return {ok:true,status:'duplicate',publicationId:priorSubmission.publication_id,
           revision:Number(priorSubmission.revision)};
       }
-      const [[profiles],[children],[variants],[head]]=await Promise.all([
-        tx`SELECT phone10,child_id FROM parent_profiles`,
-        tx`SELECT child_id,registered_first_name,surname FROM children`,
-        tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
-        tx`SELECT publication_id,revision,submitted_at FROM report_publication_head WHERE kind=${kind}`
-      ]);
-      if(head?.submitted_at&&submittedAt<=Number(head.submitted_at))
+      // PostgreSQL transactions share one client; sequential reads avoid
+      // interleaving different result sets during a source correction.
+      const [profiles]=await tx`SELECT phone10,child_id FROM parent_profiles`;
+      const [children]=await tx`SELECT child_id,registered_first_name,surname FROM children`;
+      const [variants]=await tx`SELECT base_key,preferred_name,variants_json FROM name_variants`;
+      const [[head]]=await tx`SELECT publication_id,revision,submitted_at
+        FROM report_publication_head WHERE kind=${kind}`;
+      if(correctionOf&&head?.publication_id!==correctionOf)
+        throw new Error('Report source changed. Reload before editing.');
+      if(!correctionOf&&head?.submitted_at&&submittedAt<=Number(head.submitted_at))
         return {ok:true,status:'superseded'};
+      const review=reviewCurrentReport({kind,rawText,correctionOf,
+        profiles,children,nameVariants:variants,headId:head?.publication_id||''});
+      const choices=clarification
+        ?checkedCurrentResolutions({preview:review,resolutions:clarification.choices,
+          token:clarification.token}):[];
       let reportDate=dateMoscow(submittedAt),priorOwners=[];
       if(correctionOf){
         if(head?.publication_id!==correctionOf)throw new Error('Source has been replaced; reload.');
-        const [[original]]=await tx`SELECT report_date FROM raw_reports WHERE publication_id=${correctionOf}`;
+        const [[original]]=await tx`SELECT report_date,normalized_text FROM raw_reports
+          WHERE publication_id=${correctionOf}`;
         if(!original?.report_date)throw new Error('Correction source unavailable.');
         reportDate=String(original.report_date);
         const [ownerRows]=await tx`SELECT owner_key,record_json FROM report_ownership
           WHERE owner_key LIKE ${'CURRENT_BLOCK_'+correctionOf+'_%'}`;
-        priorOwners=ownerRows.map(row=>{
+        const oldOwners=[];
+        for(const row of ownerRows){
           const index=Number(String(row.owner_key).split('_').at(-1));
-          if(!Number.isSafeInteger(index))return null;
-          let value=null;try{value=JSON.parse(row.record_json)}catch{}
-          return {index,value};
-        }).filter(Boolean);
+          if(!Number.isSafeInteger(index)||index<0||index>999)continue;
+          try{oldOwners[index]=JSON.parse(row.record_json)}catch{oldOwners[index]={blocked:true}}
+        }
+        priorOwners=remapCurrentBlockOwners({beforeText:original.normalized_text||'',
+          afterText:rawText,priorOwners:oldOwners,nameVariants:variants,children});
       }
       const plan=planCurrentReport({kind,rawText,profiles,children,
-        nameVariants:variants,
-        priorBlockOwners:correctionOf?Array.from({length:1000},(_,i)=>
-          priorOwners.find(x=>x.index===i)?.value):[]});
+        nameVariants:variants,priorBlockOwners:priorOwners,
+        manualResolutions:choices});
       const publicationId=randomUUID(),revision=Number(head?.revision||0)+1;
-      const time=BigInt(submittedAt),rev=BigInt(revision);
+      // An inline edit can happen within the same millisecond as publication.
+      const time=BigInt(correctionOf
+        ?Math.max(submittedAt,Number(head?.submitted_at||0)+1):submittedAt);
+      const rev=BigInt(revision);
       await tx.upsert`INSERT INTO raw_reports
         (publication_id,kind,report_date,raw_text,normalized_text,author_id,submitted_at,revision)
         VALUES (${publicationId},${kind},${reportDate},${rawText},${plan.normalizedText},
           ${authorId},${time},${rev})`;
+      // A correction replacing/removing a block must also withdraw its former
+      // current/history delivery. Only records of the replaced publication are
+      // touched; authored source revisions remain immutable in raw_reports.
+      if(correctionOf){
+        await tx`DELETE FROM parent_current_reports
+          WHERE kind=${kind} AND publication_id=${correctionOf}`;
+        await tx`DELETE FROM parent_report_history
+          WHERE kind=${kind} AND publication_id=${correctionOf}`;
+      }
       let queued=0;
       for(const row of plan.recipients){
         const version=currentReportVersion({kind,childId:row.childId,
@@ -108,5 +146,5 @@ export function createCurrentReportPublisher(sql){
         unresolvedBlocks:plan.unresolved.length};
     });
   }
-  return {publish};
+  return {publish,preview};
 }

@@ -154,7 +154,8 @@ test('report form keeps invalid text and shows success only after queue receipt'
     medsi_d1_educator_session_v1:JSON.stringify({token:'synthetic-session',expiresAt:Date.now()+3600000})
   };
   const context = {
-    window:{MedsiReportValidation:{validate}, MedsiOverlayTransport:transport, scrollTo(){}},
+    window:{MedsiReportValidation:{validate}, MedsiOverlayTransport:transport,
+      MedsiReportClarifier:{prepare:async()=>({clarification:null,deletions:[]}),finish:async()=>''}, scrollTo(){}},
     document:{getElementById:element, body:{dataset:{started:'1'}}},
     MedsiOverlayTransport:transport, localStorage:{getItem:key=>storage[key],setItem(){},removeItem(){}},
     setTimeout:()=>1, clearTimeout(){}, console,
@@ -186,7 +187,7 @@ test('report form keeps invalid text and shows success only after queue receipt'
   const sending = element('btnSend').handlers.click();
   assert.equal(context.document.body.dataset.screen, 'report-morning');
   assert.equal(element('btnSend').disabled, true);
-  await Promise.resolve();
+  for(let i=0;i<12&&!queued.length;i++)await Promise.resolve();
   assert.equal(queued[0].text, valid);
   release(); await sending;
   assert.equal(context.document.body.dataset.screen, 'screenDone');
@@ -198,7 +199,8 @@ test('queue failure never falls back to Apps Script or returns a success receipt
   const submit = source.slice(source.indexOf('  async function submitReportPayload('), source.indexOf('  async function sendReport('));
   const transport={reportSubmit:async()=>{throw Object.assign(new Error('Connection lost'),{code:'NETWORK'});}};
   const context = {
-    tutorToken:'synthetic', window:{MedsiReportValidation:{validate},MedsiOverlayTransport:transport},
+    tutorToken:'synthetic', window:{MedsiReportValidation:{validate},MedsiOverlayTransport:transport,
+      MedsiReportClarifier:{prepare:async()=>({clarification:null,deletions:[]}),finish:async()=>''}},
     MedsiOverlayTransport:transport, ensureD1Fresh:async()=>({token:'synthetic'}),
     callApi:()=>{throw new Error('Unexpected Apps Script request');}
   };

@@ -30,7 +30,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
   assert.match(html,/next-settings\.css\?v=20261110-roster-unified-1/);
-  assert.match(html,/next-settings\.js\?v=20261110-roster-unified-1/);
+  assert.match(html,/next-settings\.js\?v=20261110-name-clarify-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);
   assert.match(js,/Нужна проверка привязки/);
@@ -117,9 +117,9 @@ test('raw morning and evening reports visually separate child blocks but keep on
   assert.deepEqual(segment('Только текст, без детских блоков.'),
     [{type:'plain',content:'Только текст, без детских блоков.'}]);
   assert.match(js,/sourceKind==='morning'\|\|sourceKind==='evening'/);
-  assert.match(js,/area\.value=value\|\|''/);
-  assert.match(js,/text=>request\('\/lab\/admin\/reports\/raw','POST'/);
-  assert.match(js,/reportTypeLabel\(kind\),text=>request\([\s\S]*?\),kind\)\)/);
+  assert.match(js,/area\.value=originalSource\|\|''/);
+  assert.match(js,/clarifier\.prepare\(\{kind,text,publicationId:/);
+  assert.match(js,/entry\.rawText\|\|entry\.normalizedText/);
   assert.match(css,/\.medsi-source-child-block\{/);
   assert.match(css,/\.medsi-source-child-name\{font-weight:800/);
   assert.match(css,/\.medsi-raw-morning \.medsi-source-child-block/);

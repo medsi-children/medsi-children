@@ -11,7 +11,7 @@ const headerFor=b=>b.name+(b.prefix?' '+b.prefix:'')+': ';
 // registered child ID, or quarantined. A parent row never creates a child.
 // Prior source ownership is by exact publication/block, not a hospital stay.
 export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVariants=[],
-  priorBlockOwners=[]}={}){
+  priorBlockOwners=[],manualResolutions=[]}={}){
   if(!KINDS.has(kind))throw new Error('Unknown report kind.');
   if(typeof rawText!=='string'||!rawText.trim()||rawText.length>240000)
     throw new Error('Invalid staff source.');
@@ -37,21 +37,31 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
     g.push(b);groups.set(b.canonical,g);
   }
   const assigned=new Map(),blockedChildren=new Set(),owners=[],unresolved=[];
+  const confirmed=new Map(manualResolutions.map(r=>[r.index,r]));
   for(const block of sourceBlocks){
     const family=roster.filter(c=>canonicalCurrentName(c.registered_first_name,nameVariants)===block.canonical);
     const siblingBlocks=groups.get(block.canonical)||[];
     let candidates=block.prefix
       ?family.filter(c=>prefixMatch(c.surname,block.prefix))
       :family;
-    // A bare heading loses its owner when another CURRENT child shares
-    // the same canonical name. Duplicate unqualified headers are likewise
-    // never inferred or assigned.
-    if(!block.prefix&&(family.length!==1||siblingBlocks.length!==1))candidates=[];
-    if(siblingBlocks.length>1&&siblingBlocks.some(b=>!b.prefix))candidates=[];
-    if(block.prefix&&siblingBlocks.some(b=>b!==block&&b.prefix===block.prefix))candidates=[];
     const recorded=priorBlockOwners[block.index];
+    const explicit=confirmed.get(block.index);
+    if(explicit?.choice==='child'){
+      // Explicit educator choice is accepted only after the publishing
+      // transaction revalidated it against its live roster preflight.
+      candidates=candidates.filter(c=>String(c.child_id)===String(explicit.childId));
+    }else if(explicit?.choice?.startsWith('other-')){
+      candidates=[];
+    }else if(recorded?.childId&&!recorded.blocked){
+      // Verified owner from the same logical block in a previous revision.
+      // A newly bare heading can keep that original identity.
+      candidates=candidates.filter(c=>String(c.child_id)===String(recorded.childId));
+    }else{
+      if(!block.prefix&&(family.length!==1||siblingBlocks.length!==1))candidates=[];
+      if(siblingBlocks.length>1&&siblingBlocks.some(b=>!b.prefix))candidates=[];
+      if(block.prefix&&siblingBlocks.some(b=>b!==block&&b.prefix===block.prefix))candidates=[];
+    }
     if(recorded===null||recorded?.blocked)candidates=[];
-    if(recorded?.childId)candidates=candidates.filter(c=>String(c.child_id)===String(recorded.childId));
     const unique=candidates.length===1&&!!block.bodyText;
     const childId=unique?String(candidates[0].child_id):'';
     // One block can serve two parents of the SAME child. It must never
@@ -59,6 +69,9 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
     if(childId&&(assigned.has(childId)||blockedChildren.has(childId))){
       assigned.delete(childId);
       blockedChildren.add(childId);
+      for(const earlier of owners)if(earlier.childId===childId){
+        earlier.childId='';earlier.blocked=true;earlier.pending=false;
+      }
       owners.push({index:block.index,childId:'',blocked:true});
       unresolved.push({index:block.index,reason:'duplicate-child-block'});
     }else if(childId){
@@ -72,7 +85,8 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
         (!b.prefix||!block.prefix||b.prefix===block.prefix));
       const competitors=family.filter(c=>!block.prefix||
         prefixMatch(c.surname,block.prefix));
-      const pending=!recorded&&competingSource.length===0&&competitors.length===0;
+      const pending=explicit?.choice==='other-new'||
+        (!explicit&&!recorded&&competingSource.length===0&&competitors.length===0);
       owners.push({index:block.index,childId:'',pending,blocked:!pending});
       unresolved.push({index:block.index,
         reason:pending?'awaiting-parent':'unresolved-or-ambiguous'});

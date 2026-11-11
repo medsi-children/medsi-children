@@ -15,6 +15,9 @@
   const threadCache=new Map();
   const phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const displayPhone=v=>{const p=phone10(v);return p?'8'+p:''};
+  // Full names stay in the chat heading and identity data; detail rows use
+  // only the entered first name, including hyphenated and indeclinable names.
+  const shortName=v=>String(v||'').trim().split(/\s+/u)[0]||'—';
   const getCached=p=>threadCache.get(phone10(p))||null;
   const setCached=(p,rows)=>threadCache.set(phone10(p),{rows:Array.isArray(rows)?rows:[],at:Date.now()});
 
@@ -167,7 +170,7 @@
     function makeCard(chat){
       const card=document.createElement('button');card.className='chat-card'+(chat.hasUnread?' unread':'')+(chat.pinnedBucket?' pinned':'');card.type='button';card.dataset.phone=chat.phone||'';
       const cardTitle=document.createElement('div');cardTitle.className='chat-card-title';cardTitle.textContent=chat.childName||'Без имени ребёнка';
-      const cardMeta=document.createElement('div');cardMeta.className='chat-card-meta';cardMeta.textContent=(chat.relationship||'Родитель')+': '+(chat.parentName||'—')+'\nРебёнок: '+(chat.childName||'—')+'\nНомер телефона: '+(chat.phone?displayPhone(chat.phone):'—');
+      const cardMeta=document.createElement('div');cardMeta.className='chat-card-meta';cardMeta.textContent='Родитель: '+shortName(chat.parentName)+'\nРебёнок: '+shortName(chat.childName)+'\nНомер телефона: '+(chat.phone?displayPhone(chat.phone):'—');
       const last=document.createElement('div');last.className='chat-card-last '+(chat.lastSide==='educator'?'educator':'parent');last.textContent=preview(chat);
       card.append(makeControls(chat,!chat.hasUnread),cardTitle,cardMeta,last);
       card.onclick=e=>{if(e.target.closest('.chat-menu-toggle,.chat-menu-close,.chat-read-toggle,.chat-delete-toggle,.chat-pin-toggle'))return;activeChat=chat;openThread(chat)};
@@ -219,7 +222,7 @@
     const refreshChats=()=>loadChats(true);
     document.addEventListener('medsi:refresh-educator-chats',refreshChats);
 
-    function renderThreadHeader(chat){chatThreadHeader.replaceChildren();[(chat.relationship||'Родитель')+': '+(chat.parentName||'—'),'Ребёнок: '+(chat.childName||'—'),'Номер телефона: '+displayPhone(chat.phone||'')].forEach(text=>{const d=document.createElement('div');d.textContent=text;chatThreadHeader.appendChild(d)})}
+    function renderThreadHeader(chat){chatThreadHeader.replaceChildren();['Родитель: '+shortName(chat.parentName),'Ребёнок: '+shortName(chat.childName),'Номер телефона: '+(displayPhone(chat.phone||'')||'—')].forEach(text=>{const d=document.createElement('div');d.textContent=text;chatThreadHeader.appendChild(d)})}
     function threadWithTimeout(phone){
       return new Promise((resolve,reject)=>{
         let settled=false;
@@ -242,7 +245,7 @@
       const el=document.createElement('div');el.className='msg '+(m.side==='educator'?'educator':'parent');el.dataset.medsiMessageKey=messageKey(m);el.dataset.medsiMessageSignature=messageSig(m);if(quiet)el.dataset.medsiAnimated='1';
       const author=document.createElement('div');author.className='msg-author';
       author.textContent=m.side==='parent'
-        ?(activeChat&&activeChat.relationship||'Родитель')+(activeChat&&activeChat.parentName?' '+activeChat.parentName:'')
+        ?'Родитель'+(activeChat?.parentName?' '+shortName(activeChat.parentName):'')
         :'Детское Отделение Медси';
       el.appendChild(author);
       if(m.reply){const q=document.createElement('div');q.className='msg-reply-quote';q.textContent=replyLabel(m.reply);el.appendChild(q)}

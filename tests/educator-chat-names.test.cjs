@@ -16,6 +16,7 @@ function getShortName(source){
 function makeElement(tag){
   return {tag,children:[],textContent:'',dataset:{},style:{},
     append(...items){this.children.push(...items)},
+    appendChild(item){this.children.push(item);return item},
     replaceChildren(...items){this.children=[...items]},
     addEventListener(){},
     setAttribute(){},

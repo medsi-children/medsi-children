@@ -41,7 +41,7 @@ test('educator warnings are short, clear and never display source line numbers',
     assert.equal(result.ok,false,source);
     assert.equal(result.issues[0].reason,reason,source);
     assert.equal(result.message,expected,source);
-    assert.doesNotMatch(result.message,/строк[а-я]*\s*\\d/i);
+    assert.doesNotMatch(result.message,/строк[а-я]*\s*\d/i);
   }
   assert.equal(validate('morning',' ').message,'Добавьте текст отчёта.');
   assert.equal(validate('morning','09.10 — Утро\nИгры и общение').message,

@@ -203,7 +203,7 @@ test('a doctors section is rejected before child report cleanup, with or without
     ].join('\n');
     const prepared = x.prepareRawReportSourceText_('evening', raw);
     assert.equal(prepared.ok, false);
-    assert.match(prepared.message, /уберите раздел «Для врачей»/i);
+    assert.equal(prepared.message, 'Найден блок для врачей, пожалуйста, удалите его.');
     assert.equal(prepared.text, raw);
   }
 });

@@ -6,6 +6,7 @@
 
   const phone10=v=>String(v||'').replace(/\D+/g,'').slice(-10);
   const displayPhone=v=>{const p=phone10(v);return p?'8'+p:''};
+  const shortName=v=>String(v||'').trim().split(/\s+/u)[0]||'—';
   const deleteIcon=()=>'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"></path></svg>';
   const rowsSignature=rows=>(Array.isArray(rows)?rows:[]).map(r=>[phone10(r&&r.phone),String(r&&r.parentName||''),String(r&&r.childName||''),String(r&&r.relationship||'')].join('|')).sort().join('||');
 
@@ -75,7 +76,7 @@
       rows.forEach(r=>{
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
         const name=document.createElement('div');name.className='chat-card-title';name.textContent=r.childName||'Без имени ребёнка';
-        const info=document.createElement('div');info.className='chat-card-meta';info.textContent=(r.relationship||'Родитель')+': '+(r.parentName||'—')+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
+        const info=document.createElement('div');info.className='chat-card-meta';info.textContent='Родитель: '+shortName(r.parentName)+'\nРебёнок: '+shortName(r.childName)+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
         card.append(name,info);
         card.addEventListener('click',()=>bridgeToCard(r,'open'));
         list.appendChild(card);

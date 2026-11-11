@@ -20,6 +20,38 @@ test('service sections are rejected by their headings, independent of room label
   }
 });
 
+test('educator warnings are short, clear and never display source line numbers', () => {
+  const cases = [
+    ['Для врачей:\nЛена — Основной текст.',
+      'Найден блок для врачей, пожалуйста, удалите его.', 'service_section'],
+    ['Общий комментарий:\nЛена — Основной текст.',
+      'Найден общий комментарий, пожалуйста, удалите его.', 'service_section'],
+    ['Лена — Первый текст.\nЛена: Второй текст.',
+      'Имя «Лена» повторяется. Удалите лишний блок или добавьте инициалы.', 'duplicate_name'],
+    ['Лена Т.: Первый текст.\nЛена — Второй текст.',
+      'Имя «Лена» указано без инициала. Добавьте инициал или фамилию.', 'missing_initial'],
+    ['Саша: Первый текст.\nАлександр — Второй текст.',
+      'Встречаются похожие имена: «Саша», «Александр». Уточните инициалы или фамилии.', 'missing_initial'],
+    ['Лена Т.: Первый текст.\nЛена Т. — Второй текст.',
+      'Найдены похожие блоки: «Лена Т.», «Лена Т.». Уберите повтор или уточните фамилии.',
+      'duplicate_header']
+  ];
+  for(const [source,expected,reason] of cases){
+    const result=validate('morning',source);
+    assert.equal(result.ok,false,source);
+    assert.equal(result.issues[0].reason,reason,source);
+    assert.equal(result.message,expected,source);
+    assert.doesNotMatch(result.message,/строк[а-я]*\s*\\d/i);
+  }
+  assert.equal(validate('morning',' ').message,'Добавьте текст отчёта.');
+  assert.equal(validate('morning','09.10 — Утро\nИгры и общение').message,
+    'Не найдены блоки детей. Проверьте заголовки с именами.');
+  const repeated=validate('evening','Для врачей:\nДля врачей:\nЛена — Основной текст.');
+  assert.deepEqual(repeated.issues.map(x=>x.line),[1,2],
+    'source locations remain available internally');
+  assert.equal(repeated.message,'Найден блок для врачей, пожалуйста, удалите его.');
+});
+
 test('doctor and comment phrases inside a child body are ordinary prose', () => {
   assert.equal(validate('morning',
     'Лена — Передала заметку для врачей. Это общий комментарий о занятии.').ok, true);

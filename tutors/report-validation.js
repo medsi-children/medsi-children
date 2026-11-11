@@ -101,11 +101,11 @@ var MedsiReportValidation = (function() {
   }
 
   function failure(issues) {
-    return {ok:false, code:'REPORT_FORMAT_ERROR', issues, message:issues.map(issue => issue.message).join('\n')};
+    return {ok:false, code:'REPORT_FORMAT_ERROR', issues, message:[...new Set(issues.map(issue => issue.message))].join('\n')};
   }
 
   function validate(kind, text) {
-    if (!String(text || '').trim()) return failure([{reason:'empty', message:'Пустой текст отчёта.'}]);
+    if (!String(text || '').trim()) return failure([{reason:'empty', message:'Добавьте текст отчёта.'}]);
     if (kind === 'psychology') return {ok:true};
     const lines = sourceLines(text);
     const forbidden = [];
@@ -113,13 +113,15 @@ var MedsiReportValidation = (function() {
     lines.forEach((line, index) => {
       const heading = forbiddenHeading(line);
       if (heading) forbidden.push({reason:'service_section', line:index + 1,
-        message:`Строка ${index + 1}: уберите раздел «${heading}» вместе с его текстом перед отправкой.`});
+        message:heading === 'Для врачей'
+          ?'Найден блок для врачей, пожалуйста, удалите его.'
+          :'Найден общий комментарий, пожалуйста, удалите его.'});
       const header = childHeader(line, index + 1);
       if (header) headers.push(header);
     });
     if (forbidden.length) return failure(forbidden);
     if (!headers.length) return failure([{reason:'no_child_headers',
-      message:'Не найдено детских блоков. Используйте формат «Имя: текст» или «Имя — текст».'}]);
+      message:'Не найдены блоки детей. Проверьте заголовки с именами.'}]);
 
     const groups = new Map();
     headers.forEach(header => {
@@ -136,12 +138,11 @@ var MedsiReportValidation = (function() {
         const reason = bare.length === items.length && !differentForms ? 'duplicate_name' : 'missing_initial';
         let message;
         if (differentForms) {
-          message = `Встречаются разные формы имени: ${labels}. Добавьте различающие инициалы или фамилии, чтобы избежать неоднозначного распределения.`;
+          message = `Встречаются похожие имена: ${labels}. Уточните инициалы или фамилии.`;
         } else if (reason === 'duplicate_name') {
-          const lineNumbers = items.map(item => item.line).join(' и ');
-          message = `В отчёте найдено два блока с именем «${items[0].name}» (строки ${lineNumbers}). Имя повторяется. Проверьте, не попал ли в отчёт общий комментарий для врачей. Уберите повторяющийся блок перед отправкой. Если это разные дети, уточните инициалы или фамилии.`;
+          message = `Имя «${items[0].name}» повторяется. Удалите лишний блок или добавьте инициалы.`;
         } else {
-          message = `В отчёте есть ${labels}. Уточните инициал или фамилию у «${bare[0].name}», указанного без инициала.`;
+          message = `Имя «${bare[0].name}» указано без инициала. Добавьте инициал или фамилию.`;
         }
         issues.push({reason, lines:items.map(item => item.line), message});
         return;
@@ -150,7 +151,7 @@ var MedsiReportValidation = (function() {
         for (let j = i + 1; j < items.length; j++) {
           if (!items[i].suffix.startsWith(items[j].suffix) && !items[j].suffix.startsWith(items[i].suffix)) continue;
           issues.push({reason:'duplicate_header', lines:[items[i].line, items[j].line],
-            message:`В отчёте найдены два блока «${items[i].label}» и «${items[j].label}» (строки ${items[i].line} и ${items[j].line}). Проверьте, не попал ли общий комментарий для врачей. Уберите повтор либо уточните фамилии, если это разные дети.`});
+            message:`Найдены похожие блоки: «${items[i].label}» и «${items[j].label}». Уберите повтор или уточните фамилии.`});
           return;
         }
       }

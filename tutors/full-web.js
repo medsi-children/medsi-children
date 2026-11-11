@@ -186,7 +186,7 @@
   async function sendReport(){
     const type=$('btnSend').dataset.type,text=$('text').value,btn=$('btnSend');
     if(btn.disabled)return;
-    $('reportError').classList.add('hidden');$('reportError').classList.remove('report-validation-warning');if(!text.trim()){showReportError('Пустой текст отчёта.');return}
+    $('reportError').classList.add('hidden');$('reportError').classList.remove('report-validation-warning');if(!text.trim()){showReportError('Добавьте текст отчёта.');return}
     // An uncertain network result must reuse the same ID on another attempt.
     if(!reportAttempt||reportAttempt.type!==type||reportAttempt.text!==text)reportAttempt={type,text,id:reportSubmissionId()};
     btn.disabled=true;btn.textContent='Отправляем…';
@@ -201,7 +201,7 @@
     $('doneText').textContent='Готово.';
     setScreen('screenDone','Готово','Отчёт сохранён. Можно закрыть приложение.');
   }
-  function showReportError(text,isFormatError=false){const el=$('reportError');el.textContent=(isFormatError?'⚠️ ':'')+text;el.classList.toggle('report-validation-warning',!!isFormatError);el.classList.remove('hidden')}
+  function showReportError(text,isFormatError=false){const el=$('reportError');el.textContent=text;el.classList.toggle('report-validation-warning',!!isFormatError);el.classList.remove('hidden')}
 
   async function prewarmParents(){
     try{await refreshPhones()}catch(_){}

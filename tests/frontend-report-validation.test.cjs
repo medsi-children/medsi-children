@@ -20,6 +20,38 @@ test('service sections are rejected by their headings, independent of room label
   }
 });
 
+test('educator warnings are short, clear and never display source line numbers', () => {
+  const cases = [
+    ['Для врачей:\nЛена — Основной текст.',
+      'Найден блок для врачей, пожалуйста, удалите его.', 'service_section'],
+    ['Общий комментарий:\nЛена — Основной текст.',
+      'Найден общий комментарий, пожалуйста, удалите его.', 'service_section'],
+    ['Лена — Первый текст.\nЛена: Второй текст.',
+      'Имя «Лена» повторяется. Удалите лишний блок или добавьте инициалы.', 'duplicate_name'],
+    ['Лена Т.: Первый текст.\nЛена — Второй текст.',
+      'Имя «Лена» указано без инициала. Добавьте инициал или фамилию.', 'missing_initial'],
+    ['Саша: Первый текст.\nАлександр — Второй текст.',
+      'Встречаются похожие имена: «Саша», «Александр». Уточните инициалы или фамилии.', 'missing_initial'],
+    ['Лена Т.: Первый текст.\nЛена Т. — Второй текст.',
+      'Найдены похожие блоки: «Лена Т.» и «Лена Т.». Уберите повтор или уточните фамилии.',
+      'duplicate_header']
+  ];
+  for(const [source,expected,reason] of cases){
+    const result=validate('morning',source);
+    assert.equal(result.ok,false,source);
+    assert.equal(result.issues[0].reason,reason,source);
+    assert.equal(result.message,expected,source);
+    assert.doesNotMatch(result.message,/строк[а-я]*\s*\d/i);
+  }
+  assert.equal(validate('morning',' ').message,'Добавьте текст отчёта.');
+  assert.equal(validate('morning','09.10 — Утро\nИгры и общение').message,
+    'Не найдены блоки детей. Проверьте заголовки с именами.');
+  const repeated=validate('evening','Для врачей:\nДля врачей:\nЛена — Основной текст.');
+  assert.deepEqual(repeated.issues.map(x=>x.line),[1,2],
+    'source locations remain available internally');
+  assert.equal(repeated.message,'Найден блок для врачей, пожалуйста, удалите его.');
+});
+
 test('doctor and comment phrases inside a child body are ordinary prose', () => {
   assert.equal(validate('morning',
     'Лена — Передала заметку для врачей. Это общий комментарий о занятии.').ok, true);
@@ -43,9 +75,9 @@ test('a pinned general note and the same child block are caught before submissio
   assert.equal(result.ok, false);
   assert.equal(result.issues[0].reason, 'duplicate_name');
   assert.deepEqual(result.issues[0].lines, [4, 9]);
-  assert.match(result.message, /два блока с именем «Эрнест»/);
-  assert.match(result.message, /строки 4 и 9/);
-  assert.match(result.message, /общий комментарий для врачей/);
+  assert.match(result.message, /Имя «Эрнест» повторяется/);
+  assert.doesNotMatch(result.message, /строк[аи]?\s*\d/i);
+  assert.match(result.message, /Удалите лишний блок или добавьте инициалы/);
 });
 
 test('decorative prefixes are accepted for distinct headers, not ordinary prose', () => {
@@ -55,7 +87,7 @@ test('decorative prefixes are accepted for distinct headers, not ordinary prose'
     '📌 Лена А.: Первый текст.\n\nЛена А. — Снова тот же ребёнок.');
   assert.equal(response.ok, false);
   assert.equal(response.issues[0].reason, 'duplicate_header');
-  assert.match(response.message, /общий комментарий для врачей/);
+  assert.match(response.message, /Уберите повтор или уточните фамилии/);
 });
 
 test('a single bare child name is allowed; bare duplicates are rejected', () => {
@@ -86,7 +118,7 @@ test('popular alternative forms require distinct initials and never rename the s
     const text = `${first}: Первый текст.\n${second} — Второй текст.`;
     const result = validate('evening', text);
     assert.equal(result.ok, false);
-    assert.match(result.message, /разные формы имени/);
+    assert.match(result.message, /похожие имена/);
     assert.equal(validate('evening', `${first} Т.: Первый текст.\n${second} У.: Второй текст.`).ok, true);
   }
 });
@@ -167,7 +199,7 @@ test('report form keeps invalid text and shows success only after queue receipt'
   const invalid = 'Для врачей:\nЛена — Синтетическая заметка.';
   element('text').value = invalid;
   await element('btnSend').handlers.click();
-  assert.match(element('reportError').textContent, /уберите раздел/i);
+  assert.equal(element('reportError').textContent, 'Найден блок для врачей, пожалуйста, удалите его.');
   assert.equal(element('text').value, invalid);
   assert.equal(context.document.body.dataset.screen, 'report-morning');
   assert.equal(queued.length, 0);
@@ -179,7 +211,7 @@ test('report form keeps invalid text and shows success only after queue receipt'
   await element('btnSend').handlers.click();
   assert.equal(queued.length, 0);
   assert.equal(element('text').value, duplicated);
-  assert.match(element('reportError').textContent, /два блока с именем «Лена»/);
+  assert.match(element('reportError').textContent, /Имя «Лена» повторяется/);
   assert.equal(element('reportError').classList.contains('report-validation-warning'), true);
 
   const valid = 'Лена — Основной текст.';

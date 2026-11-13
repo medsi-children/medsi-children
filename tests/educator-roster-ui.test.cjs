@@ -149,7 +149,7 @@ test('unlinked parent can be deleted without manual child assignment',async()=>{
       ()=>true,()=>{}, {confirm:message=>{confirms.push(message);return true}},()=>{},{createElement:tag=>({...node(tag),focus(){}})}
     );
   const unlinked={phone10:'9000000091',phone:'89000000091',parentName:'Тестовый родитель',
-    childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,assignable:[{childId:'child_synthetic',admissionId:'admission_synthetic',label:'Новый ребёнок'}]};
+    childName:'Новый ребёнок',relationship:'Мама',linked:false,registered:true,assignable:[{childId:'child_synthetic',label:'Новый ребёнок'}]};
   render({children:[],unlinked:[unlinked]});
   assert.equal(pane.children.length,1);
   const card=pane.children[0];
@@ -227,7 +227,7 @@ test('linked children first, muted unlinked and review profiles last; multi-pare
   );
   render({
     children:[{
-      childId:'child_arina',admissionId:'child_arina',
+      childId:'child_arina',
       firstName:'Арина',surname:'Халитова',morning:true,evening:false,
       parents:[
         {phone10:'9000000001',phone:'89000000001',parentName:'Мама',relationship:'Мама'},

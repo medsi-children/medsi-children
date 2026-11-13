@@ -5,7 +5,7 @@ const ID=/^[A-Za-z0-9_-]{8,128}$/;
 export function createCurrentEducatorReportEditsStore(sql){
   if(!sql?.begin)throw Error('PostgreSQL required.');
   async function update(input={}){
-    const phone10=String(input.phone10||''),childId=String(input.childId||input.admissionId||'');
+    const phone10=String(input.phone10||''),childId=String(input.childId||'');
     const kind=String(input.kind||''),rawText=input.text;
     if(!PHONE.test(phone10)||!ID.test(childId)||
       !['morning','evening'].includes(kind)||typeof rawText!=='string'||rawText.length>240000)

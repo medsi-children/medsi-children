@@ -28,6 +28,33 @@ test('no current-day publication cannot establish a new child identity from old 
   assert.equal(result.status,'pending');
 });
 
+test('late registration can use an explicit, unique surname prefix from the latest report within seven days',()=>{
+  const source={...publication('Анфиса Ив.: наблюдение','2026-11-11'),publication_id:'pub_recent'};
+  const result=matchCurrentSource({childName:'Анфиса Иванова',profiles:[],children:[],
+    publications:[source],today});
+  assert.equal(result.status,'new');
+  assert.equal(result.publicationId,'pub_recent');
+  assert.equal(result.blockIndex,0);
+});
+
+test('late registration does not use a bare historical name or a report older than seven days',()=>{
+  const bare=matchCurrentSource({childName:'Анфиса Иванова',profiles:[],children:[],
+    publications:[publication('Анфиса: наблюдение','2026-11-11')],today});
+  assert.equal(bare.status,'pending');
+  assert.equal(bare.reason,'recent-block-needs-surname-evidence');
+  const stale=matchCurrentSource({childName:'Анфиса Иванова',profiles:[],children:[],
+    publications:[publication('Анфиса Ив.: наблюдение','2026-11-01')],today});
+  assert.equal(stale.status,'pending');
+});
+
+test('a reviewed or already-owned historical source block cannot auto-create a child',()=>{
+  const reviewed={...publication('Анфиса Ив.: наблюдение','2026-11-11'),publication_id:'pub_reviewed',blockOwners:[{blocked:true}]};
+  const result=matchCurrentSource({childName:'Анфиса Иванова',profiles:[],children:[],
+    publications:[reviewed],today});
+  assert.equal(result.status,'pending');
+  assert.equal(result.reason,'block-already-reviewed');
+});
+
 test('unique pending block becomes deliverable after a verified parent link',()=>{
   const plan=planCurrentReport({
     kind:'evening',rawText:'Анфиса: спокойное настроение',

@@ -23,7 +23,7 @@ export function assembleCurrentEducatorRoster({children=[],profiles=[],current=[
     if(!childId){if(parent.registered)unlinked.push({...parent,linked:false});continue}
     const child=childById.get(childId);
     if(!child){review.push({...parent,linked:false,reason:'missing-child'});continue}
-    if(!linked.has(childId))linked.set(childId,{childId,admissionId:childId,
+    if(!linked.has(childId))linked.set(childId,{childId,
       firstName:String(child.registered_first_name||''),surname:String(child.surname||''),
       parents:[],morning:false,evening:false});
     linked.get(childId).parents.push(parent);
@@ -69,10 +69,6 @@ export function createCurrentEducatorRosterStore(sql,{now=()=>Date.now()}={}){
     const kind=String(payload.kind||'');
     if(kind==='child'){
       const childId=validId(payload.childId);
-      // Legacy frontend sends "admissionId"; it is now just an alias for
-      // the same child ID until the frontend contract is updated.
-      if(payload.admissionId&&payload.admissionId!==childId)
-        throw new Error('Roster changed; reload.');
       const firstName=valid(payload.firstName,70),surname=valid(payload.surname,100);
       return sql.begin({isolation:'serializableReadWrite',idempotent:true},async tx=>{
         const [[child]]=await tx`SELECT registered_first_name,surname FROM children
@@ -84,7 +80,7 @@ export function createCurrentEducatorRosterStore(sql,{now=()=>Date.now()}={}){
           WHERE child_id=${childId}`;
         await tx`UPDATE parent_profiles SET child_name=${firstName+' '+surname},
           updated_at=${BigInt(now())} WHERE child_id=${childId}`;
-        return {ok:true,childId,admissionId:childId};
+        return {ok:true,childId};
       });
     }
     if(kind==='parent'){

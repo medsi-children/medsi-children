@@ -11,7 +11,7 @@ function fakeServices(){
     sessions:{verifyWorker:async()=>null,verifyTutor:()=>false,
       loginTutor:()=>({ok:false}),renewTutor:()=>({ok:false})},
     chatStore:{},chatOperations:{},reportReader:{},reports:{},
-    dashboard:{},nameVariants:{},passkeys:{},
+    dashboard:{},reportHistoryReview:{list:async()=>({ok:true,items:[]}),assign:async()=>({ok:true})},nameVariants:{},passkeys:{},
     parentRegistration:{register:async()=>({ok:true,status:'COMPLETED',parentSession:'dummy'})},
     parentAccess:{request:async()=>({ok:true,status:'PENDING'})},
     parentDeletion:{enqueue:async()=>({ok:true})},

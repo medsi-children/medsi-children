@@ -85,7 +85,15 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   const existing=matchRegisteredChild({childName,profiles,children,nameVariants});
   // When the parent supplied only a first name, a newly appeared namesake
   // makes even an old unique registered child ambiguous.
-  const available=currentStaffPublications(publications,today);
+  const availableToday=currentStaffPublications(publications,today);
+  const reportRows=(publications||[]).filter(r=>ACTIVE_KINDS.has(String(r.kind))&&/^\d{4}-\d\d-\d\d$/.test(String(r.report_date||'')));
+  const latestDate=reportRows.reduce((a,r)=>String(r.report_date)>a?String(r.report_date):a,'');
+  const daysOld=today&&latestDate?Math.floor((Date.parse(today+'T00:00:00Z')-Date.parse(latestDate+'T00:00:00Z'))/86400000):Infinity;
+  const recentFallback=!availableToday.length&&daysOld>=0&&daysOld<=7;
+  const dateRows=reportRows.filter(r=>r.report_date===(availableToday.length?today:recentFallback?latestDate:''));
+  const newestByKind=new Map();
+  for(const row of dateRows){const prior=newestByKind.get(row.kind);if(!prior||Number(row.submitted_at||0)>Number(prior.submitted_at||0))newestByKind.set(row.kind,row);}
+  const available=[...newestByKind.values()];
   // The newest submitted report is the authoritative roster signal.
   // A newer evening report with two explicit Sasha prefixes supersedes a
   // morning bare "Sasha" without resurrecting either old identity.
@@ -101,9 +109,17 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   const selected=source;
   if(!selected.length)return {status:'pending',reason:'no-current-publication'};
   const blocks=selected.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants)
-    .map(b=>({...b,publicationId:r.publication_id,reportDate:r.report_date,kind:r.kind})));
+    .map((b,index)=>({...b,index,publicationId:r.publication_id,reportDate:r.report_date,kind:r.kind,
+      owner:r.blockOwners?.[index]})));
   const candidates=blocks.filter(b=>b.canonical===canonical);
   if(!candidates.length)return {status:'pending',reason:'no-current-block'};
+  if(candidates.some(b=>b.owner?.blocked||b.owner?.childId))
+    return {status:'pending',reason:'block-already-reviewed'};
+  // With no publication today, only an explicit, matching surname prefix in
+  // the last week's latest roster can establish a new child identity. A bare
+  // first name is insufficient evidence for a late registration.
+  if(recentFallback&&candidates.some(b=>!b.prefix))
+    return {status:'pending',reason:'recent-block-needs-surname-evidence'};
   // Different daily publications may describe the same child; each kind must
   // remain internally unique, and any explicit surname prefixes must agree.
   for(const kind of ACTIVE_KINDS){
@@ -137,7 +153,8 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   const matchingPrefixes=[...explicit].filter(p=>personSurname.startsWith(p));
   if(explicit.size&&matchingPrefixes.length!==1)return {status:'ambiguous',reason:'initial-conflict'};
   return {status:'new',canonical,firstName:firstUpper(canonical),
-    surname:person.surname,sourceDate:selected[0].report_date};
+    surname:person.surname,sourceDate:selected[0].report_date,
+    publicationId:possible[0].publicationId,blockIndex:possible[0].index};
 }
 // For each published block choose the shortest distinctive family prefix.
 // A family prefix is a DISPLAY label only. Stored authored source stays intact.

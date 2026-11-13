@@ -70,7 +70,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
                 (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
                 VALUES (${recipient.phone10},${source.kind},${source.report_date},
                   ${recipient.childId},${source.publication_id},${BigInt(source.revision||1)},
-                  ${recipient.text},${at})`;
+                  ${String(current.text||recipient.text)},${at})`;
               backfilled++;
             }
             continue;

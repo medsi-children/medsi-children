@@ -21,6 +21,7 @@ async function fixture() {
     chatOperations:{markRead:async(role,phone)=>{calls.push({role,phone});return {ok:true}}},
     reportReader:{markRead:async()=>{calls.push({op:'report-read'});return {ok:true}}},
     reports:{},dashboard:{},roster:{},reportEdits:{},nameVariants:{},passkeys:{},
+    reportHistoryReview:{list:async()=>({ok:true,items:[]}),assign:async payload=>{calls.push({op:'history-assign',payload});return {ok:true,assigned:true}}},
     parentRegistration:{},parentAccess:{},parentDeletion:{},push:{}
   };
   const app=express();
@@ -82,5 +83,25 @@ test('preview and foreign parent cannot send messages or mark reports read',asyn
     assert.equal(report.status,403);
     assert.equal(report.body.ok,false);
     assert.deepEqual(f.calls,[]);
+  }finally{await f.close();}
+});
+
+test('only an educator can list or assign historical report blocks',async()=>{
+  const f=await fixture();
+  async function request(token,method,path,body){
+    const response=await fetch(f.base+'/lab/'+path,{method,headers:{
+      ...(token?{'X-Medsi-Chat-Session':token}:{}),...(body?{'content-type':'application/json'}:{})
+    },...(body?{body:JSON.stringify(body)}:{})});
+    return {status:response.status,body:await response.json()};
+  }
+  try{
+    for(const token of ['', 'parent-a','preview']){
+      assert.equal((await request(token,'GET','admin/reports/history-review')).status,401);
+      assert.equal((await request(token,'POST','admin/reports/history-review/assign',{targetKey:'child:synthetic'})).status,401);
+    }
+    assert.equal((await request('educator','GET','admin/reports/history-review')).status,200);
+    const assigned=await request('educator','POST','admin/reports/history-review/assign',{targetKey:'child:synthetic'});
+    assert.equal(assigned.status,200);assert.equal(assigned.body.assigned,true);
+    assert.equal(f.calls.filter(x=>x.op==='history-assign').length,1);
   }finally{await f.close();}
 });

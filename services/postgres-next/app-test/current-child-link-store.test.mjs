@@ -5,7 +5,7 @@ import {createCurrentChildLinkStore} from '../app/current-child-link-store.mjs';
 const now=Date.parse('2026-11-09T12:00:00Z');
 function fakeDB({profiles=[],children=[],sources=[]}={}){
   const rows={profiles:structuredClone(profiles),children:structuredClone(children),
-    publications:structuredClone(sources),attempts:[],auth:new Set(profiles.map(p=>p.phone10))};
+    publications:structuredClone(sources),owners:[],attempts:[],auth:new Set(profiles.map(p=>p.phone10))};
   const queries=[];
   const tx=async(strings,...values)=>{
     const q=strings.join('?').replace(/\s+/g,' ').trim();
@@ -21,7 +21,8 @@ function fakeDB({profiles=[],children=[],sources=[]}={}){
       if(q.includes('FROM children'))return [rows.children];
       if(q.includes('FROM name_variants'))return [[
         {preferred_name:'Степан',variants_json:'["Стёпа"]'}]];
-      if(q.includes('FROM report_publication_head'))return [rows.publications];
+      if(q.includes('FROM raw_reports'))return [rows.publications];
+      if(q.includes('FROM report_ownership'))return [rows.owners];
       return [[]];
     }
     if(q.startsWith('UPDATE parent_profiles')){
@@ -30,14 +31,14 @@ function fakeDB({profiles=[],children=[],sources=[]}={}){
       p.child_id=values[0];return [[{phone10:p.phone10}]];
     }
     if(q.startsWith('UPDATE parent_registration_attempts'))return [[]];
+    if(q.startsWith('INSERT INTO report_ownership')){rows.owners.push({owner_key:values[0],record_json:values[1]});return [[{owner_key:values[0]}]];}
     throw new Error('Unexpected SQL '+q);
   };
   tx.upsert=async(strings,...values)=>{
     const q=strings.join('?').replace(/\s+/g,' ').trim();
     queries.push(q);
-    if(!q.startsWith('INSERT INTO children'))throw new Error('Unexpected upsert '+q);
-    rows.children.push({child_id:values[0],registered_first_name:values[1],
-      surname:values[2]});
+    if(q.startsWith('INSERT INTO children'))rows.children.push({child_id:values[0],registered_first_name:values[1],surname:values[2]});
+    else throw new Error('Unexpected upsert '+q);
     return [[]];
   };
   return {sql:{begin:async(_opts,fn)=>fn(tx)},rows,queries};
@@ -55,6 +56,14 @@ test('late parent creates only one registered child row, never an admission',asy
   assert.equal(db.rows.profiles[0].child_id,db.rows.children[0].child_id);
   assert.equal(db.rows.children[0].surname,'Сидоров');
   assert.ok(db.queries.every(q=>!q.includes('admission')));
+});
+test('late registration links from a two-day-old roster only with a matching surname prefix and saves its source owner',async()=>{
+  const db=fakeDB({profiles:[parent('9000000001','Степан Сидоров')],
+    sources:[pub('Степан С. — Синтетическое наблюдение.','morning','2026-11-07')]});
+  const result=await createCurrentChildLinkStore(db.sql,{now:()=>now}).reconcile();
+  assert.equal(result.linked,1);assert.equal(db.rows.children.length,1);
+  assert.equal(db.rows.owners.length,1);
+  assert.match(db.rows.owners[0].record_json,new RegExp(db.rows.children[0].child_id));
 });
 test('both parents receive same active child identity',async()=>{
   const db=fakeDB({children:[{child_id:'kid_12345678',registered_first_name:'Степан',surname:'Сидоров'}],

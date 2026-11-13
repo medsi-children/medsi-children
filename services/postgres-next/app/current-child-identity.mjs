@@ -113,8 +113,6 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
       owner:r.blockOwners?.[index]})));
   const candidates=blocks.filter(b=>b.canonical===canonical);
   if(!candidates.length)return {status:'pending',reason:'no-current-block'};
-  if(candidates.some(b=>b.owner?.blocked||b.owner?.childId))
-    return {status:'pending',reason:'block-already-reviewed'};
   // With no publication today, only an explicit, matching surname prefix in
   // the last week's latest roster can establish a new child identity. A bare
   // first name is insufficient evidence for a late registration.
@@ -134,6 +132,8 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
     personSurname&&personSurname.startsWith(b.prefix));
   if(!possible.length)return {status:!personSurname&&candidates.some(b=>b.prefix)?'ambiguous':'pending',
     reason:!personSurname?'missing-surname':'surname-conflict'};
+  if(possible.some(b=>b.owner?.blocked||b.owner?.childId))
+    return {status:'pending',reason:'block-already-reviewed'};
   if(possible.length!==candidates.length&&possible.some(b=>!b.prefix))
     return {status:'ambiguous',reason:'bare-with-namesakes'};
   // A bare matching heading is only safe when it is the single child of that

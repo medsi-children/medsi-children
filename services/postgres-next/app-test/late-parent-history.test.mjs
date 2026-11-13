@@ -55,6 +55,14 @@ test('a reviewed or already-owned historical source block cannot auto-create a c
   assert.equal(result.reason,'block-already-reviewed');
 });
 
+test('an already-owned namesake block does not block the matching pending surname block',()=>{
+  const owned={...publication('Анфиса Си.: Сидорова.\nАнфиса Ме.: Мерцалова.'),publication_id:'pub_two_namesakes',
+    blockOwners:[{childId:child.child_id,pending:false,blocked:false},{childId:'',pending:true,blocked:false}]};
+  const result=matchCurrentSource({childName:'Анфиса Мерцалова',
+    profiles:[parent],children:[child],publications:[owned],today});
+  assert.equal(result.status,'new');assert.equal(result.blockIndex,1);
+});
+
 test('unique pending block becomes deliverable after a verified parent link',()=>{
   const plan=planCurrentReport({
     kind:'evening',rawText:'Анфиса: спокойное настроение',

@@ -57,9 +57,24 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           // Preserve authored per-recipient edits and read markers for an
           // already delivered source, even if display punctuation was fixed
           // after this publication. Corrections publish a NEW source ID.
-          if(current&&current.child_id===recipient.childId&&
-            current.publication_id===source.publication_id)continue;
           const at=BigInt(source.submitted_at||now());
+          if(current&&current.child_id===recipient.childId&&
+            current.publication_id===source.publication_id){
+            // A previously delivered current row does not prove that its
+            // corresponding history row survived an interrupted migration.
+            const [[savedHistory]]=await tx`SELECT publication_id FROM parent_report_history
+              WHERE phone10=${recipient.phone10} AND kind=${source.kind}
+                AND report_date=${source.report_date}`;
+            if(!savedHistory){
+              await tx.upsert`INSERT INTO parent_report_history
+                (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
+                VALUES (${recipient.phone10},${source.kind},${source.report_date},
+                  ${recipient.childId},${source.publication_id},${BigInt(source.revision||1)},
+                  ${String(current.text||recipient.text)},${at})`;
+              backfilled++;
+            }
+            continue;
+          }
           await tx.upsert`INSERT INTO parent_current_reports
             (phone10,kind,child_id,publication_id,revision,text,version,read_version,updated_at)
             VALUES (${recipient.phone10},${source.kind},${recipient.childId},

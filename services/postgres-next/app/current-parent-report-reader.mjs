@@ -40,6 +40,9 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
     // Failed matching/backfill never hides shared therapy.
     try{await link.reconcile({phone10:p})}catch(_){}
     try{await backfill.recover({phone10:p})}catch(_){}
+    // Opening the default report screen also repairs history for parents
+    // who registered after staff published earlier days.
+    try{await backfill.recoverHistory({phone10:p})}catch(_){}
     return read(async tx=>{
       const [[profile]]=await tx`SELECT child_id FROM parent_profiles WHERE phone10=${p}`;
       if(!profile)return {ok:false,code:'CHAT_CLOSED',message:'Чат недоступен'};

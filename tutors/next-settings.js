@@ -160,12 +160,14 @@
         <button type="button" id="medsiTabChildren" role="tab" aria-selected="false" aria-controls="medsiChildrenPane"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><path d="M2.5 20v-2a6.5 6.5 0 0 1 13 0v2"/><circle cx="17" cy="9" r="2.5"/><path d="M18 14a5 5 0 0 1 3.5 4.8V20"/></svg><span>Отчёты по детям</span></button>
         <button type="button" id="medsiTabNames" role="tab" aria-selected="false" aria-controls="medsiNamesPane"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11V5a2 2 0 0 1 2-2h6l10 10-8 8L3 11Z"/><circle cx="8" cy="8" r="1"/></svg><span>Варианты имён</span></button>
         <button type="button" id="medsiTabRoster" role="tab" aria-selected="false" aria-controls="medsiRosterPane"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="9" cy="10" r="2"/><path d="M5.5 17c0-2 1.5-3.2 3.5-3.2s3.5 1.2 3.5 3.2M15 9h3M15 13h3"/></svg><span>Дети и родители</span></button>
+        <button type="button" id="medsiTabHistory" role="tab" aria-selected="false" aria-controls="medsiHistoryPane"><span>История</span></button>
       </div>
       <p id="medsiReportsFeedback" class="medsi-reports-feedback" role="status"></p>
       <div id="medsiRawPane" role="tabpanel" aria-labelledby="medsiTabRaw" class="medsi-reports-content"></div>
       <div id="medsiChildrenPane" role="tabpanel" aria-labelledby="medsiTabChildren" class="medsi-reports-content hidden"></div>
       <div id="medsiNamesPane" role="tabpanel" aria-labelledby="medsiTabNames" class="medsi-reports-content hidden"></div>
         <div id="medsiRosterPane" role="tabpanel" aria-labelledby="medsiTabRoster" class="medsi-reports-content hidden"></div>
+      <div id="medsiHistoryPane" role="tabpanel" aria-labelledby="medsiTabHistory" class="medsi-reports-content hidden"></div>
     </div>`;
   document.body.append(library);
 
@@ -289,16 +291,45 @@
   async function showTab(kind){
     if(activeTab==='names'&&kind!=='names'&&!await leaveNames())return;
     activeTab=kind;
-    for(const [name,id,pane] of [['raw','medsiTabRaw','medsiRawPane'],['children','medsiTabChildren','medsiChildrenPane'],['names','medsiTabNames','medsiNamesPane'],['roster','medsiTabRoster','medsiRosterPane']]){
+    for(const [name,id,pane] of [['raw','medsiTabRaw','medsiRawPane'],['children','medsiTabChildren','medsiChildrenPane'],['names','medsiTabNames','medsiNamesPane'],['roster','medsiTabRoster','medsiRosterPane'],['history','medsiTabHistory','medsiHistoryPane']]){
       byId(id).setAttribute('aria-selected',String(kind===name));byId(pane).classList.toggle('hidden',kind!==name);
     }
     if(kind==='names')await refreshNames();
     if(kind==='roster')await refreshRoster();
+    if(kind==='history')await refreshHistoryReview();
   }
   byId('medsiTabRaw').addEventListener('click',()=>showTab('raw'));
   byId('medsiTabChildren').addEventListener('click',()=>showTab('children'));
   byId('medsiTabNames').addEventListener('click',()=>showTab('names'));
   byId('medsiTabRoster').addEventListener('click',()=>showTab('roster'));
+  byId('medsiTabHistory').addEventListener('click',()=>showTab('history'));
+  async function refreshHistoryReview(){
+    const pane=byId('medsiHistoryPane');pane.replaceChildren(textNode('p','medsi-reports-empty','Загружаем нераспределённые блоки…'));
+    try{
+      const data=await request('/lab/admin/reports/history-review');pane.replaceChildren();
+      const items=Array.isArray(data.items)?data.items:[];
+      if(!items.length){pane.append(textNode('p','medsi-reports-empty','Нет исторических блоков, ожидающих подтверждения.'));return;}
+      for(const item of items){
+        const card=textNode('article','medsi-raw-report medsi-history-review-item','');
+        card.append(textNode('h3','',`${item.heading} · ${formatDisplayDate(item.reportDate)} · ${reportTypeLabel(item.kind)}`));
+        card.append(textNode('p','medsi-report-body',item.excerpt));
+        const label=textNode('label','medsi-history-review-label','Подтвердить принадлежность');
+        const select=document.createElement('select');select.className='medsi-history-review-select';
+        select.append(new Option('Выберите ребёнка или родителя',''));
+        for(const c of item.candidates)select.append(new Option(c.label,c.key));
+        label.append(select);card.append(label);
+        const assign=textNode('button','medsi-inline-save','Подтвердить и открыть историю');assign.type='button';
+        assign.disabled=true;select.onchange=()=>{assign.disabled=!select.value;};
+        assign.onclick=async()=>{
+          if(!select.value||!confirm('Подтвердить этот блок для выбранного ребёнка или родителя?'))return;
+          assign.disabled=true;
+          try{await request('/lab/admin/reports/history-review/assign','POST',{publicationId:item.publicationId,blockIndex:item.blockIndex,token:item.token,targetKey:select.value});byId('medsiReportsFeedback').textContent='История назначена выбранному профилю.';await refreshHistoryReview();}
+          catch(error){byId('medsiReportsFeedback').textContent=error.message||'Не удалось назначить историю. Обновите список.';assign.disabled=false;}
+        };
+        card.append(assign);pane.append(card);
+      }
+    }catch(error){pane.replaceChildren(textNode('p','medsi-reports-empty',error.message||'Не удалось загрузить блоки истории.'));}
+  }
   function renderRaw(data){
     const root=byId('medsiRawPane');root.replaceChildren();
     for(const kind of ['morning','evening','psychology']){
@@ -404,7 +435,7 @@
         heading.append(symbol,document.createTextNode(reportTypeLabel(kind)));
         section.append(heading);
         section.append(inlineReport(current,reportTypeLabel(kind),text=>request('/lab/admin/reports/edit','POST',{
-          phone10:view.phone10,admissionId:child.admissionId,kind,text,expectedText:current
+          phone10:view.phone10,childId:child.childId,kind,text,expectedText:current
         })));
         block.append(section);
       }
@@ -461,7 +492,7 @@
         {id:'firstName',label:'Имя ребёнка',value:child.firstName},
         {id:'surname',label:'Фамилия ребёнка',value:child.surname}
       ],values=>request('/lab/admin/roster/edit','POST',{
-        kind:'child',childId:child.childId,admissionId:child.admissionId,
+        kind:'child',childId:child.childId,
         ...values,expectedFirstName:child.firstName,expectedSurname:child.surname
       })));
       info.append(name);
@@ -473,7 +504,7 @@
           {id:'parentName',label:'Имя родителя',value:parent.parentName},
           {id:'relationship',label:'Кем приходится ребёнку',value:parent.relationship||'Родитель'}
         ],values=>request('/lab/admin/roster/edit','POST',{
-          kind:'parent',phone10:parent.phone10,childId:child.childId,admissionId:child.admissionId,
+          kind:'parent',phone10:parent.phone10,childId:child.childId,
           ...values,expectedParentName:parent.parentName,expectedRelationship:parent.relationship
         })));
         parentText.append(parentButton);

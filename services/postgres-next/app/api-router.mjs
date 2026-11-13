@@ -4,8 +4,8 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
-  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,reportHistoryReview,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
+  const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,reportHistoryReview,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
   router.use(express.json({limit:'1mb'}));
@@ -25,8 +25,8 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
         return;
       }
       // Expose only deliberately authored, non-clinical clarification errors.
-      const stale=/^Report (source changed|roster changed|clarification)/.test(safe);
-      const known=/^(Invalid |Unsupported |Bad |Forbidden|Unauthorized|Only own |Reply target|Chat is closed|Message not found|Subscription belongs|Report blocked|Parent roster changed|Report ownership changed|Report clarification|Invalid child selected)/.test(safe);
+      const stale=/^(Report (source changed|roster changed|source or roster changed|clarification)|Parent profile changed|Report ownership changed)/.test(safe);
+      const known=/^(Invalid |Unsupported |Bad |Forbidden|Unauthorized|Only own |Reply target|Chat is closed|Message not found|Subscription belongs|Report blocked|Parent roster changed|Report ownership changed|Report source or roster changed|Report clarification|Invalid child selected|A different report already exists)/.test(safe);
       if(!res.headersSent)return res.status(stale?409:known?400:503).json({
         ok:false,code:stale?'REPORT_RELOAD_REQUIRED':undefined,
         message:stale?'Отчёт или список детей изменился. Обновите страницу и повторите выбор.':
@@ -129,6 +129,16 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
   router.get('/admin/reports/dashboard',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return dashboard.readForEducator();
+  }));
+  router.get('/admin/reports/history-review',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    if(typeof reportHistoryReview?.list!=='function')throw new Error('History review unavailable.');
+    return reportHistoryReview.list();
+  }));
+  router.post('/admin/reports/history-review/assign',run(async(req,res)=>{
+    if(!await educator(req,res))return;
+    if(typeof reportHistoryReview?.assign!=='function')throw new Error('History review unavailable.');
+    return reportHistoryReview.assign(req.body||{});
   }));
   router.get('/admin/roster',run(async(req,res)=>{
     if(!await educator(req,res))return;

@@ -13,7 +13,7 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     const childId=String(p.child_id||''),child=childById.get(childId);
     if(!child)continue;
     if(!cards.has(childId))cards.set(childId,{
-      childId,admissionId:childId, // temporary old frontend wire alias
+      childId,
       childName:String(child.registered_first_name||''),
       surname:String(child.surname||''),parents:[],parentViews:[]
     });
@@ -28,7 +28,7 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     const therapy=headByKind.get('psychology')&&rawByPublication.get(headByKind.get('psychology'));
     if(therapy)reports.psychology=normalizeCurrentReportPunctuation(therapy.normalized_text||'');
     card.parentViews.push({phone:parent.phone,phone10:p.phone10,
-      admissionId:childId,parentName:parent.parentName,reports});
+      childId,parentName:parent.parentName,reports});
   }
   const raw={};
   for(const kind of KINDS){

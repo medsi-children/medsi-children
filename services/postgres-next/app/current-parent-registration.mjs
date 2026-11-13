@@ -22,6 +22,9 @@ export function createCurrentParentRegistrationService({sql,sessions,now=()=>Dat
   async function recover(phone10){
     try{await link.reconcile({phone10})}catch(_){}
     try{await backfill.recover({phone10})}catch(_){}
+    // Late registrations need their already-published, safely owned history
+    // immediately, even before the parent opens the history screen.
+    try{await backfill.recoverHistory({phone10})}catch(_){}
   }
   async function register(payload){
     const {phone10,attemptId,parentName,childName}=details(payload);

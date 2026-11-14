@@ -190,6 +190,10 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           const day=Date.parse(date+'T00:00:00Z'),horizon=14*86400000;
           const future=anchors.filter(at=>at>day&&at-day<=horizon);
           if(!future.length)return [];
+          // An unowned legacy source has no historical claim snapshot. For
+          // a single initial require two distinct already verified report
+          // dates, rather than trusting one later occurrence of the name.
+          if(!owner&&surnamePrefix.length===1&&future.length<2)return [];
           if(surnamePrefix.length===1&&
             !future.some(at=>at-day<=7*86400000)&&future.length<2)return [];
           const peers=blocks.filter(x=>x.canonical===canonical);

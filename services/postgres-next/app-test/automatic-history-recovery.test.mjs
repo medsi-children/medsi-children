@@ -9,7 +9,7 @@ const source=(day,text,id)=>({
   publication_id:id,kind:'evening',report_date:day,
   normalized_text:text,revision:1n,submitted_at:Date.parse(day+'T18:00:00Z')
 });
-function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitorOwner=false,unlinkedCompetitor=false}={}){
+function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitorOwner=false,unlinkedCompetitor=false,singleAnchor=false}={}){
   const parent={phone10:phone,child_id:childId,child_name:'Михаил Котов'};
   const profiles=[parent];
   if(unlinkedCompetitor)profiles.push({phone10:'9000000003',child_id:'',child_name:'Михаил Ковалёв'});
@@ -17,14 +17,21 @@ function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitor
   if(namesake)children.push({child_id:'child_other_k',registered_first_name:'Михаил',surname:'Казаков'});
   const raw=[
     source('2026-11-04','Миша К.: Запись за четвёртое ноября.','pub_legacy_04'),
-    ...(anchor?[source('2026-11-11','Миша К.: Подтверждённая запись.','pub_owned_11')]:[]),
+    ...(anchor?[
+      source('2026-11-11','Миша К.: Подтверждённая запись.','pub_owned_11'),
+      ...(!singleAnchor?[source('2026-11-12','Миша К.: Ещё одна подтверждённая запись.','pub_owned_12')]:[])
+    ]:[]),
     ...(competitorOwner?[source('2026-11-07','Миша К.: Чужой отчёт.','pub_other_07')]:[])
   ];
   const owners=[];
   if(!legacy)owners.push({owner_key:'CURRENT_BLOCK_pub_legacy_04_0',
     record_json:JSON.stringify(blocked?{blocked:true}:{childId:'',pending:true,blocked:false})});
-  if(anchor)owners.push({owner_key:'CURRENT_BLOCK_pub_owned_11_0',
-    record_json:JSON.stringify({childId,blocked:false,pending:false})});
+  if(anchor){
+    owners.push({owner_key:'CURRENT_BLOCK_pub_owned_11_0',
+      record_json:JSON.stringify({childId,blocked:false,pending:false})});
+    if(!singleAnchor)owners.push({owner_key:'CURRENT_BLOCK_pub_owned_12_0',
+      record_json:JSON.stringify({childId,blocked:false,pending:false})});
+  }
   if(competitorOwner)owners.push({owner_key:'CURRENT_BLOCK_pub_other_07_0',
     record_json:JSON.stringify({childId:'child_other_k',blocked:false,pending:false})});
   const history=[];
@@ -74,13 +81,19 @@ const oldEntry=db=>db.history.find(h=>h.report_date==='2026-11-04');
 test('legacy initialed report is recovered only with a verified later anchor',async()=>{
   const {db,service}=recover();
   const result=await service.recoverHistory({phone10:phone});
-  assert.equal(result.backfilled,2);
+  assert.equal(result.backfilled,3);
   assert.match(oldEntry(db).text,/Запись за четвёртое ноября/);
   assert.equal(oldEntry(db).child_id,childId);
   assert.equal(db.owners.find(x=>x.owner_key==='CURRENT_BLOCK_pub_legacy_04_0')?.record_json.includes(childId),true);
   const again=await service.recoverHistory({phone10:phone});
   assert.equal(again.backfilled,0);
-  assert.equal(db.history.length,2);
+  assert.equal(db.history.length,3);
+});
+
+test('a single later anchor cannot claim an unsnapshotted legacy initial',async()=>{
+  const {db,service}=recover({singleAnchor:true});
+  await service.recoverHistory({phone10:phone});
+  assert.equal(oldEntry(db),undefined);
 });
 
 test('existing pending owner with one surname initial is claimed conservatively',async()=>{

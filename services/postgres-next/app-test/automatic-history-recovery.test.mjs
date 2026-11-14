@@ -9,7 +9,7 @@ const source=(day,text,id)=>({
   publication_id:id,kind:'evening',report_date:day,
   normalized_text:text,revision:1n,submitted_at:Date.parse(day+'T18:00:00Z')
 });
-function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitorOwner=false,unlinkedCompetitor=false,singleAnchor=false,differentInitialNamesake=false,orphan=false,orphanWrongText=false,orphanWrongPublication=false,orphanOwned=false}={}){
+function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitorOwner=false,unlinkedCompetitor=false,singleAnchor=false,differentInitialNamesake=false,orphan=false,orphanWrongText=false,orphanWrongPublication=false,orphanOwned=false,orphanVariant=false}={}){
   const parent={phone10:phone,child_id:childId,child_name:'Михаил Котов'};
   const profiles=[parent];
   if(unlinkedCompetitor)profiles.push({phone10:'9000000003',child_id:'',child_name:'Михаил Ковалёв'});
@@ -39,7 +39,7 @@ function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitor
   const history=orphan?[{
     phone10:phone,kind:'evening',report_date:'2026-11-04',child_id:'',
     publication_id:orphanWrongPublication?'pub_unrelated':'pub_legacy_04',
-    text:orphanWrongText?'Михаил: Другой ребёнок.':'Михаил: Запись за четвёртое ноября.',
+    text:orphanWrongText?'Михаил: Другой ребёнок.':orphanVariant?'Миша К.: Запись за четвёртое ноября.':'Михаил: Запись за четвёртое ноября.',
     captured_at:Date.parse('2026-11-04T18:00:00Z')
   }]:[];
   const sql={begin:async(options,callback)=>{
@@ -113,6 +113,14 @@ test('orphaned pre-cutover history reattaches the verified child without changin
   assert.equal(oldEntry(db).captured_at,at);
   assert.equal(db.history.filter(x=>x.report_date==='2026-11-04').length,1);
   assert.equal((await service.recoverHistory({phone10:phone})).backfilled,0);
+});
+
+test('migration orphan with a confirmed nickname retains its original heading',async()=>{
+  const {db,service}=recover({orphan:true,orphanVariant:true});
+  const original=oldEntry(db).text;
+  await service.recoverHistory({phone10:phone});
+  assert.equal(oldEntry(db)?.child_id,childId);
+  assert.equal(oldEntry(db)?.text,original);
 });
 
 test('an explicit saved owner can reattach an orphan without any later anchor',async()=>{

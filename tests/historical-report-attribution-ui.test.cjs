@@ -11,6 +11,7 @@ test('historic attribution remains protected but has no prominent educator setti
   for(const tab of ['medsiTabRaw','medsiTabChildren','medsiTabNames','medsiTabRoster'])
     assert.match(ui,new RegExp(tab));
   // Keep the guarded backend available for exceptional administrator recovery.
-  assert.match(api,/router\\.get\\('\\/admin\\/reports\\/history-review'/);
-  assert.match(api,/if\\(!await educator\\(req,res\\)\\)return;[\\s\\S]*?reportHistoryReview\\.assign/);
+  assert.ok(api.includes("router.get('/admin/reports/history-review'"));
+  assert.ok(api.includes('reportHistoryReview.assign('));
+  assert.ok(api.includes('if(!await educator(req,res))return;'));
 });

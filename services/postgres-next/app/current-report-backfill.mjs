@@ -237,7 +237,17 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // In an unowned legacy source, parent history must also reproduce
         // the selected block. Otherwise a stale orphan may belong to another
         // child despite sharing this publication and report date.
-        if(priorHistory&&!owned&&String(priorHistory.text||'').trim()!==text.trim())continue;
+        if(priorHistory&&!owned){
+          const savedText=String(priorHistory.text||'').trim();
+          const originalBody=block.body.join('\\n').trim();
+          // Legacy personalised reports can use a nickname instead of the
+          // registered first name. Compare the entire source body, never
+          // just the heading or a substring of another child's paragraph.
+          const savedBody=/^[^:：\\n]{1,100}[:：][ \\t]*([\\s\\S]*)$/u.exec(savedText)?.[1]?.trim();
+          if(savedText!==text.trim()||!savedBody){
+            if(!savedBody||savedBody!==originalBody)continue;
+          }
+        }
         const at=BigInt(source.submitted_at||now());
         if(!owned){
           // Claim the exact historic source block at the same time as the

@@ -239,11 +239,11 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // child despite sharing this publication and report date.
         if(priorHistory&&!owned){
           const savedText=String(priorHistory.text||'').trim();
-          const originalBody=block.body.join('\\n').trim();
+          const originalBody=block.body.join('\n').trim();
           // Legacy personalised reports can use a nickname instead of the
           // registered first name. Compare the entire source body, never
           // just the heading or a substring of another child's paragraph.
-          const savedBody=/^[^:：\\n]{1,100}[:：][ \\t]*([\\s\\S]*)$/u.exec(savedText)?.[1]?.trim();
+          const savedBody=/^[^:：\n]{1,100}[:：][ \t]*([\s\S]*)$/u.exec(savedText)?.[1]?.trim();
           if(savedText!==text.trim()||!savedBody){
             if(!savedBody||savedBody!==originalBody)continue;
           }

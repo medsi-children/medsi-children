@@ -121,7 +121,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           ORDER BY submitted_at DESC LIMIT 240`,
         tx`SELECT owner_key,record_json FROM report_ownership
           WHERE owner_key LIKE ${'CURRENT\\_BLOCK\\_%'}`,
-        tx`SELECT kind,report_date,child_id FROM parent_report_history WHERE phone10=${phone10}`
+        tx`SELECT kind,report_date,child_id,publication_id,text FROM parent_report_history WHERE phone10=${phone10}`
       ]);
       const childId=String(profile?.child_id||'');
       const child=children.find(c=>String(c.child_id)===childId);
@@ -133,7 +133,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       const roster=children;
       const norm=v=>String(v||'').trim().normalize('NFC')
         .toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
-      const already=new Set(existing.map(x=>String(x.kind)+'/'+String(x.report_date)));
+      const existingByDay=new Map(existing.map(x=>[String(x.kind)+'/'+String(x.report_date),x]));
       // Latest submitted source per day/kind; never resurrect a replaced draft.
       const latest=new Map();
       for(const source of raw){
@@ -171,7 +171,11 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       let backfilled=0;
       for(const {source,saved,originals,blocks} of snapshots){
         const kind=String(source.kind),date=String(source.report_date);
-        if(already.has(kind+'/'+date))continue;
+        const priorHistory=existingByDay.get(kind+'/'+date);
+        // An old migrated row can still exist without its verified child_id.
+        // Never overwrite a report for another child or a different source.
+        if(priorHistory&&(String(priorHistory.child_id||'')||
+          String(priorHistory.publication_id||'')!==String(source.publication_id)))continue;
         const eligible=blocks.flatMap((b,index)=>{
           const owner=saved.get(index);
           if(owner?.blocked||!b.body.join('\n').trim()||b.canonical!==canonical)return [];
@@ -230,6 +234,10 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         if(eligible.length!==1)continue;
         const {block,index,owned}=eligible[0];
         const text=(child.registered_first_name||block.name)+': '+block.body.join('\n').trim();
+        // In an unowned legacy source, parent history must also reproduce
+        // the selected block. Otherwise a stale orphan may belong to another
+        // child despite sharing this publication and report date.
+        if(priorHistory&&!owned&&String(priorHistory.text||'').trim()!==text.trim())continue;
         const at=BigInt(source.submitted_at||now());
         if(!owned){
           // Claim the exact historic source block at the same time as the
@@ -253,11 +261,21 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
             if(inserted.length!==1)throw new Error('Historical block ownership changed.');
           }
         }
-        await tx.upsert`INSERT INTO parent_report_history
-          (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
-          VALUES (${phone10},${kind},${date},${childId},${source.publication_id},
-            ${BigInt(source.revision||1)},${text},${at})`;
-        already.add(kind+'/'+date);
+        if(priorHistory){
+          // Restore only the missing identity column. Preserve historic text,
+          // author edits, timestamps, publication and every read marker.
+          const [updated]=await tx`UPDATE parent_report_history SET child_id=${childId}
+            WHERE phone10=${phone10} AND kind=${kind} AND report_date=${date}
+              AND child_id=${''} AND publication_id=${source.publication_id}
+            RETURNING child_id`;
+          if(updated.length!==1)throw new Error('Historical parent identity changed.');
+        }else{
+          await tx.upsert`INSERT INTO parent_report_history
+            (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
+            VALUES (${phone10},${kind},${date},${childId},${source.publication_id},
+              ${BigInt(source.revision||1)},${text},${at})`;
+        }
+        existingByDay.set(kind+'/'+date,{child_id:childId,publication_id:source.publication_id});
         backfilled++;
       }
       return {ok:true,backfilled};

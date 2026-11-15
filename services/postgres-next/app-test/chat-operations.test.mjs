@@ -57,6 +57,24 @@ test('educator list maintains pin filtering and same-child multiple-parent cards
   assert.equal(read.chats.length,1);
   assert.equal(read.chats[0].phone,'9000000002');
 });
+test('chat lists and threads infer old generic labels while keeping staff roles',async()=>{
+  const {sql,data}=sqlFixture();
+  data.profiles[0].parent_name='Анна';
+  data.profiles[0].relationship='Родитель';
+  data.profiles[1].parent_name='Павел';
+  data.profiles[1].relationship='Дедушка';
+  const ops=createChatOperations(sql);
+  const parents=await ops.listParents();
+  const byPhone=new Map(parents.parents.map(x=>[x.phone,x]));
+  assert.equal(byPhone.get('9000000001').relationship,'Мама');
+  assert.equal(byPhone.get('9000000002').relationship,'Дедушка');
+  const chats=await ops.listChats();
+  const chatByPhone=new Map(chats.chats.map(x=>[x.phone,x]));
+  assert.equal(chatByPhone.get('9000000001').relationship,'Мама');
+  assert.equal(chatByPhone.get('9000000002').relationship,'Дедушка');
+  assert.equal((await ops.thread('9000000001')).relationship,'Мама');
+});
+
 test('unsupported chat filters and invalid user roles are rejected',async()=>{
   const {sql}=sqlFixture();
   const ops=createChatOperations(sql);

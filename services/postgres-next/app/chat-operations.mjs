@@ -1,3 +1,4 @@
+import {effectiveParentRelationship} from './current-parent-relationship.mjs';
 
 const PHONE = /^\d{10}$/;
 const REACTIONS = new Set(['❤️','👍','👌','🙏','🥰','😁','🔥']);
@@ -38,7 +39,7 @@ export function createChatOperations(sql) {
           phone:p.phone10,
           parentName:p.parent_name || '',
           childName:[child.registered_first_name || '',child.surname || ''].filter(Boolean).join(' ')||p.child_name||'',
-          relationship:p.relationship || 'Родитель'
+          relationship:effectiveParentRelationship(p.relationship,p.parent_name)
         };
       }).sort((a,b)=>a.childName.localeCompare(b.childName,'ru'))};
     });
@@ -69,7 +70,7 @@ export function createChatOperations(sql) {
         return {
           phone:state.phone10,parentName:profile.parent_name || '',
           childName:[child.registered_first_name,child.surname].filter(Boolean).join(' ')||profile.child_name||'',
-          relationship:profile.relationship||'Родитель',lastSide:state.last_side,
+          relationship:effectiveParentRelationship(profile.relationship,profile.parent_name),lastSide:state.last_side,
           lastType:state.last_type || 'text', lastText:state.last_text || '',
           hasUnread,pinnedBucket,_lastAt:Number(state.last_at || 0)
         };
@@ -136,7 +137,7 @@ export function createChatOperations(sql) {
       });
       return {ok:true,phone:phone10,parentName:profile.parent_name||'',
         childName:[child?.registered_first_name,child?.surname].filter(Boolean).join(' ')||profile.child_name||'',
-        relationship:profile.relationship||'Родитель',messages,hasMore};
+        relationship:effectiveParentRelationship(profile.relationship,profile.parent_name),messages,hasMore};
     });
   }
   async function markRead(role,phoneRaw,markAsUnread=false) {

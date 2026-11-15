@@ -1,4 +1,5 @@
 import {randomBytes} from 'node:crypto';
+import {inferParentRelationship} from './current-parent-relationship.mjs';
 import {createCurrentChildLinkStore} from './current-child-link-store.mjs';
 import {createCurrentReportBackfill} from './current-report-backfill.mjs';
 const PHONE=/^\d{10}$/;
@@ -53,7 +54,7 @@ export function createCurrentParentRegistrationService({sql,sessions,now=()=>Dat
       await tx.upsert`INSERT INTO parent_profiles
         (phone10,parent_name,child_name,relationship,child_id,
           profile_generation,child_genitive,created_at,updated_at)
-        VALUES (${phone10},${parentName},${childName},${'Родитель'},${''},
+        VALUES (${phone10},${parentName},${childName},${inferParentRelationship(parentName)},${''},
           ${attemptId},${''},${at},${at})`;
       await tx.upsert`INSERT INTO parent_auth_profiles
         (phone10,user_handle,generation_id,created_at)

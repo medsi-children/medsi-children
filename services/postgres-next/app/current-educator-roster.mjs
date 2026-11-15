@@ -1,4 +1,5 @@
 import {createCurrentChildLinkStore} from './current-child-link-store.mjs';
+import {effectiveParentRelationship} from './current-parent-relationship.mjs';
 import {createCurrentReportBackfill} from './current-report-backfill.mjs';
 const PHONE=/^\d{10}$/;
 const ID=/^[A-Za-z0-9_-]{8,128}$/;
@@ -18,7 +19,7 @@ export function assembleCurrentEducatorRoster({children=[],profiles=[],current=[
     if(!PHONE.test(phone10))continue;
     const childId=String(p.child_id||'');
     const parent={phone10,phone:'8'+phone10,parentName:String(p.parent_name||''),
-      relationship:String(p.relationship||'Родитель'),childName:String(p.child_name||''),
+      relationship:effectiveParentRelationship(p.relationship,p.parent_name),childName:String(p.child_name||''),
       registered:registered.has(phone10)};
     if(!childId){if(parent.registered)unlinked.push({...parent,linked:false});continue}
     const child=childById.get(childId);
@@ -93,7 +94,7 @@ export function createCurrentEducatorRosterStore(sql,{now=()=>Date.now()}={}){
           FROM parent_profiles WHERE phone10=${phone10} FOR UPDATE`;
         if(!p||String(p.child_id)!==childId||
           name(p.parent_name)!==name(payload.expectedParentName)||
-          name(p.relationship||'Родитель')!==name(payload.expectedRelationship||'Родитель'))
+          name(effectiveParentRelationship(p.relationship,p.parent_name))!==name(payload.expectedRelationship||'Родитель'))
           throw new Error('Roster changed; reload.');
         await tx`UPDATE parent_profiles SET parent_name=${parentName},
           relationship=${relationship},updated_at=${BigInt(now())}

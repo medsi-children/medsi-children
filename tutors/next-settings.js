@@ -565,7 +565,7 @@
         info.append(textNode('div','medsi-roster-line-name',
           String(parent.childName||'').trim()||'Ребёнок не указан'));
         info.append(textNode('div','medsi-roster-line-parent',
-          [(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
+          [(parent.relationship||'Родитель'),parent.parentName||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
         const actions=textNode('div','medsi-roster-line-actions','');
         actions.append(
@@ -600,7 +600,7 @@
         const card=textNode('article','medsi-roster-line medsi-roster-line-unlinked','');
         const info=textNode('div','medsi-roster-line-info','');
         info.append(textNode('div','medsi-roster-line-name',String(parent.childName||'').trim()||'Ребёнок не указан'));
-        info.append(textNode('div','medsi-roster-line-parent',[(parent.relationship||'Родитель')+':',parent.parentName||'—'].join(' ')));
+        info.append(textNode('div','medsi-roster-line-parent',[(parent.relationship||'Родитель'),parent.parentName||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
         info.append(textNode('div','medsi-roster-review-note','Нужна проверка привязки'));
         card.title='Требуется проверка профиля перед предоставлением доступа к индивидуальным отчётам';

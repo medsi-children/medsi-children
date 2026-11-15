@@ -251,6 +251,15 @@ test('linked children first, muted unlinked and review profiles last; multi-pare
   assert.match(JSON.stringify(pane.children[0]),/Арина/);
   assert.match(JSON.stringify(pane.children[1]),/Артём Тестов/);
   assert.match(JSON.stringify(pane.children[2]),/Тестовый профиль/);
+  // Muted cards must use the same "Мама Имя" format as linked profiles.
+  // Review cards and unlinked cards come from different rendering branches.
+  const parentLabel=card=>card.children
+    .find(child=>child.className==='medsi-roster-line-info').children
+    .find(child=>child.className==='medsi-roster-line-parent').textContent;
+  assert.equal(parentLabel(pane.children[1]),'Мама Другой родитель');
+  assert.equal(parentLabel(pane.children[2]),'Папа Родитель для проверки');
+  assert.doesNotMatch(parentLabel(pane.children[1]),/Мама:/);
+  assert.doesNotMatch(parentLabel(pane.children[2]),/Папа:/);
   const actions=pane.children[0].children.find(x=>x.className==='medsi-roster-line-actions');
   const del=actions.children.find(x=>x.className==='medsi-roster-line-delete');
   await del.onclick();

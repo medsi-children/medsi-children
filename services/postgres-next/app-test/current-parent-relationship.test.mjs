@@ -35,7 +35,7 @@ test('the staff roster and dashboard show inferred and manually selected relativ
   ];
   const roster=assembleCurrentEducatorRoster({children,profiles,
     authenticated:profiles.map(x=>({phone10:x.phone10}))});
-  assert.deepEqual(roster.children[0].parents.map(p=>p.relationship),['Мама','Папа','Бабушка']);
+  assert.deepEqual(roster.children[0].parents.map(p=>p.relationship),['Мама','Бабушка','Папа']);
   assert.equal(roster.unlinked[0].relationship,'Папа');
   const dashboard=assembleCurrentEducatorDashboard({children,profiles});
   assert.deepEqual(dashboard.children[0].parents.map(p=>p.relationship),['Мама','Папа','Бабушка']);

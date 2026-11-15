@@ -1,4 +1,5 @@
 import {displayCurrentStaffSource} from './current-educator-source-display.mjs';
+import {effectiveParentRelationship} from './current-parent-relationship.mjs';
 import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
 const PHONE=/^\d{10}$/;
 const KINDS=['morning','evening','psychology'];
@@ -19,7 +20,7 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     });
     const card=cards.get(childId);
     const parent={parentName:String(p.parent_name||''),
-      relationship:String(p.relationship||'Родитель'),phone:'8'+p.phone10};
+      relationship:effectiveParentRelationship(p.relationship,p.parent_name),phone:'8'+p.phone10};
     card.parents.push(parent);
     const reports={morning:'',evening:'',psychology:''};
     for(const r of current)if(r.phone10===p.phone10&&r.child_id===childId&&

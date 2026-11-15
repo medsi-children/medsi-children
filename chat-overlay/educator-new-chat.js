@@ -76,7 +76,7 @@
       rows.forEach(r=>{
         const card=document.createElement('button');card.className='chat-card';card.type='button';card.dataset.phone=r.phone||'';
         const name=document.createElement('div');name.className='chat-card-title';name.textContent=r.childName||'Без имени ребёнка';
-        const info=document.createElement('div');info.className='chat-card-meta';info.textContent='Родитель: '+shortName(r.parentName)+'\nРебёнок: '+shortName(r.childName)+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
+        const info=document.createElement('div');info.className='chat-card-meta';info.textContent=(r.relationship||'Родитель')+': '+shortName(r.parentName)+'\nРебёнок: '+shortName(r.childName)+'\nНомер телефона: '+(r.phone?displayPhone(r.phone):'—');
         card.append(name,info);
         card.addEventListener('click',()=>bridgeToCard(r,'open'));
         list.appendChild(card);

@@ -29,6 +29,22 @@ test('registration stops with a retry message when Cloudflare says the previous 
   assert.equal(typeof env.elements.get('registrationRetryBtn').onclick,'function');
   assert.equal(typeof env.elements.get('registrationCancelBtn').onclick,'function');
 });
+test('repeat admission link opens registration and discards an unfinished sign-in request',()=>{
+  const env=parent(async()=>{throw new Error('Navigation must not contact server')});
+  assert.equal(typeof env.elements.get('btnGoRegister').onclick,'function');
+  assert.equal(typeof env.elements.get('btnGoAuth').onclick,'function');
+  env.elements.get('btnGoAuth').onclick();
+  assert.equal(env.ctx.document.body.dataset.screen,'screenAuth');
+  env.storage.set('medsi_parent_reauthorization_v1',JSON.stringify({phone:'9000000001',requestId:'auth_synthetic'}));
+  env.elements.get('authRepeatRegisterBtn').onclick();
+  assert.equal(env.ctx.document.body.dataset.screen,'screenNames');
+  assert.equal(env.storage.has('medsi_parent_reauthorization_v1'),false);
+  env.elements.get('namesBackBtn').onclick();
+  assert.equal(env.ctx.document.body.dataset.screen,'screenStart');
+  env.elements.get('btnGoRegister').onclick();
+  assert.equal(env.ctx.document.body.dataset.screen,'screenNames');
+});
+
 test('parallel session renewal makes only one gateway request and allows its retries to finish',async()=>{
   let calls=0,resolve;const env=parent(()=>{calls++;return new Promise(r=>resolve=r)});env.api.setup({...session,expiresAt:0});
   const a=env.api.warmD1(),b=env.api.warmD1();assert.equal(calls,1);assert.ok([...env.timers.values()].some(t=>t.ms===35000));

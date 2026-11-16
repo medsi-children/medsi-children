@@ -21,3 +21,26 @@ test('passkey offer remains immediately after registration and phone grace is se
   assert.match(server,/FIRST_DAY_MS=24\*60\*60\*1000/);
   assert.match(server,/auth\?\.created_at/);
 });
+
+test('entry screen favors registration and login warns about repeat admissions',()=>{
+  const html=read('index.html'),css=read('parents/full-web.css'),js=read('parents/full-web.js');
+  const start=html.slice(html.indexOf('<section id="screenStart"'),html.indexOf('<section id="screenNames"'));
+  const auth=html.slice(html.indexOf('<section id="screenAuth"'),html.indexOf('<section id="screenRegistrationPending"'));
+  assert.ok(start.includes('id="btnGoRegister"')&&start.includes('id="btnGoAuth"'));
+  assert.ok(start.indexOf('id="btnGoRegister"')<start.indexOf('id="btnGoAuth"'));
+  assert.match(start,/id="btnGoRegister"[^>]*class="[^"]*primary[^"]*"[^>]*>Зарегистрироваться<\/button>/);
+  assert.match(start,/Уже регистрировались\? <button id="btnGoAuth" class="start-signin-link"[^>]*>Войти<\/button>/);
+  assert.doesNotMatch(start,/id="btnGoAuth"[^>]*class="[^"]*primary/);
+  assert.match(auth,/<h2 class="form-title">Вход в кабинет<\/h2>/);
+  assert.match(auth,/Введите номер телефона, который указывали при регистрации\./);
+  assert.match(auth,/Поступаете повторно\?/);
+  assert.match(auth,/Если ребёнок уже выписывался и поступил снова, необходимо зарегистрироваться заново\. После выписки предыдущий профиль удаляется\./);
+  assert.match(auth,/id="authRepeatRegisterBtn"[^>]*>Перейти к регистрации<\/button>/);
+  assert.ok(auth.indexOf('id="authRepeatRegisterBtn"')<auth.indexOf('id="phoneInputAuth"'));
+  assert.match(css,/#screenStart \.start-primary-register\{/);
+  assert.match(css,/#screenStart \.start-signin-link\{/);
+  assert.match(css,/#screenAuth \.auth-readmission-note\{/);
+  assert.match(js,/\$\('authRepeatRegisterBtn'\)\.onclick=switchToRegistration/);
+  assert.match(html,/parents\/full-web\.css\?v=20261116-registration-priority-1/);
+  assert.match(html,/parents\/full-web\.js\?v=20261116-registration-priority-1/);
+});

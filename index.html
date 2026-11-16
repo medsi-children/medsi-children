@@ -7,7 +7,7 @@
   <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
   <title>Медси Бот</title>
   <link rel="shortcut icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.json">
-  <link rel="stylesheet" href="/parents/full-web.css?v=20261105-phone-first-passkey-2">
+  <link rel="stylesheet" href="/parents/full-web.css?v=20261116-registration-priority-1">
   <link rel="stylesheet" href="/parents/chat-screen.css?v=20260911-smooth-media-1">
   <link rel="stylesheet" href="/parents/psychology-format.css?v=20261108-therapy-paragraphs-1" data-medsi-psych-format="1">
   <link rel="stylesheet" href="/parents/dashboard-ui.css?v=20260910-auth-chip-1">
@@ -33,7 +33,7 @@
 
   <section id="screenStart" class="start-screen hidden">
     <div class="start-brand"><div class="medsi-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div><h1 class="start-title">Медси Бот</h1><p class="start-subtitle">Облачная система для просмотра отчётов по вашему ребёнку и для связи с воспитателями.</p></div>
-    <div class="start-actions"><div class="grid2"><button id="btnGoAuth" class="btn primary start-cascade start-cascade-1">Авторизация</button><button id="btnGoRegister" class="btn btn-outline-teal start-cascade start-cascade-2">Регистрация</button></div><button id="startHelpBtn" class="btn start-help-btn start-cascade start-cascade-3" type="button">Есть вопросы?</button><div id="startHelpPanel" class="start-help-panel" aria-hidden="true"><div class="start-help-content"><p>Добро пожаловать в Медси Бот. После регистрации вы сможете просматривать утренние и вечерние отчёты по ребёнку, а также отчёт с групповой терапии.</p><p>В отчётах воспитатели и психологи делятся безоценочными наблюдениями: что они замечают в эмоциональном состоянии, поведении и повседневной жизни ребёнка.</p><p>Вопросы о терапии, препаратах, процедурах и других медицинских темах, пожалуйста, обсуждайте с лечащим врачом.</p><p>В чате с воспитателями можно оставить пожелания по отчётам, а также получить просьбы ребёнка по доставке.</p></div></div></div>
+    <div class="start-actions"><button id="btnGoRegister" class="btn primary start-primary-register start-cascade start-cascade-1" type="button">Зарегистрироваться</button><div class="start-signin start-cascade start-cascade-2">Уже регистрировались? <button id="btnGoAuth" class="start-signin-link" type="button">Войти</button></div><button id="startHelpBtn" class="btn start-help-btn start-cascade start-cascade-3" type="button">Есть вопросы?</button><div id="startHelpPanel" class="start-help-panel" aria-hidden="true"><div class="start-help-content"><p>Добро пожаловать в Медси Бот. После регистрации вы сможете просматривать утренние и вечерние отчёты по ребёнку, а также отчёт с групповой терапии.</p><p>В отчётах воспитатели и психологи делятся безоценочными наблюдениями: что они замечают в эмоциональном состоянии, поведении и повседневной жизни ребёнка.</p><p>Вопросы о терапии, препаратах, процедурах и других медицинских темах, пожалуйста, обсуждайте с лечащим врачом.</p><p>В чате с воспитателями можно оставить пожелания по отчётам, а также получить просьбы ребёнка по доставке.</p></div></div></div>
   </section>
 
   <section id="screenNames" class="hidden"><h2 class="form-title">Регистрация родителя</h2><p class="form-subtitle">Укажите данные ребёнка и родителя.</p><div class="registration-fields">
@@ -44,8 +44,13 @@
   <section id="screenPhoneReg" class="hidden"><h2 class="form-title">Номер телефона</h2><p class="form-subtitle">Введите номер, который будет привязан к вашему Медси Боту.</p><div class="registration-fields"><div class="field-block"><label for="phoneInputReg">Номер телефона</label><input id="phoneInputReg" type="tel" inputmode="tel" autocomplete="tel" placeholder="88005553535"></div></div><p class="registration-note">После регистрации вход сохранится на этом устройстве.</p><p id="phoneErrorReg" class="error hidden"></p><p id="alreadyRegistered" class="info hidden"></p><div class="grid2" style="margin-top:12px"><button id="phoneRegBackBtn" class="btn">Назад</button><button id="registerBtn" class="btn primary">Зарегистрироваться</button></div></section>
 
   <section id="screenAuth" class="hidden">
-    <h2 class="form-title">Авторизация</h2>
-    <p class="form-subtitle">Введите номер телефона, который использовали при регистрации.</p>
+    <h2 class="form-title">Вход в кабинет</h2>
+    <p class="form-subtitle">Введите номер телефона, который указывали при регистрации.</p>
+    <div class="auth-readmission-note" role="note" aria-labelledby="authReadmissionTitle">
+      <div class="auth-readmission-heading"><span class="auth-readmission-icon" aria-hidden="true">i</span><strong id="authReadmissionTitle">Поступаете повторно?</strong></div>
+      <p>Если ребёнок уже выписывался и поступил снова, необходимо зарегистрироваться заново. После выписки предыдущий профиль удаляется.</p>
+      <button id="authRepeatRegisterBtn" class="auth-readmission-link" type="button">Перейти к регистрации</button>
+    </div>
     <div class="registration-fields">
       <div class="field-block"><label for="phoneInputAuth">Номер телефона</label><input id="phoneInputAuth" type="tel" inputmode="tel" autocomplete="tel" placeholder="+7 (999) 123-45-67"></div>
     </div>
@@ -159,7 +164,7 @@
   window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261012-group-therapy-label-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261110-auth-unknown-phone-1').then(function(){
+  load('/parents/full-web.js?v=20261116-registration-priority-1').then(function(){
     if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
     clearTimeout(notice);status.classList.add('hidden');
     window.MedsiLoadParentChat().then(function(){

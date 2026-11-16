@@ -68,3 +68,15 @@ body.parent-preview-mode #logoutBtn{display:none!important}
 #screenAuth .medsi-passkey-action{width:100%;min-height:44px;margin:0;border-radius:12px;font-size:14px}
 #screenAuth .medsi-passkey-prompt .error{margin:10px 0 0;color:#b45363}
 @media(max-width:560px){.medsi-passkey-prompt{padding:15px;border-radius:16px}}
+
+/* Parent entry: one primary registration action, quiet sign-in link. */
+#screenStart .start-primary-register{width:100%;min-height:64px;font-size:1.15rem;box-shadow:0 9px 22px rgba(16,169,179,.17)}
+#screenStart .start-signin{text-align:center;color:var(--muted);font-size:.96rem;line-height:1.5}
+#screenStart .start-signin-link{appearance:none;background:transparent;border:0;border-radius:7px;color:#0b919a;font:inherit;font-weight:760;text-decoration:underline;text-underline-offset:3px;padding:8px 4px;min-height:40px;cursor:pointer}
+#screenStart .start-signin-link:focus-visible,#screenAuth .auth-readmission-link:focus-visible{outline:3px solid rgba(11,145,154,.5);outline-offset:3px}
+#screenAuth .auth-readmission-note{margin:0 0 18px;padding:15px 16px;background:#eefafb;border:1px solid rgba(22,184,192,.25);border-radius:15px;color:var(--fg);font-size:.94rem;line-height:1.46}
+#screenAuth .auth-readmission-heading{display:flex;align-items:center;gap:9px;margin-bottom:8px;color:#126c76;font-size:1rem}
+#screenAuth .auth-readmission-icon{width:22px;height:22px;border:1.7px solid #159ca6;color:#159ca6;border-radius:50%;font-size:14px;line-height:19px;font-weight:800;text-align:center;flex:none;font-style:normal}
+#screenAuth .auth-readmission-note p{margin:0 0 8px}
+#screenAuth .auth-readmission-link{appearance:none;border:0;background:transparent;padding:6px 2px;min-height:36px;color:#087f89;font:inherit;font-weight:750;text-decoration:underline;text-underline-offset:3px;text-align:left;cursor:pointer}
+@media(max-width:560px){#screenStart .start-primary-register{min-height:56px;font-size:1.08rem}#screenAuth .auth-readmission-note{padding:13px 14px;font-size:.91rem}}

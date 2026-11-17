@@ -428,3 +428,39 @@ test('broadcast requires educator, previews count and safely retries one recipie
     assert.equal(third.result.duplicates,2);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
+
+test('current-device push diagnostic is bound to authorized parent or educator',async()=>{
+  const services=fakeServices(),calls=[];
+  services.sessions.verifyTutor=token=>token==='synthetic-staff-token';
+  services.sessions.verifyWorker=async token=>token==='synthetic-parent-token'
+    ?{role:'parent',phone10:'9000000001'}:null;
+  services.push.testSubscription=async request=>{
+    calls.push(request);return {ok:true,accepted:true};
+  };
+  services.push.dispatchStatus=()=>({configured:true,dispatchEnabled:false});
+  const app=createNextStandApp(services,{env}),server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const base='http://127.0.0.1:'+server.address().port;
+  async function testPush(body){
+    const response=await fetch(base+'/push/test',{method:'POST',
+      headers:{'content-type':'text/plain;charset=utf-8'},body:JSON.stringify(body)});
+    return {status:response.status,result:await response.json()};
+  }
+  try{
+    const endpoint='https://push.example.invalid/test-only';
+    let result=await testPush({role:'educator',endpoint});
+    assert.equal(result.status,503);
+    assert.equal(calls.length,0);
+    result=await testPush({role:'parent',phone:'9000000001',parentSession:'synthetic-parent-token',endpoint});
+    assert.equal(result.status,200);
+    assert.equal(result.result.ok,true);
+    assert.equal(result.result.dispatch.dispatchEnabled,false);
+    assert.deepEqual(calls[0],{role:'parent',phone10:'9000000001',endpoint});
+    result=await testPush({role:'educator',tutorToken:'synthetic-staff-token',endpoint});
+    assert.equal(result.status,200);
+    assert.deepEqual(calls[1],{role:'educator',phone10:'',endpoint});
+    const bad=await testPush({role:'parent',phone:'9000000002',parentSession:'synthetic-parent-token',endpoint});
+    assert.equal(bad.status,503);
+    assert.equal(calls.length,2);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});

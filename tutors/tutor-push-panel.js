@@ -21,7 +21,7 @@
     pushLoading=true;
     const s=document.createElement('script');
     s.async=false;
-    s.src='/notify-client.js?v=20261007-verified-subscription-1';
+    s.src='/notify-client.js?v=20261117-device-test-1';
     s.onload=()=>{pushLoading=false;initPush()};
     s.onerror=()=>{pushLoading=false};
     document.head.appendChild(s);

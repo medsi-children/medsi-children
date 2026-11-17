@@ -97,7 +97,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
         const payload=JSON.parse(job.notification_json||'{}');
         // All producers must use generic message/report notices, never patient text.
         if(!['chat','report'].includes(payload.type))throw new Error('Unexpected push payload type.');
-        await webpushClient.sendNotification(JSON.parse(target.subscription_json),JSON.stringify(payload));
+        await webpushClient.sendNotification(JSON.parse(target.subscription_json),JSON.stringify(payload),{TTL:300,timeout:10000});
         sent++;
       }catch(error) {
         if([404,410].includes(Number(error?.statusCode))) {
@@ -108,8 +108,8 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       }
     }
     await write(async tx=>{
-      const nextStatus=failed?(attempts<6?'retry':'failed'):'completed';
-      const due=BigInt(now+Math.min(3600000,10000*2**Math.min(8,attempts)));
+      const nextStatus=failed?(attempts<48?'retry':'failed'):'completed';
+      const due=BigInt(now+Math.min(900000,10000*2**Math.min(8,attempts)));
       // A late sender may not overwrite a newer attempt which recovered its lease.
       await tx`UPDATE push_outbox
         SET status=${nextStatus},next_attempt_at=${due}
@@ -121,11 +121,13 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
   }
   async function pendingEvents(limit=30) {
     return read(async tx=>{
-      const [events]=await tx`SELECT event_id,status,next_attempt_at
-        FROM push_outbox WHERE status=${'pending'} OR status=${'retry'}
-          OR status=${'processing'}`;
-      return events.filter(r=>Number(r.next_attempt_at||0)<=Date.now()).slice(0,Math.max(1,Math.min(100,limit)))
-        .map(r=>r.event_id);
+      const due=BigInt(Date.now());
+      const count=Math.max(1,Math.min(100,Number(limit)||30));
+      const [events]=await tx`SELECT event_id FROM push_outbox
+        WHERE (status=${'pending'} OR status=${'retry'} OR status=${'processing'})
+          AND COALESCE(next_attempt_at,0)<=${due}
+        ORDER BY next_attempt_at ASC,event_id ASC LIMIT ${count}`;
+      return events.map(row=>row.event_id);
     });
   }
   return {subscribe,unsubscribe,deliverEvent,pendingEvents};

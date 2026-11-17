@@ -12,6 +12,7 @@
   const personIcon = icon('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-7 7-7s7 3 7 7"/>');
   const deleteIcon = icon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>');
 
+  const archiveIcon = icon('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 13h8M8 17h5"/>');
   const broadcastIcon = icon('<path d="M4 11v3a2 2 0 0 0 2 2h2l2 4h3l-2-5 8 3V7l-8 3H6a2 2 0 0 0-2 1Z"/><path d="M21 9c1.2 1.7 1.2 4.3 0 6"/>');
 
   const root = document.createElement('div');
@@ -43,6 +44,11 @@
         <span class="medsi-tile-icon">${broadcastIcon}</span>
         <span class="medsi-tile-heading">Отправить рассылку</span>
         <span class="medsi-tile-sub">Сообщение всем действующим родителям</span>
+      </button>
+      <button type="button" id="medsiParentDirectoryCard" class="medsi-setting-tile medsi-tile-directory">
+        <span class="medsi-tile-icon">${archiveIcon}</span>
+        <span class="medsi-tile-heading">База родителей</span>
+        <span class="medsi-tile-sub">История регистраций и поиск</span>
       </button>
     </div>
     <p id="medsiSettingFeedback" class="medsi-setting-feedback" role="status"></p>

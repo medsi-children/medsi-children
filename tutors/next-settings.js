@@ -525,7 +525,7 @@
           const refreshed=await refreshRoster();
           if(!refreshed)throw new Error('Справочник не удалось обновить после удаления.');
           await refreshLibrary();
-          byId('medsiReportsFeedback').textContent='Ребёнок и родительские профили удалены. Очистка переписок и файлов поставлена в очередь.';
+          byId('medsiReportsFeedback').textContent='Профиль удалён.';
         }catch(error){
           del.disabled=false;
           await refreshRoster();
@@ -587,7 +587,7 @@
             const answer=await request('/lab/parent-delete','POST',{phone:parent.phone,operationId:'del_'+uuid});
             if(answer?.accepted!==true)throw new Error(answer?.message||'Сервер не принял удаление профиля.');
             await refreshRoster();await refreshLibrary();
-            byId('medsiReportsFeedback').textContent='Профиль удалён. Очистка переписки и файлов поставлена в очередь.';
+            byId('medsiReportsFeedback').textContent='Профиль удалён.';
           }catch(error){del.disabled=false;byId('medsiReportsFeedback').textContent=error.message||'Не удалось удалить профиль.';}
         };
         actions.append(del);

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand,checkNextTestSchema,shouldDispatchPush} from '../app/stand-server.mjs';
+import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand,checkNextTestSchema,shouldDispatchPush,pushReadiness} from '../app/stand-server.mjs';
+import {createECDH} from 'node:crypto';
 import {SCHEMA_INDEXES,SCHEMA_TABLES} from '../src/schema-contract.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',MEDSI_NEXT_PG_ENABLED:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
@@ -429,17 +430,22 @@ test('broadcast requires educator, previews count and safely retries one recipie
   }finally{await new Promise(resolve=>server.close(resolve));}
 });
 
-test('push dispatch runs when VAPID is complete, but explicit maintenance off switch wins',()=>{
-  const vapid={VAPID_PUBLIC_KEY:'synthetic-public',VAPID_PRIVATE_KEY:'synthetic-private',
+test('push dispatch needs explicit opt-in plus a valid matching VAPID pair',()=>{
+  const ecdh=createECDH('prime256v1');ecdh.generateKeys();
+  const vapid={VAPID_PUBLIC_KEY:ecdh.getPublicKey().toString('base64url'),
+    VAPID_PRIVATE_KEY:ecdh.getPrivateKey().toString('base64url'),
     VAPID_SUBJECT:'mailto:synthetic@example.invalid'};
-  assert.equal(shouldDispatchPush({}),false);
-  assert.equal(shouldDispatchPush({MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),false,
-    'a missing VAPID configuration cannot send notifications');
-  assert.equal(shouldDispatchPush(vapid),false,
-    'having VAPID keys must never activate a dormant notification queue');
-  assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),true);
-  assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'0'}),false);
-  assert.equal(shouldDispatchPush({...vapid,VAPID_PRIVATE_KEY:''}),false);
+  assert.equal(pushReadiness({}),'DISABLED');
+  assert.equal(pushReadiness({MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),'MISSING_VAPID');
+  assert.equal(shouldDispatchPush(vapid),false,'missing opt-in never activates dormant queue');
+  const enabled={...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'};
+  assert.equal(pushReadiness(enabled),'READY');
+  assert.equal(shouldDispatchPush(enabled),true);
+  assert.equal(pushReadiness({...enabled,VAPID_SUBJECT:''}),'MISSING_VAPID');
+  assert.equal(pushReadiness({...enabled,VAPID_SUBJECT:'no-at-symbol'}),'VAPID_SUBJECT_INVALID');
+  assert.equal(pushReadiness({...enabled,VAPID_PRIVATE_KEY:'wrong'}),'VAPID_KEY_PAIR_MISMATCH');
+  assert.equal(shouldDispatchPush({...enabled,VAPID_PRIVATE_KEY:'wrong'}),false);
+  assert.equal(shouldDispatchPush({...enabled,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'0'}),false);
 });
 
 test('historical parent directory is educator-only and preview sessions cannot change it',async()=>{

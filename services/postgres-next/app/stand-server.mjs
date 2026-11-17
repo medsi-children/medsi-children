@@ -157,12 +157,11 @@ export function createNextServices({sql,env=process.env}) {
     nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
 
-// Enable notifications on a configured post-cutover server. The explicit
-// operator off switch remains authoritative, including during migrations.
+// Fail closed. Deployments must never replay dormant push queues merely
+// because VAPID credentials were already configured.
 export function shouldDispatchPush(env={}) {
-  if(env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='0')return false;
-  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)return false;
-  return true;
+  return env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='1'&&
+    !!env.VAPID_PUBLIC_KEY&&!!env.VAPID_PRIVATE_KEY&&!!env.VAPID_SUBJECT;
 }
 
 function handler(fn) {

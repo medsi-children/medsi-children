@@ -30,7 +30,7 @@
   function replyLabel(r){
     if(!r)return'';
     if(r.text){
-      const text=String(r.text).replace(/\\s+/gu,' ').trim();
+      const text=String(r.text).replace(/\s+/gu,' ').trim();
       const max=108;
       if(text.length<=max)return text;
       const prefix=text.slice(0,max+1);

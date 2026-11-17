@@ -54,8 +54,10 @@
     if(!surname)return name||'Имя ребёнка не указано';
     const parts=name.split(/\s+/);
     const last=parts[parts.length-1]||'';
-    if(last.length===1&&last.toLocaleLowerCase('ru-RU')===surname[0].toLocaleLowerCase('ru-RU'))
-      parts.pop();
+    const lowerLast=last.toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
+    const lowerSurname=surname.toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
+    if(lowerLast===lowerSurname)return name;
+    if(last.length===1&&lowerLast===lowerSurname[0])parts.pop();
     return [...parts,surname].filter(Boolean).join(' ');
   }
   function render(){

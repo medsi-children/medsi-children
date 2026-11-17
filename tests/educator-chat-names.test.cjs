@@ -85,7 +85,7 @@ test('new chat picker uses the same parent/child detail labels',()=>{
 });
 
 test('educator chat scripts have fresh cache keys, unrelated identity API remains intact',()=>{
-  assert.match(html,/educator-chat\.js\?v=20261117-gallery-1/);
+  assert.match(html,/educator-chat\.js\?v=20261117-reply-excerpt-1/);
   assert.match(html,/educator-new-chat\.js\?v=20261111-short-labels-1/);
   const backend=read('services/postgres-next/app/chat-operations.mjs');
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);
@@ -99,10 +99,34 @@ test('opened chat identity stays compact on mobile while preserving child-first 
   assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-parent\{\s*font-size:\.82rem;/);
   assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-phone\{\s*font-size:\.77rem;/);
   assert.match(css, /@media\(max-width:560px\)/);
-  assert.match(html,/educator-exact\.css\?v=20261117-phone-label-1/);
+  assert.match(html,/educator-exact\.css\?v=20261117-reply-excerpt-1/);
   assert.match(main,/chatThreadHeader\.append\(details\)/);
   const composer=read('chat-overlay/composer-ui.js');
   assert.match(composer,/\(\?:Номер телефона\|Телефон\)/);
   assert.match(composer,/tel:\+7/);
-  assert.match(html,/composer-ui\.js\?v=20261117-phone-label-1/);
+  assert.match(html,/composer-ui\.js\?v=20261117-reply-excerpt-1/);
+});
+
+test('quoted replies finish on complete words and show ellipsis, including long mobile replies',()=>{
+  const start=main.indexOf('function replyLabel(r){');
+  const end=main.indexOf('function mediaUrl(m){',start);
+  assert.ok(start>=0&&end>start);
+  const replyLabel=new Function(main.slice(start,end)+'return replyLabel;')();
+  const source=('Здравствуйте! Прошу передать Еве. Сейчас у мамы очень много работы, '+
+    'допоздна сижу с документами. Поэтому до выписки вряд ли получится приехать. '+
+    'Очень скучаем, увидимся в пятницу.');
+  const excerpt=replyLabel({type:'text',text:source});
+  assert.ok(excerpt.length<source.length);
+  assert.ok(excerpt.endsWith('…'));
+  assert.ok(source.includes(excerpt.slice(0,-1)+' '),
+    'excerpt may only end at a whole-word boundary');
+  assert.equal(replyLabel({type:'image'}),'Фотография');
+  assert.equal(replyLabel({type:'video'}),'Видео');
+  const css=read('chat-overlay/educator-exact.css');
+  assert.match(css,/#screenChatThread \.msg-reply-quote\{/);
+  assert.match(css,/-webkit-line-clamp:4/);
+  assert.match(css,/font-size:\.85rem/);
+  assert.match(css,/word-break:normal/);
+  assert.match(html,/educator-chat\.js\?v=20261117-reply-excerpt-1/);
+  assert.match(html,/educator-exact\.css\?v=20261117-reply-excerpt-1/);
 });

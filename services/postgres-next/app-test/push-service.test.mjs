@@ -53,3 +53,33 @@ test('a processing event with a live lease is not claimed twice',async()=>{
   assert.equal(row.status,'processing');
   assert.equal(row.attempts,1);
 });
+
+test('own-device push check sends a generic notification only to authorized subscription',async()=>{
+  const endpoint='https://push.invalid.example/synthetic',sent=[];
+  const subscription={endpoint,keys:{auth:'synthetic',p256dh:'synthetic'}};
+  // Endpoint SHA-256 is computed by the production service.
+  const {createHash}=await import('node:crypto');
+  const id=createHash('sha256').update(endpoint).digest('hex');
+  const record={subscription_id:id,role:'parent',phone10:'9000000001',
+    subscription_json:JSON.stringify(subscription),enabled:true};
+  const sql={async begin(_options,fn){const tx=async(strings,...args)=>{
+    const query=strings.join('?').replace(/\s+/g,' ').trim();
+    if(query.includes('FROM push_subscriptions WHERE subscription_id='))return [[record]];
+    throw new Error('Unexpected query: '+query);
+  };return fn(tx);}};
+  const client={setVapidDetails(){},async sendNotification(sub,payload){
+    sent.push({sub,payload:JSON.parse(payload)});
+  }};
+  const service=createPushService({sql,env,webpushClient:client});
+  assert.equal(service.dispatchStatus().dispatchEnabled,false);
+  const accepted=await service.testSubscription({role:'parent',phone10:'9000000001',endpoint});
+  assert.equal(accepted.ok,true);
+  assert.equal(sent.length,1);
+  assert.equal(sent[0].payload.body,'Проверка уведомлений. Всё работает!');
+  assert.doesNotMatch(JSON.stringify(sent),/patient|child|9000000001/);
+  const foreign=await service.testSubscription({role:'parent',phone10:'9000000002',endpoint});
+  assert.equal(foreign.code,'SUBSCRIPTION_NOT_REGISTERED');
+  assert.equal(sent.length,1);
+  const wrongRole=await service.testSubscription({role:'educator',endpoint});
+  assert.equal(wrongRole.code,'SUBSCRIPTION_NOT_REGISTERED');
+});

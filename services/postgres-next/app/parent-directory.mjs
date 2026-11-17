@@ -32,14 +32,14 @@ export function createParentDirectory({sql,now=()=>Date.now()}={}){
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
   async function list(){
-    const [rows]=await read(tx=>tx`SELECT entry_id,phone10,parent_name,child_name,child_surname,
-      source,registered_at,created_at
+    const [rows]=await read(tx=>tx`SELECT entry_id,phone10,parent_name,child_name,child_surname
       FROM parent_directory_archive ORDER BY created_at DESC,entry_id DESC LIMIT 5000`);
+    // The directory only exposes contact information. Technical storage
+    // timestamps and record origins are intentionally not part of its API.
     return {ok:true,rows:rows.map(row=>({
       entryId:row.entry_id,phone:'7'+row.phone10,
       parentName:row.parent_name,childName:row.child_name,
-      childSurname:row.child_surname,source:row.source,
-      registeredAt:row.registered_at==null?null:Number(row.registered_at)
+      childSurname:row.child_surname
     }))};
   }
   async function importRows(rows){

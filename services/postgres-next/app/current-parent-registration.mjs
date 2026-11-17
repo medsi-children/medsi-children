@@ -70,7 +70,7 @@ export function createCurrentParentRegistrationService({sql,sessions,now=()=>Dat
       await tx`INSERT INTO parent_directory_archive
         (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
         VALUES (${'registration_'+attemptId},${phone10},${parentName},${childName},
-          ${''},${'registration'},${at},${at})
+          ${''},${'registration'},${null},${at})
         ON CONFLICT (phone10) DO NOTHING`;
       return {ok:true,duplicate:false};
     });

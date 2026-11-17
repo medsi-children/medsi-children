@@ -20,8 +20,11 @@
 .medsi-directory-child{color:#12a4ae;font-size:1.01rem;font-weight:850;line-height:1.3}
 .medsi-directory-parent{font-size:.89rem;font-weight:610;color:#39646d}
 .medsi-directory-phone{font-size:.85rem;color:#63868a}
-.medsi-directory-source{font-size:.73rem;color:#879a9f;margin-top:3px}
-.medsi-directory-remove{flex:none;background:#fff5f7;border:1px solid rgba(220,71,106,.28);border-radius:9px;color:#ad4f64;padding:8px 10px;min-height:34px;font-weight:710;font-size:.8rem;cursor:pointer}
+.medsi-directory-remove{flex:none;display:grid;place-items:center;width:36px;height:36px;min-width:36px;min-height:36px;padding:0;background:transparent;border:1px solid transparent;border-radius:10px;color:#9eacb0;cursor:pointer;transition:background .16s ease,color .16s ease,border-color .16s ease}
+.medsi-directory-remove svg{display:block;width:17px;height:17px;pointer-events:none}
+.medsi-directory-remove:hover{background:#fff0f2;color:#b84c65;border-color:rgba(190,83,103,.15)}
+.medsi-directory-remove:active{background:#ffe5eb;color:#a83650}
+.medsi-directory-remove:disabled{opacity:.45;cursor:default}
 .medsi-directory-remove:focus-visible,.medsi-directory-import:focus-visible,#medsiDirectoryClose:focus-visible{outline:3px solid rgba(22,184,192,.5);outline-offset:2px}
 .medsi-directory-empty{padding:26px 8px;text-align:center;color:#8aa1a5}
-@media(max-width:560px){.medsi-directory-overlay{padding:8px}.medsi-directory-panel{max-height:calc(100dvh - 16px);border-radius:17px}.medsi-directory-header{padding:15px 13px 10px}.medsi-directory-controls{padding:0 13px 10px}.medsi-directory-list{padding:4px 13px 15px}.medsi-directory-entry{padding:10px;gap:7px}.medsi-directory-remove{font-size:.75rem;padding:7px 8px}.medsi-directory-header h2{font-size:1.19rem}}
+@media(max-width:560px){.medsi-directory-overlay{padding:8px}.medsi-directory-panel{max-height:calc(100dvh - 16px);border-radius:17px}.medsi-directory-header{padding:15px 13px 10px}.medsi-directory-controls{padding:0 13px 10px}.medsi-directory-list{padding:4px 13px 15px}.medsi-directory-entry{padding:10px;gap:7px}.medsi-directory-remove{width:36px;height:36px;min-width:36px;min-height:36px}.medsi-directory-header h2{font-size:1.19rem}}

@@ -119,7 +119,7 @@ export async function ensureParentDirectoryArchive(sql){
         (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
         SELECT ${'current_'}||p.phone10, p.phone10, p.parent_name,
           COALESCE(NULLIF(c.registered_first_name,${''}),p.child_name),
-          COALESCE(c.surname,${''}), ${'current_profile'}, p.created_at,
+          COALESCE(c.surname,${''}), ${'current_profile'}, ${null},
           p.created_at
         FROM parent_profiles AS p
         LEFT JOIN children AS c ON c.child_id=p.child_id

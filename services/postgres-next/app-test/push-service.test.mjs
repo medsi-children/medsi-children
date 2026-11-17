@@ -75,7 +75,7 @@ test('retry never resends an event to a device whose push provider already accep
   const created=Date.now();
   const row={event_id:'push_retry_synthetic_001',role:'parent',phone10:'9000000001',
     notification_json:JSON.stringify({title:'Медси Бот',body:'Новое сообщение в чате.',type:'chat'}),
-    status:'pending',attempts:0,next_attempt_at:created-100,created_at:created};
+    status:'pending',attempts:0,next_attempt_at:created-100,created_at:created+1000};
   const targets=[
     {subscription_id:'device-a',role:'parent',phone10:'9000000001',
       subscription_json:JSON.stringify({endpoint:'https://push.invalid.example/a'}),enabled:true},

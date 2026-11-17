@@ -32,7 +32,8 @@ self.addEventListener('push', event => {
     icon: payload.icon || '/apple-touch-icon.png',
     badge: payload.badge || '/apple-touch-icon.png',
     tag: payload.tag || 'medsi-message',
-    renotify: true,
+    // Retries replace the same notification quietly instead of buzzing again.
+    renotify: false,
     silent: false,
     timestamp: Date.now(),
     data: {

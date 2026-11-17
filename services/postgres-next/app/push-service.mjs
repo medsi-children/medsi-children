@@ -22,6 +22,9 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
   if(!sql?.begin)throw new Error('PostgreSQL query client required.');
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
+  // A newly enabled worker must not flood every device with old chat events.
+  // Keep historical rows intact for a separate, audited cleanup.
+  const activatedAt=BigInt(Date.now());
   let configured=false;
   function ensureConfigured() {
     if(configured)return;
@@ -74,7 +77,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     const now=Date.now();
     const job=await write(async tx=>{
       const [[row]]=await tx`SELECT event_id,role,phone10,notification_json,status,attempts,next_attempt_at
-        FROM push_outbox WHERE event_id=${eventId}`;
+        FROM push_outbox WHERE event_id=${eventId} FOR UPDATE`;
       if(!row||!['pending','retry','processing'].includes(row.status)||
          Number(row.next_attempt_at||0)>now)return null;
       const attempt=Number(row.attempts||0)+1;
@@ -92,12 +95,28 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       (job.role==='educator'||s.phone10===job.phone10));
     let failed=0,sent=0;
     const attempts=job.attempt;
+    const payload=JSON.parse(job.notification_json||'{}');
+    // All producers use generic notices, never message or patient text.
+    if(!['chat','report'].includes(payload.type))throw new Error('Unexpected push payload type.');
+    const delivered=new Set(Array.isArray(payload._deliveredSubscriptions)
+      ?payload._deliveredSubscriptions.filter(x=>typeof x==='string'):[]);
     for(const target of targets) {
+      // Once one device accepted an event, never send it again on a retry
+      // triggered by another device's temporary push-provider failure.
+      if(delivered.has(target.subscription_id))continue;
       try {
-        const payload=JSON.parse(job.notification_json||'{}');
-        // All producers must use generic message/report notices, never patient text.
-        if(!['chat','report'].includes(payload.type))throw new Error('Unexpected push payload type.');
-        await webpushClient.sendNotification(JSON.parse(target.subscription_json),JSON.stringify(payload),{TTL:300,timeout:10000});
+        const notice={...payload,tag:'medsi-'+sha(eventId).slice(0,20)};
+        delete notice._deliveredSubscriptions;
+        await webpushClient.sendNotification(JSON.parse(target.subscription_json),
+          JSON.stringify(notice),{TTL:300,timeout:10000});
+        delivered.add(target.subscription_id);
+        await write(async tx=>{
+          await tx`UPDATE push_outbox
+            SET notification_json=${JSON.stringify({...payload,_deliveredSubscriptions:[...delivered]})}
+            WHERE event_id=${eventId} AND status=${'processing'}
+              AND attempts=${BigInt(attempts)}
+              AND next_attempt_at=${BigInt(job.leaseUntil)}`;
+        });
         sent++;
       }catch(error) {
         if([404,410].includes(Number(error?.statusCode))) {
@@ -126,6 +145,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       const [events]=await tx`SELECT event_id FROM push_outbox
         WHERE (status=${'pending'} OR status=${'retry'} OR status=${'processing'})
           AND COALESCE(next_attempt_at,0)<=${due}
+          AND created_at>=${activatedAt}
         ORDER BY next_attempt_at ASC,event_id ASC LIMIT ${count}`;
       return events.map(row=>row.event_id);
     });

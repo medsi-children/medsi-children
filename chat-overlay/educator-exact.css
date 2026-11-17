@@ -584,3 +584,49 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
 .educator-exact-clone .chat-info .chat-identity-title{font-size:1.1rem;font-weight:850;line-height:1.35}
 .educator-exact-clone .chat-info .chat-identity-parent{font-size:.92rem;font-weight:650;line-height:1.4;margin-top:3px}
 .educator-exact-clone .chat-info .chat-identity-phone{font-size:.85rem;font-weight:450;line-height:1.4;margin-top:2px}
+
+/* Quoted message excerpt: small, neat, word-safe and visibly unfinished. */
+.educator-exact-clone #screenChatThread .msg-reply-quote{
+  box-sizing:border-box;
+  max-width:100%;
+  width:100%;
+  min-width:0;
+  margin:3px 0 8px;
+  padding:8px 11px;
+  border-left:3px solid rgba(255,255,255,.8);
+  border-radius:9px;
+  background:linear-gradient(105deg,rgba(255,255,255,.28),rgba(255,255,255,.12));
+  font-size:.9rem;
+  font-weight:500;
+  line-height:1.42;
+  white-space:normal;
+  word-break:normal;
+  overflow-wrap:break-word;
+  overflow:hidden;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:4;
+  line-clamp:4;
+}
+.educator-exact-clone #screenChatThread .chat-reply-preview-text{
+  min-width:0;
+  font-size:.83rem;
+  line-height:1.35;
+  white-space:normal;
+  word-break:normal;
+  overflow-wrap:break-word;
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:2;
+  line-clamp:2;
+  overflow:hidden;
+}
+@media(max-width:560px){
+  .educator-exact-clone #screenChatThread .msg-reply-quote{
+    font-size:.85rem;
+    line-height:1.38;
+    padding:7px 9px;
+    -webkit-line-clamp:4;
+    line-clamp:4;
+  }
+}

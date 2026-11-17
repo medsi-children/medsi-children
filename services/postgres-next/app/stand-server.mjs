@@ -157,6 +157,14 @@ export function createNextServices({sql,env=process.env}) {
     nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
 
+// Enable notifications on a configured post-cutover server. The explicit
+// operator off switch remains authoritative, including during migrations.
+export function shouldDispatchPush(env={}) {
+  if(env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='0')return false;
+  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)return false;
+  return true;
+}
+
 function handler(fn) {
   return async(req,res)=>{
     try {
@@ -167,9 +175,11 @@ function handler(fn) {
       const unauthorized=/^Unauthorized/.test(message);
       const expired=error?.code==='PUSH_SUBSCRIPTION_EXPIRED';
       const forbidden=/^(Forbidden|Subscription belongs)/.test(message);
+      const subscriptionAccountMismatch=message.startsWith('Subscription belongs');
       const userError=/^(Invalid |Unauthorized|Unsupported |Parent profile|Request |Forbidden|Subscription belongs)/.test(message);
       if(!res.headersSent)res.status(expired?409:unauthorized?401:forbidden?403:userError?400:503).json({
         ok:false,...(expired?{code:'PUSH_SUBSCRIPTION_EXPIRED'}:{}),
+        ...(subscriptionAccountMismatch?{code:'PUSH_ACCOUNT_MISMATCH'}:{}),
         message:expired?'Подписка устарела, требуется обновление.':userError
           ?'Некорректный или недоступный запрос.':'Сервис временно недоступен.'
       });
@@ -408,16 +418,20 @@ export async function startIsolatedStand(env=process.env,{
           }
         );
       }
-      const dispatchPush=env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='1';
+      const dispatchPush=shouldDispatchPush(env);
       const processDeletion=env.MEDSI_NEXT_DELETION_ENABLED==='1';
       if(dispatchPush||processDeletion){
-        ticker=setInterval(async()=>{
+        const runBackgroundJobs=async()=>{
           if(working||stopped)return;
           working=true;
           try{
             if(dispatchPush){
-              const ids=await services.push.pendingEvents(20);
-              for(const id of ids)await services.push.deliverEvent(id);
+              const ids=await services.push.pendingEvents(40);
+              for(const id of ids){
+                if(stopped)break;
+                try{await services.push.deliverEvent(id)}
+                catch(_){console.warn('NEXT_PUSH_EVENT_RETRY_REQUIRED')}
+              }
             }
             if(processDeletion){
               const cleanup=await services.parentDeletion.processNext();
@@ -426,8 +440,11 @@ export async function startIsolatedStand(env=process.env,{
           }catch(_){
             console.warn('NEXT_BACKGROUND_JOBS_UNAVAILABLE');
           }finally{working=false;}
-        },30000);
+        };
+        // Do not strand the first new message for a full 30-second tick.
+        ticker=setInterval(runBackgroundJobs,10000);
         ticker.unref();
+        setImmediate(runBackgroundJobs);
       }
     }catch(error){
       // No raw errors: they can contain connection strings or patient data.

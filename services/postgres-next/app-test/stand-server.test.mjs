@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand,checkNextTestSchema} from '../app/stand-server.mjs';
+import {createNextStandApp,readLegacyAuthConfig,startIsolatedStand,checkNextTestSchema,shouldDispatchPush} from '../app/stand-server.mjs';
 import {SCHEMA_INDEXES,SCHEMA_TABLES} from '../src/schema-contract.mjs';
 
 const env={MEDSI_NEXT_STAND:'1',MEDSI_NEXT_PG_ENABLED:'1',NEXT_SESSION_SECRET:'s'.repeat(64),
@@ -427,4 +427,16 @@ test('broadcast requires educator, previews count and safely retries one recipie
     const third=await call('/lab/broadcast/send','staff-token',payload);
     assert.equal(third.result.duplicates,2);
   }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
+test('push dispatch runs when VAPID is complete, but explicit maintenance off switch wins',()=>{
+  const vapid={VAPID_PUBLIC_KEY:'synthetic-public',VAPID_PRIVATE_KEY:'synthetic-private',
+    VAPID_SUBJECT:'mailto:synthetic@example.invalid'};
+  assert.equal(shouldDispatchPush({}),false);
+  assert.equal(shouldDispatchPush({MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),false,
+    'a missing VAPID configuration cannot send notifications');
+  assert.equal(shouldDispatchPush(vapid),true);
+  assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),true);
+  assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'0'}),false);
+  assert.equal(shouldDispatchPush({...vapid,VAPID_PRIVATE_KEY:''}),false);
 });

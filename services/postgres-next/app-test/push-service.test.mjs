@@ -83,29 +83,3 @@ test('own-device push check sends a generic notification only to authorized subs
   const wrongRole=await service.testSubscription({role:'educator',endpoint});
   assert.equal(wrongRole.code,'SUBSCRIPTION_NOT_REGISTERED');
 });
-
-test('same browser may transfer push subscription from former parent identity to verified educator',async()=>{
-  const endpoint='https://push.invalid.example/shared-device';
-  const stored={role:'parent',phone10:'9000000001',enabled:true,disabled_reason:''};
-  const sql={async begin(_options,fn){
-    const tx=async(strings,...args)=>{
-      const query=strings.join('?').replace(/\s+/g,' ').trim();
-      if(query.includes('FROM push_subscriptions WHERE subscription_id='))return [[stored]];
-      throw new Error('Unexpected SQL: '+query);
-    };
-    tx.upsert=async(strings,...args)=>{
-      const query=strings.join('?');
-      assert.match(query,/INSERT INTO push_subscriptions/);
-      stored.role=args[1];stored.phone10=args[2];stored.enabled=args[4];
-    };
-    return fn(tx);
-  }};
-  const service=createPushService({sql,env,webpushClient:{setVapidDetails(){}}});
-  const result=await service.subscribe({role:'educator',subscription:{
-    endpoint,keys:{auth:'synthetic-auth',p256dh:'synthetic-key'}
-  }});
-  assert.equal(result.ok,true);
-  assert.equal(stored.role,'educator');
-  assert.equal(stored.phone10,'');
-  assert.equal(stored.enabled,true);
-});

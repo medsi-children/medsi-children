@@ -26,9 +26,9 @@
   function messageSig(m){return JSON.stringify([m&&m.side||'',m&&m.type||'',m&&m.text||'',m&&m.fileId||'',m&&m.reaction||'',m&&m.editedAt||'',m&&m.timestamp||'',m&&m.replyToKey||'',m&&m.reply&&m.reply.messageKey||'',m&&m.reply&&m.reply.text||'',m&&m.readByParent,m&&m.readByParentAt,m&&m.parentRead,m&&m.parentReadAt,m&&m.read_by_parent,m&&m.parent_read_at])}
   function isPending(m){return String(m&&m.messageKey||'').startsWith('pending-')}
   function samePendingMessage(pending,confirmed){return isPending(pending)&&!isPending(confirmed)&&String(pending&&pending.side||'')===String(confirmed&&confirmed.side||'')&&String(pending&&pending.type||'')===String(confirmed&&confirmed.type||'')&&String(pending&&pending.text||'')===String(confirmed&&confirmed.text||'')&&String(pending&&pending.fileId||'')===String(confirmed&&confirmed.fileId||'')&&Math.abs(Number(pending&&pending.timestamp||0)-Number(confirmed&&confirmed.timestamp||0))<120000}
-  function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'[Фотография]';if(c.lastType==='video')return c.lastText||'[Видео]';return c.lastText||'Нет сообщений'}
-  function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';return'Сообщение'}
-  function mediaUrl(m){const id=String(m&&m.fileId||'');const transport=window.MedsiOverlayTransport;return id&&transport&&typeof transport.mediaUrl==='function'?transport.mediaUrl(id,'w1200'):''}
+  function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'[Фотография]';if(c.lastType==='video')return c.lastText||'[Видео]';if(c.lastType==='gallery')return c.lastText||'[Медиагруппа]';return c.lastText||'Нет сообщений'}
+  function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';if(r.type==='gallery')return'Медиагруппа';return'Сообщение'}
+  function mediaUrl(m){const id=String(m&&m.fileId||'');if(m?.type==='gallery')return'';const transport=window.MedsiOverlayTransport;return id&&transport&&typeof transport.mediaUrl==='function'?transport.mediaUrl(id,'w1200'):''}
 
   function getEyeIconSvg(isRead){
     if(isRead){
@@ -70,7 +70,7 @@
     const chatThreadError=document.createElement('p');chatThreadError.id='chatThreadError';chatThreadError.className='error hidden';
     const chatReplyPreview=document.createElement('div');chatReplyPreview.id='chatReplyPreview';chatReplyPreview.className='chat-reply-preview hidden';chatReplyPreview.innerHTML='<div id="chatReplyPreviewTitle" class="chat-reply-preview-title"></div><div id="chatReplyPreviewText" class="chat-reply-preview-text"></div><button id="chatReplyCancel" type="button" class="chat-reply-cancel" aria-label="Отменить ответ">×</button>';
     const chatCompose=document.createElement('div');chatCompose.className='chat-compose';
-    const fileInput=document.createElement('input');fileInput.id='chatImageInput';fileInput.type='file';fileInput.accept='image/*,video/*';fileInput.className='hidden';
+    const fileInput=document.createElement('input');fileInput.id='chatImageInput';fileInput.type='file';fileInput.accept='image/*,video/*';fileInput.multiple=true;fileInput.className='hidden';
     const attach=document.createElement('button');attach.id='chatAttachBtn';attach.type='button';attach.className='btn chat-attach-btn';attach.textContent='📎';
     const editorWrap=document.createElement('div');editorWrap.id='chatReplyEditor';editorWrap.className='chat-reply-editor';
     const editor=document.createElement('div');editor.id='chatReplyInput';editor.contentEditable='true';editor.setAttribute('role','textbox');editor.setAttribute('aria-multiline','true');editor.dataset.placeholder='Введите сообщение…';editorWrap.appendChild(editor);
@@ -101,8 +101,9 @@
     let activeRows=[];
     let replyTo=null;
     let editing=null;
-    let pendingFile=null;
-    let pendingUrl='';
+    let pendingFiles=[];
+    let pendingUrls=[];
+    let pendingMessageId='';
     let sending=false;
     let disposed=false;
     let deleteTarget=null;
@@ -257,6 +258,10 @@
         :'Детское Отделение Медси';
       el.appendChild(author);
       if(m.reply){const q=document.createElement('div');q.className='msg-reply-quote';q.textContent=replyLabel(m.reply);el.appendChild(q)}
+      if(m.type==='gallery'&&window.MedsiChatGallery){
+        const gallery=window.MedsiChatGallery.render(m.fileId,window.MedsiOverlayTransport);
+        if(gallery)el.appendChild(gallery);
+      }
       const url=mediaUrl(m),previewUrl=m.type==='image'&&window.MedsiOverlayTransport&&typeof window.MedsiOverlayTransport.mediaPreviewUrl==='function'?window.MedsiOverlayTransport.mediaPreviewUrl(m.fileId,'w960'):url;if(url){const wrap=document.createElement('div');wrap.className='msg-image-wrap';const media=document.createElement(m.type==='video'?'video':'img');const markReady=()=>{wrap.classList.add('loaded','medsi-media-ready');if(m.type==='image'&&window.MedsiMediaPreload)window.MedsiMediaPreload.queueOriginal(url)};media.addEventListener('load',markReady,{once:true});media.addEventListener('loadedmetadata',markReady,{once:true});media.addEventListener('error',()=>wrap.classList.add('medsi-media-error'),{once:true});if(m.type==='video'){media.controls=true;media.preload='metadata'}wrap.appendChild(media);el.appendChild(wrap);media.src=previewUrl;if((media.tagName==='IMG'&&media.complete&&media.naturalWidth>0)||(media.tagName==='VIDEO'&&media.readyState>=1))markReady()}
       if(m.text){const body=document.createElement('div');body.className='msg-body';body.textContent=String(m.text);el.appendChild(body)}
       if(m.reaction){const r=document.createElement('span');r.className='msg-reaction';r.textContent=m.reaction;el.appendChild(r)}
@@ -352,13 +357,37 @@
       contextMenu.classList.remove('hidden');const r=el.getBoundingClientRect(),w=310;contextMenu.style.left=Math.min(innerWidth-w-12,Math.max(12,r.left+(r.width-w)/2))+'px';let top=r.bottom+8;if(top+220>innerHeight)top=Math.max(12,r.top-220);contextMenu.style.top=top+'px';
     }
 
-    function clearFile(){pendingFile=null;imagePreview.classList.add('hidden');if(pendingUrl){URL.revokeObjectURL(pendingUrl);pendingUrl=''}imagePreview.querySelector('img').removeAttribute('src')}
+    function clearFile(){
+      pendingFiles=[];pendingMessageId='';
+      pendingUrls.forEach(url=>URL.revokeObjectURL(url));pendingUrls=[];
+      imagePreview.replaceChildren();imagePreview.classList.add('hidden');
+    }
+    function drawFilePreview(){
+      imagePreview.replaceChildren();
+      pendingFiles.forEach((file,index)=>{
+        const tile=document.createElement('div');tile.className='preview-item';
+        const media=document.createElement(file.type.startsWith('video/')?'video':'img');
+        media.src=pendingUrls[index];
+        if(media.tagName==='VIDEO'){media.muted=true;media.preload='metadata';media.playsInline=true}
+        else media.alt='Вложение '+(index+1);
+        const remove=document.createElement('button');remove.type='button';remove.className='preview-remove-btn';
+        remove.textContent='×';remove.setAttribute('aria-label','Убрать вложение '+(index+1));
+        remove.onclick=()=>{
+          URL.revokeObjectURL(pendingUrls[index]);
+          pendingUrls.splice(index,1);pendingFiles.splice(index,1);
+          if(!pendingFiles.length){clearFile();return}
+          pendingMessageId='';drawFilePreview();
+        };
+        tile.append(media,remove);imagePreview.append(tile);
+      });
+      imagePreview.classList.toggle('hidden',!pendingFiles.length);
+    }
     function setSending(v){sending=!!v;send.disabled=sending;attach.disabled=sending;editor.contentEditable=sending?'false':'true'}
     async function submit(){
-      if(!activeChat||sending)return;const value=transport.normalizeEducatorText(editorText());if(!value&&!pendingFile)return;setSending(true);
+      if(!activeChat||sending)return;const value=transport.normalizeEducatorText(editorText());if(!value&&!pendingFiles.length)return;setSending(true);
       const targetChat=activeChat;
       const targetPhone=phone10(targetChat.phone);
-      const targetFile=pendingFile;
+      const targetFiles=pendingFiles.slice();
       const targetReply=replyTo;
       const targetEditing=editing;
       try{
@@ -366,9 +395,20 @@
           await transport.edit(session,'educator',targetEditing.messageKey,value);
           if(activeChat===targetChat){editing=null;editor.textContent='';await refreshThread(false)}
         }
-        else if(targetFile){
-          const up=await transport.upload(session,targetPhone,targetFile);
-          await transport.sendMessage(session,'educator',targetPhone,{type:up.type||(targetFile.type.startsWith('video/')?'video':'image'),text:value,fileId:up.fileId,replyToKey:targetReply&&targetReply.messageKey||''});
+        else if(targetFiles.length){
+          const uploaded=[];
+          for(const file of targetFiles){
+            const up=await transport.upload(session,targetPhone,file);
+            uploaded.push({fileId:up.fileId,type:up.type||(file.type.startsWith('video/')?'video':'image')});
+          }
+          const group=uploaded.length>1;
+          const media=group
+            ?{type:'gallery',fileId:window.MedsiChatGallery.pack(uploaded)}
+            :uploaded[0];
+          await transport.sendMessage(session,'educator',targetPhone,{
+            ...media,text:value,clientMessageId:pendingMessageId||undefined,
+            replyToKey:targetReply&&targetReply.messageKey||''
+          });
           if(activeChat===targetChat){editor.textContent='';setReply(null);clearFile();await refreshThread(false)}
         }
         else{
@@ -389,8 +429,19 @@
     btnVideo.onclick=()=>fileInput.click();
     attach.onclick=()=>fileInput.click();
     send.onclick=submit;
-    fileInput.onchange=()=>{const f=fileInput.files&&fileInput.files[0];fileInput.value='';if(!f)return;const maxBytes=Number(transport.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){overlay.showError('Размер файла не должен превышать 100 МБ.');return}clearFile();pendingFile=f;pendingUrl=URL.createObjectURL(f);imagePreview.querySelector('img').src=pendingUrl;imagePreview.classList.remove('hidden')};
-    imagePreview.querySelector('#chatImageRemoveBtn').onclick=clearFile;
+    fileInput.onchange=()=>{
+      const files=Array.from(fileInput.files||[]);fileInput.value='';
+      if(!files.length)return;
+      if(files.length>5){overlay.showError('Можно прикрепить не более пяти файлов.');return}
+      const maxBytes=Number(transport.maxUploadBytes||100*1024*1024);
+      if(files.some(f=>(!f.type.startsWith('image/')&&!f.type.startsWith('video/'))||f.size>maxBytes)||
+         files.reduce((sum,f)=>sum+f.size,0)>150*1024*1024){
+        overlay.showError('Допускаются только фото и видео: до 100 МБ каждый и 150 МБ вместе.');return
+      }
+      clearFile();pendingFiles=files;pendingUrls=files.map(file=>URL.createObjectURL(file));
+      pendingMessageId=(crypto.randomUUID?crypto.randomUUID():'gallery_'+Date.now().toString(36));
+      drawFilePreview();
+    };
     chatReplyPreview.querySelector('#chatReplyCancel').onclick=()=>setReply(null);
     childDeleteModal.querySelector('#childDeleteCancel').onclick=()=>{deleteTarget=null;childDeleteModal.classList.add('hidden')};
     async function confirmChildDeletion(){

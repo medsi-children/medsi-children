@@ -1,0 +1,22 @@
+/* Shared multi-photo/video gallery for educator and parent chats. */
+.medsi-gallery-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px;width:min(280px,100%);max-width:100%;margin:4px 0 7px}
+.medsi-gallery-grid .medsi-gallery-tile{position:relative;aspect-ratio:1.12/1;padding:0;border:0;border-radius:9px;background:#e9f5f6;overflow:hidden;min-width:0;cursor:pointer}
+.medsi-gallery-tile img,.medsi-gallery-tile video{display:block;width:100%;height:100%;object-fit:cover}
+.medsi-gallery-play{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);display:grid;place-items:center;width:35px;height:35px;border-radius:50%;background:rgba(9,82,91,.72);color:white;font-size:15px;padding-left:2px}
+.medsi-gallery-lightbox{position:fixed;inset:0;z-index:22000;background:rgba(2,21,27,.93);display:grid;place-items:center;padding:12px}
+.medsi-gallery-lightbox-panel{position:relative;display:grid;grid-template-columns:42px minmax(0,1fr) 42px;align-items:center;width:min(100%,940px);height:min(86dvh,790px);gap:4px}
+.medsi-gallery-lightbox-media{display:grid;place-items:center;min-width:0;min-height:0;height:100%}
+.medsi-gallery-lightbox-media img,.medsi-gallery-lightbox-media video{display:block;max-width:100%;max-height:100%;object-fit:contain;border-radius:5px}
+.medsi-gallery-lightbox-close{position:absolute;right:4px;top:0;width:38px;height:38px;border:0;border-radius:50%;background:rgba(255,255,255,.16);color:#fff;font-size:29px;z-index:2;cursor:pointer}
+.medsi-gallery-arrow{min-height:48px;min-width:38px;border:0;border-radius:14px;background:rgba(255,255,255,.13);color:#fff;font-size:38px;line-height:1;cursor:pointer}
+.medsi-gallery-arrow:disabled{opacity:.22;cursor:default}
+.medsi-gallery-counter{position:absolute;bottom:0;left:50%;transform:translateX(-50%);border-radius:999px;background:rgba(255,255,255,.13);color:#fff;padding:5px 13px;font-size:13px;font-weight:700}
+.medsi-gallery-lightbox button:focus-visible,.medsi-gallery-tile:focus-visible{outline:3px solid #17c2ca;outline-offset:2px}
+@media(max-width:560px){.medsi-gallery-lightbox{padding:5px}.medsi-gallery-lightbox-panel{grid-template-columns:33px minmax(0,1fr) 33px;height:90dvh;gap:2px}.medsi-gallery-arrow{min-width:30px;font-size:30px}.medsi-gallery-lightbox-media img,.medsi-gallery-lightbox-media video{max-height:80dvh}}
+
+/* Keep the five selected thumbnails inside the mobile composer width. */
+.educator-exact-clone #chatImagePreview.chat-image-preview{box-sizing:border-box;display:flex;flex-wrap:wrap;gap:6px;max-width:100%;padding:4px 0;margin:0}
+.educator-exact-clone #chatImagePreview .preview-item{flex:none;width:62px;height:62px}
+.educator-exact-clone #chatImagePreview .preview-item img,
+.educator-exact-clone #chatImagePreview .preview-item video{width:100%;height:100%;object-fit:cover}
+.educator-exact-clone #chatImagePreview .preview-remove-btn{width:23px;height:23px;min-height:23px;font-size:16px}

@@ -85,7 +85,7 @@ test('new chat picker uses the same parent/child detail labels',()=>{
 });
 
 test('educator chat scripts have fresh cache keys, unrelated identity API remains intact',()=>{
-  assert.match(html,/educator-chat\.js\?v=20261117-phone-label-1/);
+  assert.match(html,/educator-chat\.js\?v=20261117-gallery-1/);
   assert.match(html,/educator-new-chat\.js\?v=20261111-short-labels-1/);
   const backend=read('services/postgres-next/app/chat-operations.mjs');
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);

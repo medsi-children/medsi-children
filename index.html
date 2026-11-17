@@ -14,6 +14,7 @@
   <link rel="stylesheet" href="/parents/chat-ui.css?v=20261015-assistant-layout-3">
   <link rel="stylesheet" href="/chat-overlay/composer-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/media-ui.css?v=20260907-1">
+  <link rel="stylesheet" href="/chat-overlay/gallery-ui.css?v=20261117-1">
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
@@ -94,7 +95,7 @@
       <div class="parent-chat-note"><strong>Пожалуйста, пишите только по делу. Воспитатели находятся с детьми и не могут отвечать круглосуточно.</strong>Здесь можно оставить пожелания по отчётам и вопросы. Ответы на них придут в составе следующего отчёта.</div>
       <div id="parentChatError" class="parent-chat-error hidden"></div>
       <div id="parentChatMessages" class="parent-chat-messages"><div class="parent-chat-empty">Загружаем сообщения…</div></div>
-      <form id="parentChatCompose" class="parent-chat-compose"><button id="parentChatAttach" class="btn parent-chat-attach" type="button">📎</button><input id="parentChatFile" type="file" accept="image/*,video/*" hidden><textarea id="parentChatInput" class="parent-chat-input" placeholder="Введите сообщение…" maxlength="4000"></textarea><button id="parentChatSend" class="btn parent-chat-send" type="submit">Отправить</button></form>
+      <form id="parentChatCompose" class="parent-chat-compose"><button id="parentChatAttach" class="btn parent-chat-attach" type="button">📎</button><input id="parentChatFile" multiple type="file" accept="image/*,video/*" hidden><textarea id="parentChatInput" class="parent-chat-input" placeholder="Введите сообщение…" maxlength="4000"></textarea><button id="parentChatSend" class="btn parent-chat-send" type="submit">Отправить</button></form>
     </div>
   </section>
   <div id="logoutModal" class="parent-confirm-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="logoutModalTitle"><div class="parent-confirm-card"><div class="parent-confirm-icon">!</div><h2 id="logoutModalTitle">Вы уверены, что хотите выйти?</h2><div class="grid2"><button id="logoutCancelBtn" class="btn" type="button">Остаться</button><button id="logoutConfirmBtn" class="btn parent-confirm-danger" type="button">Выйти</button></div></div></div>
@@ -155,7 +156,7 @@
   window.MedsiLoadParentChat=function(){
     if(window.MedsiParentChatScreen)return Promise.resolve();
     if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/parents/smart-bot.js?v=20261002-15','/parents/prewarm.js?v=20261022-preview-isolation','/parents/chat-screen.js?v=20261105-interface-2']).finally(function(){chatPending=null;});
+    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/chat-overlay/gallery-ui.js?v=20261117-1','/parents/smart-bot.js?v=20261002-15','/parents/prewarm.js?v=20261022-preview-isolation','/parents/chat-screen.js?v=20261117-gallery-1']).finally(function(){chatPending=null;});
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');

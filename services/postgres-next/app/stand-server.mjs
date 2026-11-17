@@ -257,6 +257,14 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     const data=parsePayload(req),auth=await pushAuth(data);
     return services.push.unsubscribe({...auth,endpoint:data.endpoint,reason:data.reason});
   }));
+  push.post('/test',handler(async req=>{
+    const data=parsePayload(req),auth=await pushAuth(data);
+    const endpoint=String(data.endpoint||'');
+    if(!endpoint.startsWith('https://')||endpoint.length>2048)
+      throw new Error('Invalid push endpoint.');
+    const result=await services.push.testSubscription({...auth,endpoint});
+    return {...result,dispatch:services.push.dispatchStatus()};
+  }));
   app.use('/push',push);
   // Media is private: chat headers authorize upload; short-lived HttpOnly
   // cookie + active chat-message ownership authorizes browser image loading.

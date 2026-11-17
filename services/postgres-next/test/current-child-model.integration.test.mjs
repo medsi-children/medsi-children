@@ -11,7 +11,7 @@ import {currentStaffPublications} from '../app/current-child-identity.mjs';
 import {planCurrentReport} from '../app/current-report-plan.mjs';
 import {purgeCurrentRegisteredChild} from '../app/current-child-deletion.mjs';
 import {checkCurrentChildSchema} from '../app/stand-server.mjs';
-import {ensureCurrentChildColumns,retireHospitalAdmissions,prepareCurrentChildSchema} from '../app/current-child-schema.mjs';
+import {ensureCurrentChildColumns,ensureParentDirectoryArchive,retireHospitalAdmissions,prepareCurrentChildSchema} from '../app/current-child-schema.mjs';
 
 const enabled=process.env.CI==='true'&&process.env.MEDSI_CURRENT_IDENTITY_TEST==='1';
 const raw=label=>'Степан '+label+' — Синтетическое наблюдение.';
@@ -26,6 +26,8 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
   // external SQL console. Repeating it must be safe and never drop tables.
   await ensureCurrentChildColumns(sql);
   await ensureCurrentChildColumns(sql);
+  await ensureParentDirectoryArchive(sql);
+  await ensureParentDirectoryArchive(sql);
   const [[legacyTable]]=await sql`SELECT to_regclass(${'public.admissions'}) IS NOT NULL AS retained`;
   assert.equal(legacyTable.retained,true);
   let clock=Date.now()-20000;
@@ -227,6 +229,10 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(await sql.begin({isolation:'serializableReadWrite'},tx=>
       purgeCurrentRegisteredChild(tx,firstProfile.child_id,clock)),false);
     await sql`DELETE FROM parent_profiles WHERE phone10=${phoneB}`;
+    const [archiveA]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneA} AND source=${'registration'}`;
+    assert.equal(archiveA.length,1,
+      'a removed active profile must leave its historical registration intact');
     assert.equal(await sql.begin({isolation:'serializableReadWrite'},tx=>
       purgeCurrentRegisteredChild(tx,firstProfile.child_id,clock)),true);
     const [survivors]=await sql`SELECT child_id FROM children`;

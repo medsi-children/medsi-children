@@ -23,7 +23,7 @@
           <button type="button" id="medsiDirectoryImport" class="medsi-directory-import">Импорт CSV</button>
           <input type="file" id="medsiDirectoryFile" accept=".csv,text/csv" class="hidden">
         </div>
-        <p class="medsi-directory-help">В архив попадают новые регистрации. Сохранённую старую базу можно импортировать из CSV один раз. Повторный импорт не создаёт дубликатов.</p>
+        <p class="medsi-directory-help">В архив попадают новые регистрации. Сохранённую старую базу можно импортировать из CSV один раз. Совпадающие номера автоматически объединяются: один телефон, одна запись.</p>
         <p id="medsiDirectoryFeedback" role="status" class="medsi-directory-feedback"></p>
       </div>
       <div id="medsiDirectoryList" class="medsi-directory-list"></div>
@@ -74,9 +74,12 @@
       const parent=document.createElement('span');parent.className='medsi-directory-parent';parent.textContent='Родитель '+row.parentName;
       const phone=document.createElement('span');phone.className='medsi-directory-phone';phone.textContent='Телефон: +'+row.phone;
       const origin=document.createElement('span');origin.className='medsi-directory-source';
-      origin.textContent=row.source==='registration'?
-        'Регистрация в боте · '+new Date(row.registeredAt).toLocaleDateString('ru-RU'):
-        'Импорт из старой базы · дата регистрации неизвестна';
+      const date=row.registeredAt?new Date(row.registeredAt).toLocaleDateString('ru-RU'):'дата неизвестна';
+      origin.textContent=row.source==='registration'
+        ?'Регистрация в боте · '+date
+        :row.source==='current_profile'
+          ?'Действующий родитель · '+date
+          :'Импорт из старой базы · дата регистрации неизвестна';
       info.append(title,parent,phone,origin);
       const remove=document.createElement('button');remove.type='button';remove.className='medsi-directory-remove';
       remove.textContent='Удалить';remove.setAttribute('aria-label','Удалить запись из базы родителей');

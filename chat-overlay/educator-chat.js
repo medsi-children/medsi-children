@@ -27,7 +27,23 @@
   function isPending(m){return String(m&&m.messageKey||'').startsWith('pending-')}
   function samePendingMessage(pending,confirmed){return isPending(pending)&&!isPending(confirmed)&&String(pending&&pending.side||'')===String(confirmed&&confirmed.side||'')&&String(pending&&pending.type||'')===String(confirmed&&confirmed.type||'')&&String(pending&&pending.text||'')===String(confirmed&&confirmed.text||'')&&String(pending&&pending.fileId||'')===String(confirmed&&confirmed.fileId||'')&&Math.abs(Number(pending&&pending.timestamp||0)-Number(confirmed&&confirmed.timestamp||0))<120000}
   function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'[Фотография]';if(c.lastType==='video')return c.lastText||'[Видео]';if(c.lastType==='gallery')return c.lastText||'[Медиагруппа]';return c.lastText||'Нет сообщений'}
-  function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';if(r.type==='gallery')return'Медиагруппа';return'Сообщение'}
+  function replyLabel(r){
+    if(!r)return'';
+    if(r.text){
+      const text=String(r.text).replace(/\s+/gu,' ').trim();
+      const max=108;
+      if(text.length<=max)return text;
+      const prefix=text.slice(0,max+1);
+      const boundary=prefix.lastIndexOf(' ');
+      // Always stop at a word boundary. Unbroken words are allowed to wrap
+      // naturally in CSS rather than being cut in the middle.
+      return (boundary>0?prefix.slice(0,boundary):text)+'…';
+    }
+    if(r.type==='image')return'Фотография';
+    if(r.type==='video')return'Видео';
+    if(r.type==='gallery')return'Медиагруппа';
+    return'Сообщение';
+  }
   function mediaUrl(m){const id=String(m&&m.fileId||'');if(m?.type==='gallery')return'';const transport=window.MedsiOverlayTransport;return id&&transport&&typeof transport.mediaUrl==='function'?transport.mediaUrl(id,'w1200'):''}
 
   function getEyeIconSvg(isRead){

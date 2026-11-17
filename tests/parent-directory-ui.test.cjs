@@ -9,7 +9,7 @@ test('sixth educator tile opens private archive with search and independent dele
   const settings=read('tutors/next-settings.js');
   const screen=read('tutors/parent-directory.js');
   const styles=read('tutors/parent-directory.css');
-  assert.match(html,/\/tutors\/parent-directory\.js\?v=20261117-1/);
+  assert.match(html,/\/tutors\/parent-directory\.js\?v=20261117-dedupe-1/);
   assert.match(html,/\/tutors\/parent-directory\.css\?v=20261117-1/);
   assert.match(html,/next-settings\.js\?v=20261117-parent-directory-1/);
   assert.equal((settings.match(/class="medsi-setting-tile/g)||[]).length,6);

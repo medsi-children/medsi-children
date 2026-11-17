@@ -85,8 +85,49 @@ export async function ensureParentDirectoryArchive(sql){
       registered_at BIGINT,
       created_at BIGINT NOT NULL
     )`;
-    await tx`CREATE INDEX IF NOT EXISTS parent_directory_phone_idx
+    // Existing records may have been imported before phone deduplication.
+    // Keep the oldest richer legacy row when available, otherwise the newest
+    // registration. This migration only touches the independent archive.
+    await tx`LOCK TABLE parent_directory_archive IN SHARE ROW EXCLUSIVE MODE`;
+    await tx`WITH ranked AS (
+      SELECT entry_id, ROW_NUMBER() OVER (
+        PARTITION BY phone10 ORDER BY
+          CASE WHEN source=${'legacy_import'} THEN 0
+               WHEN source=${'registration'} THEN 1 ELSE 2 END,
+          LENGTH(child_surname) DESC, created_at DESC, entry_id DESC
+      ) AS duplicate_rank FROM parent_directory_archive
+    ) DELETE FROM parent_directory_archive AS archive
+      USING ranked WHERE archive.entry_id=ranked.entry_id
+        AND ranked.duplicate_rank>1`;
+    // Retain the existing index name so schema probes and deployments stay
+    // compatible, but enforce the one-phone rule in PostgreSQL itself.
+    const [[index]]=await tx`SELECT indexdef FROM pg_indexes
+      WHERE schemaname=${'public'} AND indexname=${'parent_directory_phone_idx'}`;
+    if(index&&!/CREATE UNIQUE INDEX/i.test(String(index.indexdef||'')))
+      await tx`DROP INDEX IF EXISTS parent_directory_phone_idx`;
+    await tx`CREATE UNIQUE INDEX IF NOT EXISTS parent_directory_phone_idx
       ON parent_directory_archive (phone10)`;
+
+    // One-time snapshot of parents admitted before this directory existed.
+    // The marker prevents a deliberate archive deletion from being undone
+    // on the next app restart. Subsequent registrations write themselves.
+    const marker='parent_directory_active_seed_v1';
+    const [[previousSeed]]=await tx`SELECT stream_id FROM migration_state
+      WHERE stream_id=${marker}`;
+    if(!previousSeed){
+      await tx`INSERT INTO parent_directory_archive
+        (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
+        SELECT ${'current_'}||p.phone10, p.phone10, p.parent_name,
+          COALESCE(NULLIF(c.registered_first_name,${''}),p.child_name),
+          COALESCE(c.surname,${''}), ${'current_profile'}, p.created_at,
+          p.created_at
+        FROM parent_profiles AS p
+        LEFT JOIN children AS c ON c.child_id=p.child_id
+        WHERE LENGTH(p.phone10)=10
+        ON CONFLICT (phone10) DO NOTHING`;
+      await tx`INSERT INTO migration_state (stream_id,cursor_value)
+        VALUES (${marker},${'seeded'}) ON CONFLICT (stream_id) DO NOTHING`;
+    }
     return {ok:true};
   });
 }

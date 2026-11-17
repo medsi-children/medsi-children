@@ -267,6 +267,58 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(staffSource.raw_text,text);
     const [[parentStillRegistered]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
     assert.equal(parentStillRegistered.child_id,thirdProfile.child_id);
+    // Old active parents are seeded exactly once, preserving later independent
+    // removal from the archive even while the parent remains registered.
+    const [[uniqueIndex]]=await sql`SELECT indexdef FROM pg_indexes
+      WHERE indexname=${'parent_directory_phone_idx'}`;
+    assert.match(uniqueIndex.indexdef,/CREATE UNIQUE INDEX/i);
+    await sql`DELETE FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    await sql`DELETE FROM migration_state
+      WHERE stream_id=${'parent_directory_active_seed_v1'}`;
+    await ensureParentDirectoryArchive(sql);
+    const [seedMarkers]=await sql`SELECT stream_id FROM migration_state
+      WHERE stream_id=${'parent_directory_active_seed_v1'}`;
+    assert.equal(seedMarkers.length,1,'one-time backfill marker must be durable');
+    const [backfilled]=await sql`SELECT phone10,source,child_name,child_surname
+      FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    assert.equal(backfilled.length,1);
+    assert.equal(backfilled[0].source,'current_profile');
+    await ensureParentDirectoryArchive(sql);
+    const [afterSecondSeed]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`;
+    assert.equal(afterSecondSeed.length,1);
+    await sql`DELETE FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    const [afterArchiveDelete]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`;
+    assert.equal(afterArchiveDelete.length,0,'manual archive deletion must take effect');
+    await ensureParentDirectoryArchive(sql);
+    const [afterAppRestart]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`;
+    assert.equal(afterAppRestart.length,0,
+      'explicit archive deletion must not be undone by app restart');
+
+    // Rehearse migration from the previous non-unique phone index with
+    // duplicate archive rows. Prefer richer legacy data, then lock uniqueness.
+    await sql`DROP INDEX parent_directory_phone_idx`;
+    await sql`CREATE INDEX parent_directory_phone_idx
+      ON parent_directory_archive (phone10)`;
+    const legacyPhone='9999991111';
+    await sql`INSERT INTO parent_directory_archive
+      (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
+      VALUES (${'ci_dup_registration'},${legacyPhone},${'Синтетический взрослый'},
+        ${'Маша'},${''},${'registration'},${1n},${1n})`;
+    await sql`INSERT INTO parent_directory_archive
+      (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
+      VALUES (${'ci_dup_legacy'},${legacyPhone},${'Синтетический взрослый'},
+        ${'Маша'},${'Синтетическая'},${'legacy_import'},${null},${2n})`;
+    await ensureParentDirectoryArchive(sql);
+    const [deduped]=await sql`SELECT entry_id,child_surname FROM parent_directory_archive
+      WHERE phone10=${legacyPhone}`;
+    assert.deepEqual(deduped.map(x=>x.entry_id),['ci_dup_legacy']);
+    assert.equal(deduped[0].child_surname,'Синтетическая');
+    const [[restoredIndex]]=await sql`SELECT indexdef FROM pg_indexes
+      WHERE indexname=${'parent_directory_phone_idx'}`;
+    assert.match(restoredIndex.indexdef,/CREATE UNIQUE INDEX/i);
     assert.equal((await probePostgresNext(env)).schemaReady,true);
     assert.deepEqual(await checkCurrentChildSchema(sql),{ok:true});
   }finally{await conn.driver.close()}

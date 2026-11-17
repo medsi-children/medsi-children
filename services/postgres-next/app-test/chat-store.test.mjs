@@ -32,7 +32,7 @@ function fakeSql(activePhones = ['9000000001']) {
         const row=draft.threads.get(params[0]);
         return row ? [[row]] : [[]];
       }
-      if (q.includes('FROM chat_media'))return [[{phone10:params[0]}]];
+      if (q.includes('FROM chat_media'))return [[{phone10:'9000000001'}]];
       if (q.includes('FROM chat_messages')) {
         const row = draft.messages.get(params[0]+'/'+params[1]);
         return row && row.status === params[2] ? [[{ message_key: row.message_key }]] : [[]];

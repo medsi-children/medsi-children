@@ -38,14 +38,9 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     return write(async tx=>{
       const [[prior]]=await tx`SELECT role,phone10,enabled,disabled_reason
         FROM push_subscriptions WHERE subscription_id=${id}`;
-      // A browser push subscription is shared across roles on this origin.
-      // When the SAME device explicitly enables notifications while logged in
-      // as a different verified account, atomically transfer its subscription.
-      // A prior identity must not continue receiving pushes on this device.
-      // Authentication is enforced at the /push/subscribe route.
-      const transfer=prior&&(prior.role!==role||prior.phone10!==(role==='parent'?phone10:''));
-      if(transfer && (!data.keys.auth||!data.keys.p256dh))
-        throw new Error('Invalid Web Push keys.');
+      if(prior&&(prior.role!==role||prior.phone10!==(role==='parent'?phone10:''))) {
+        throw new Error('Subscription belongs to another account.');
+      }
       if(prior?.disabled_reason==='subscription_expired') {
         throw Object.assign(new Error('Subscription must be renewed.'),{code:'PUSH_SUBSCRIPTION_EXPIRED'});
       }

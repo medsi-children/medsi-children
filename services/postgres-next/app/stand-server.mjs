@@ -429,7 +429,10 @@ export async function startIsolatedStand(env=process.env,{
           working=true;
           try{
             if(dispatchPush){
-              const ids=await services.push.pendingEvents(40);
+              // Never flood all devices after an outage or a new deployment.
+              // Historical queue rows are marked expired, never sent.
+              await services.push.expireStale(80);
+              const ids=await services.push.pendingEvents(12);
               for(const id of ids){
                 if(stopped)break;
                 try{await services.push.deliverEvent(id)}

@@ -14,7 +14,7 @@ function makeFixture({status,nextAttemptAt,attempts=1}) {
     const tx=async(strings,...params)=>{
       const query=strings.join('?').replace(/\s+/g,' ').trim();
       if(query.includes('FROM push_outbox WHERE event_id='))return [[{...row}]];
-      if(query.includes('FROM push_outbox WHERE status='))return [[{...row}]];
+      if(query.includes('FROM push_outbox')&&query.includes('WHERE (status='))return [Number(row.next_attempt_at)<=Number(params.at(-2))? [{event_id:row.event_id}]:[]];
       if(query.includes('FROM push_subscriptions'))return [[]];
       if(query.startsWith('UPDATE push_outbox')) {
         if(query.includes(',attempts=?')) {

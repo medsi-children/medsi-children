@@ -51,7 +51,7 @@ export function createParentDirectory({sql,now=()=>Date.now()}={}){
           (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
           VALUES (${row.entryId},${row.phone10},${row.parentName},
             ${row.childName},${row.childSurname},${'legacy_import'},${null},${BigInt(now())})
-          ON CONFLICT (entry_id) DO NOTHING RETURNING entry_id`;
+          ON CONFLICT (phone10) DO NOTHING RETURNING entry_id`;
         count+=added.length;
       }
       return count;

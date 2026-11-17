@@ -82,14 +82,16 @@ test('retry never resends an event to a device whose push provider already accep
       if(query.includes('FROM push_outbox WHERE event_id='))return [[{...row}]];
       if(query.includes('FROM push_subscriptions'))return [targets];
       if(query.startsWith('UPDATE push_outbox SET status=')){
-        row.status=params[0];row.attempts=Number(params[1]);
-        row.next_attempt_at=Number(params[2]);return [[]];
+        row.status=params[0];
+        if(query.includes(',attempts=')){
+          row.attempts=Number(params[1]);row.next_attempt_at=Number(params[2]);
+        }else{
+          row.next_attempt_at=Number(params[1]);
+        }
+        return [[]];
       }
       if(query.startsWith('UPDATE push_outbox SET notification_json=')){
         row.notification_json=params[0];return [[]];
-      }
-      if(query.startsWith('UPDATE push_outbox')&&query.includes('SET status=')){
-        row.status=params[0];row.next_attempt_at=Number(params[1]);return [[]];
       }
       throw new Error('Unexpected SQL: '+query);
     };

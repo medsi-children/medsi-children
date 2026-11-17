@@ -184,7 +184,7 @@
   }
 
   function mediaUrl(m){
-    const id=String(m&&m.fileId||'');if(!id)return'';
+    const id=String(m&&m.fileId||'');if(!id||m?.type==='gallery')return'';
     // The shared transport rejects all legacy KV/R2/Drive references until
     // their S3 migration is explicitly verified. Never call external media.
     return typeof t.mediaUrl==='function'?t.mediaUrl(id,'w1600'):'';
@@ -293,6 +293,10 @@
         ?'Родитель'+(state.parentName?' '+state.parentName:'')
         :'Детское Отделение Медси';
       el.appendChild(author);
+      if(m.type==='gallery'&&window.MedsiChatGallery){
+        const gallery=window.MedsiChatGallery.render(m.fileId,t);
+        if(gallery)el.appendChild(gallery);
+      }
       const u=mediaUrl(m);
       const previewUrl=m.type==='image'&&typeof t.mediaPreviewUrl==='function'?t.mediaPreviewUrl(m.fileId,'w960'):u;
       if(u){
@@ -451,13 +455,38 @@
   };
   $('parentChatAttach').onclick=()=>{if(state&&!state.readOnly&&!chatClosed)$('parentChatFile').click()};
   $('parentChatFile').onchange=async()=>{
-    if(!state||state.readOnly||busy||chatClosed)return;const input=$('parentChatFile'),f=input.files&&input.files[0];input.value='';if(!f)return;
-    if(!/^image\//i.test(f.type)&&!/^video\//i.test(f.type)){showError('Можно прикреплять только фото или видео.');return}
-    const maxBytes=Number(t.maxUploadBytes||100*1024*1024);if(f.size>maxBytes){showError('Размер файла не должен превышать 100 МБ.');return}
+    if(!state||state.readOnly||busy||chatClosed)return;
+    const input=$('parentChatFile'),files=Array.from(input.files||[]);
+    input.value='';if(!files.length)return;
+    if(files.length>5){showError('Можно отправить не более пяти файлов одновременно.');return}
+    if(files.some(f=>!f.type.startsWith('image/')&&!f.type.startsWith('video/'))){
+      showError('Можно прикреплять только фото или видео.');return
+    }
+    const maxBytes=Number(t.maxUploadBytes||100*1024*1024);
+    if(files.some(f=>f.size>maxBytes)||files.reduce((total,f)=>total+f.size,0)>150*1024*1024){
+      showError('До 100 МБ на файл и до 150 МБ за одну отправку.');return
+    }
     setBusy(true);clearError();
-    try{const up=await t.upload(await currentSession(),state.phone,f);const sent=await t.sendMessage(await currentSession(),'parent',state.phone,{type:up.type||(f.type.startsWith('video/')?'video':'image'),text:'',fileId:up.fileId});clearError();const confirmed=sent&&sent.message;if(confirmed&&confirmed.messageKey&&!rows.some(m=>messageKey(m)===confirmed.messageKey))render(rows.concat(confirmed),{stick:true});refresh({stick:true,fresh:true}).catch(()=>scheduleLive(1200))}
-    catch(err){if(isChatClosedError(err))showClosedChat();else showError((err&&err.message||'Не удалось подтвердить отправку файла.')+' Проверьте чат перед повтором.')}
-    finally{setBusy(false)}
+    try{
+      const session=await currentSession(),uploaded=[];
+      for(const f of files){
+        const up=await t.upload(session,state.phone,f);
+        uploaded.push({fileId:up.fileId,type:up.type||(f.type.startsWith('video/')?'video':'image')});
+      }
+      const media=uploaded.length>1
+        ?{type:'gallery',fileId:window.MedsiChatGallery.pack(uploaded)}
+        :uploaded[0];
+      const sent=await t.sendMessage(session,'parent',state.phone,{...media,text:''});
+      clearError();
+      const confirmed=sent&&sent.message;
+      if(confirmed&&confirmed.messageKey&&!rows.some(m=>messageKey(m)===confirmed.messageKey))
+        render(rows.concat(confirmed),{stick:true});
+      refresh({stick:true,fresh:true}).catch(()=>scheduleLive(1200));
+    }catch(err){
+      if(isChatClosedError(err))showClosedChat();
+      else showError((err&&err.message||'Не удалось отправить файлы.')+
+        ' Проверьте чат перед повторной отправкой.');
+    }finally{setBusy(false)}
   };
 
   window.MedsiParentChatScreen={open,close,refresh};

@@ -104,7 +104,7 @@ test('opened chat identity stays compact on mobile while preserving child-first 
   const composer=read('chat-overlay/composer-ui.js');
   assert.match(composer,/\(\?:Номер телефона\|Телефон\)/);
   assert.match(composer,/tel:\+7/);
-  assert.match(html,/composer-ui\.js\?v=20261117-reply-excerpt-1/);
+  assert.match(html,/composer-ui\.js\?v=20261117-phone-label-1/);
 });
 
 test('quoted replies finish on complete words and show ellipsis, including long mobile replies',()=>{

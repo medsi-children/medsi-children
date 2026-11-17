@@ -30,7 +30,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
   assert.match(html,/next-settings\.css\?v=20261117-broadcast-tiles-1/);
-  assert.match(html,/next-settings\.js\?v=20261117-push-test-1/);
+  assert.match(html,/next-settings\.js\?v=20261117-parent-directory-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);
   assert.match(js,/Нужна проверка привязки/);

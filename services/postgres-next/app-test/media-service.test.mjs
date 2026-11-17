@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createMediaService} from '../app/media-service.mjs';
+import {createChatGallery} from '../app/chat-gallery.mjs';
 
 const key='chat/'+'b'.repeat(64)+'.jpg', phone='9991112233', other='9994445566';
 function harness({unlinked=false,closed=false}={}) {
@@ -102,4 +103,22 @@ test('unlinked registered chat supports photo uploads for parent and educator; c
   const denied=response();
   await service.upload({headers:{'content-length':'123'},get:k=>headers[k.toLowerCase()]},denied);
   assert.equal(denied.statusCode,401);assert.equal(state.media.size,0);
+});
+
+test('private media in an active gallery stays accessible to its parent only',async()=>{
+  const {service,state,response}=harness();
+  const cookie=response();await service.grantCookie({get:k=>k==='x-medsi-chat-session'?'parent':''},cookie,()=>{});
+  const credentials=cookie.cookies[0];
+  const gallery=createChatGallery([
+    {fileId:'s3:'+key,type:'image'},
+    {fileId:'s3:chat/'+ 'c'.repeat(64)+'.jpg',type:'image'}
+  ]);
+  const open=async()=>{const res=response();await service.open({
+    params:{key},headers:{cookie:credentials.name+'='+credentials.value},get:()=>''},res);return res};
+  state.messages.set('gallery',[{phone10:other,status:'active',file_id:gallery}]);
+  assert.equal((await open()).statusCode,404);
+  state.messages.set('gallery',[{phone10:phone,status:'active',file_id:gallery}]);
+  assert.equal((await open()).statusCode,200);
+  state.messages.set('gallery',[{phone10:phone,status:'deleted',file_id:gallery}]);
+  assert.equal((await open()).statusCode,404);
 });

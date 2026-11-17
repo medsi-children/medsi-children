@@ -28,7 +28,7 @@
   function samePendingMessage(pending,confirmed){return isPending(pending)&&!isPending(confirmed)&&String(pending&&pending.side||'')===String(confirmed&&confirmed.side||'')&&String(pending&&pending.type||'')===String(confirmed&&confirmed.type||'')&&String(pending&&pending.text||'')===String(confirmed&&confirmed.text||'')&&String(pending&&pending.fileId||'')===String(confirmed&&confirmed.fileId||'')&&Math.abs(Number(pending&&pending.timestamp||0)-Number(confirmed&&confirmed.timestamp||0))<120000}
   function preview(c){if(!c)return'';if(c.lastType==='image')return c.lastText||'[Фотография]';if(c.lastType==='video')return c.lastText||'[Видео]';if(c.lastType==='gallery')return c.lastText||'[Медиагруппа]';return c.lastText||'Нет сообщений'}
   function replyLabel(r){if(!r)return'';if(r.text)return String(r.text).slice(0,120);if(r.type==='image')return'Фотография';if(r.type==='video')return'Видео';if(r.type==='gallery')return'Медиагруппа';return'Сообщение'}
-  function mediaUrl(m){const id=String(m&&m.fileId||'');const transport=window.MedsiOverlayTransport;return id&&transport&&typeof transport.mediaUrl==='function'?transport.mediaUrl(id,'w1200'):''}
+  function mediaUrl(m){const id=String(m&&m.fileId||'');if(m?.type==='gallery')return'';const transport=window.MedsiOverlayTransport;return id&&transport&&typeof transport.mediaUrl==='function'?transport.mediaUrl(id,'w1200'):''}
 
   function getEyeIconSvg(isRead){
     if(isRead){
@@ -434,7 +434,7 @@
       if(!files.length)return;
       if(files.length>5){overlay.showError('Можно прикрепить не более пяти файлов.');return}
       const maxBytes=Number(transport.maxUploadBytes||100*1024*1024);
-      if(files.some(f=>!/^image\\/|^video\\//i.test(f.type)||f.size>maxBytes)||
+      if(files.some(f=>(!f.type.startsWith('image/')&&!f.type.startsWith('video/'))||f.size>maxBytes)||
          files.reduce((sum,f)=>sum+f.size,0)>150*1024*1024){
         overlay.showError('Допускаются только фото и видео: до 100 МБ каждый и 150 МБ вместе.');return
       }

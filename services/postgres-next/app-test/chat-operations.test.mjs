@@ -171,7 +171,7 @@ function mutableChatFixture(lastKey='latest-001') {
       }
       if(query.includes('FROM chat_thread_state AS s')) {
         const last=messages.get(state.last_message_key);
-        return [[{...state,last_text:last&&last.status==='active'?last.text:state.last_text}]];
+        return [[{...state,last_text:last&&last.status==='active'?last.text:''}]];
       }
       if(query.includes('FROM chat_pins'))return [[]];
       if(query.includes('FROM parent_profiles'))return [[{

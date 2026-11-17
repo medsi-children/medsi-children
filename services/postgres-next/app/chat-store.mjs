@@ -51,7 +51,7 @@ export function createChatStore(sql) {
           if (seen.payload_hash !== payloadHash) throw new Error('Message identifier reused for different content.');
           return { status: 'duplicate', messageKey: seen.message_key, phone10 };
         }
-        const [[profile]] = await tx`SELECT phone10 FROM parent_profiles WHERE phone10 = ${phone10}`;
+        const [[profile]] = await tx`SELECT phone10,child_name,child_id FROM parent_profiles WHERE phone10 = ${phone10}`;
         if (!profile) throw new Error('Chat is closed: parent profile is inactive.');
         if (type !== 'text') {
           const [[registered]]=await tx`SELECT phone10 FROM chat_media WHERE file_id=${fileId}`;
@@ -90,11 +90,24 @@ export function createChatStore(sql) {
           VALUES (${phone10}, ${messageKey}, ${side}, ${type}, ${text}, ${now},
                   ${educatorUnread}, ${parentUnread})`;
 
+        // The recipient sees the actual sender and a short message preview.
+        // Push content may be shown on the device lock screen by the browser.
+        let childName=String(profile.child_name||'').trim();
+        if(isParent && profile.child_id){
+          const [[child]]=await tx`SELECT registered_first_name,surname FROM children
+            WHERE child_id=${profile.child_id}`;
+          const currentName=[child?.registered_first_name,child?.surname]
+            .map(value=>String(value||'').trim()).filter(Boolean).join(' ');
+          if(currentName)childName=currentName;
+        }
+        const previewText=text.replace(/\s+/g,' ').slice(0,180);
+        const body=type==='text'?previewText
+          :[type==='video'?'🎬 Видео':'📷 Фото',previewText].filter(Boolean).join(' · ');
         const eventId = 'chat_' + digest(phone10 + '\u0000' + clientMessageId);
         const role = isParent ? 'educator' : 'parent';
         const notification = JSON.stringify({
-          title: 'Медси Бот', body: 'Новое сообщение в чате.',
-          type: 'chat', url: isParent ? '/tutors' : '/'
+          title: isParent?(childName||'Сообщение от родителя'):'Детское Отделение Медси',
+          body, type: 'chat', url: isParent ? '/tutors' : '/'
         });
         await tx.upsert`INSERT INTO push_outbox
           (event_id, role, phone10, notification_json, status, attempts, next_attempt_at, created_at)

@@ -222,7 +222,21 @@
     const refreshChats=()=>loadChats(true);
     document.addEventListener('medsi:refresh-educator-chats',refreshChats);
 
-    function renderThreadHeader(chat){chatThreadHeader.replaceChildren();const heading=document.createElement('div');heading.className='chat-identity-title';heading.textContent=chat.childName||'Без имени ребёнка';const parent=document.createElement('div');parent.className='chat-identity-parent';parent.textContent=(chat.relationship||'Родитель')+' '+shortName(chat.parentName);const phone=document.createElement('div');phone.className='chat-identity-phone';phone.textContent='Телефон: '+(displayPhone(chat.phone)||'—');chatThreadHeader.append(heading,parent,phone)}
+    function renderThreadHeader(chat){
+      chatThreadHeader.replaceChildren();
+      const details=document.createElement('div');details.className='chat-identity-details';
+      const heading=document.createElement('div');heading.className='chat-identity-title';heading.textContent=chat.childName||'Без имени ребёнка';
+      const parent=document.createElement('div');parent.className='chat-identity-parent';parent.textContent=(chat.relationship||'Родитель')+' '+shortName(chat.parentName);
+      const phone=document.createElement('div');phone.className='chat-identity-phone';phone.textContent='Телефон: '+(displayPhone(chat.phone)||'—');
+      details.append(heading,parent,phone);
+      const number=phone10(chat.phone);
+      if(number){
+        const call=document.createElement('a');call.className='chat-call-action';
+        call.href='tel:+7'+number;call.textContent='Позвонить';
+        call.setAttribute('aria-label','Позвонить родителю');
+        chatThreadHeader.append(details,call);
+      }else chatThreadHeader.append(details);
+    }
     function threadWithTimeout(phone){
       return new Promise((resolve,reject)=>{
         let settled=false;

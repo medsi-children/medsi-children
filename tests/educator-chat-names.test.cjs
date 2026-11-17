@@ -51,15 +51,18 @@ test('chat metadata keeps child heading, relationship and one phone line',()=>{
 test('open thread shows the same three-line child-first identity',()=>{
   const shortName=getShortName(main);
   const from=main.indexOf('    function renderThreadHeader(chat){');
-  const to=main.indexOf('\n',from);
+  const to=main.indexOf('    function threadWithTimeout(',from);
   assert.ok(from>=0&&to>from);
   const wrapper=makeElement('div');
-  const fn=new Function('chatThreadHeader','document','shortName','displayPhone',
+  const fn=new Function('chatThreadHeader','document','shortName','displayPhone','phone10',
     main.slice(from,to)+'\nreturn renderThreadHeader;')(
-      wrapper,{createElement:makeElement},shortName,displayPhone);
+      wrapper,{createElement:makeElement},shortName,displayPhone,v=>String(v||'').replace(/\\D/g,'').slice(-10));
   fn({childName:'Аня Иванова',parentName:'Тамара Петрова',relationship:'Мама',phone:'9000000001'});
-  assert.deepEqual(wrapper.children.map(c=>c.textContent),[
+  assert.deepEqual(wrapper.children[0].children.map(c=>c.textContent),[
     'Аня Иванова','Мама Тамара','Телефон: +79000000001']);
+  assert.equal(wrapper.children[1].textContent,'Позвонить');
+  assert.equal(wrapper.children[1].href,'tel:+79000000001');
+  assert.equal(wrapper.children[1].className,'chat-call-action');
   assert.match(main,/author\.textContent=m\.side==='parent'[\s\S]*?shortName\(activeChat\.parentName\)/);
 });
 
@@ -83,7 +86,7 @@ test('new chat picker uses the same parent/child detail labels',()=>{
 });
 
 test('educator chat scripts have fresh cache keys, unrelated identity API remains intact',()=>{
-  assert.match(html,/educator-chat\.js\?v=20261117-child-first-identity-1/);
+  assert.match(html,/educator-chat\.js\?v=20261117-call-action-1/);
   assert.match(html,/educator-new-chat\.js\?v=20261111-short-labels-1/);
   const backend=read('services/postgres-next/app/chat-operations.mjs');
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);
@@ -97,6 +100,8 @@ test('opened chat identity stays compact on mobile while preserving child-first 
   assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-parent\{\s*font-size:\.82rem;/);
   assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-phone\{\s*font-size:\.77rem;/);
   assert.match(css, /@media\(max-width:560px\)/);
-  assert.match(html,/educator-exact\.css\?v=20261117-compact-detail-1/);
-  assert.match(main,/chatThreadHeader\.append\(heading,parent,phone\)/);
+  assert.match(html,/educator-exact\.css\?v=20261117-call-action-1/);
+  assert.match(main,/chatThreadHeader\.append\(details,call\)/);
+  assert.match(css,/#screenChatThread \.chat-call-action\{/);
+  assert.match(css,/grid-template-columns:minmax\(0,1fr\) auto/);
 });

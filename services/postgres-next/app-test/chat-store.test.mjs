@@ -25,12 +25,14 @@ function fakeSql(activePhones = ['9000000001']) {
         return row ? [[row]] : [[]];
       }
       if (q.includes('FROM parent_profiles')) {
-        return activePhones.includes(params[0]) ? [[{ phone10: params[0] }]] : [[]];
+        return activePhones.includes(params[0]) ? [[{phone10:params[0],child_id:'synthetic-child-001',child_name:'Имя из профиля'}]] : [[]];
       }
+      if (q.includes('FROM children'))return [[{registered_first_name:'Арина',surname:'Халитова'}]];
       if (q.includes('FROM chat_thread_state')) {
         const row=draft.threads.get(params[0]);
         return row ? [[row]] : [[]];
       }
+      if (q.includes('FROM chat_media'))return [[{phone10:'9000000001'}]];
       if (q.includes('FROM chat_messages')) {
         const row = draft.messages.get(params[0]+'/'+params[1]);
         return row && row.status === params[2] ? [[{ message_key: row.message_key }]] : [[]];
@@ -67,7 +69,7 @@ test('new messages accept text and S3 media but reject invalid media sources', (
   assert.throws(() => prepareChatMessage(payload({phone10:'900000000'})), /recipient/);
 });
 
-test('message creation is idempotent and notifications contain no message text', async () => {
+test('message creation is idempotent and notification previews use child name and message text', async () => {
   const { state, sql } = fakeSql();
   const store = createChatStore(sql);
   const first = await store.send(payload());
@@ -76,8 +78,9 @@ test('message creation is idempotent and notifications contain no message text',
   assert.equal(state.dedup.size, 1);
   assert.equal(state.push.size, 1);
   const push = [...state.push.values()][0];
-  assert.equal(push.body, 'Новое сообщение в чате.');
-  assert.equal(JSON.stringify(push).includes('Сообщение для теста'), false);
+  assert.equal(push.title,'Арина Халитова');
+  assert.equal(push.body,'Сообщение для теста');
+  assert.equal(push.type,'chat');
   const second = await store.send(payload());
   assert.equal(second.status, 'duplicate');
   assert.equal(second.messageKey, first.messageKey);
@@ -93,4 +96,19 @@ test('inactive profile or foreign reply cannot result in a saved message', async
   await assert.rejects(() => store.send(payload({replyToKey:'foreign_message'})), /Reply target/);
   assert.equal(state.messages.size, 0);
   assert.equal(state.push.size, 0);
+});
+
+test('outgoing educator and media pushes show department name and a compact preview',async()=>{
+  const {state,sql}=fakeSql();
+  const store=createChatStore(sql);
+  await store.send(payload({side:'educator',text:'Добрый день!    Сообщение от воспитателей.',
+    clientMessageId:'synthetic_staff_001'}));
+  const notice=[...state.push.values()][0];
+  assert.equal(notice.title,'Детское Отделение Медси');
+  assert.equal(notice.body,'Добрый день! Сообщение от воспитателей.');
+  await store.send(payload({side:'parent',type:'image',text:'Подпись',
+    fileId:'s3:synthetic-media',clientMessageId:'synthetic_media_001'}));
+  const latest=[...state.push.values()][1];
+  assert.equal(latest.title,'Арина Халитова');
+  assert.equal(latest.body,'📷 Фото · Подпись');
 });

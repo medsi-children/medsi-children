@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { prepareChatMessage, createChatStore } from '../app/chat-store.mjs';
+import {createChatGallery} from '../app/chat-gallery.mjs';
 
 const payload = (more={}) => ({
   phone10: '9000000001', side: 'parent', type: 'text',
@@ -111,4 +112,29 @@ test('outgoing educator and media pushes show department name and a compact prev
   const latest=[...state.push.values()][1];
   assert.equal(latest.title,'Арина Халитова');
   assert.equal(latest.body,'📷 Фото · Подпись');
+});
+
+test('five separately uploaded attachments form one stored chat message and one push',async()=>{
+  const {state,sql}=fakeSql(),store=createChatStore(sql);
+  const items=Array.from({length:5},(_,i)=>({
+    fileId:'s3:chat/'+String(i+1).repeat(64)+'.jpg',type:i===4?'video':'image'
+  }));
+  const fileId=createChatGallery(items);
+  const sent=await store.send(payload({type:'gallery',text:'',fileId,
+    clientMessageId:'synthetic_gallery_send_001'}));
+  assert.equal(sent.status,'created');
+  assert.equal(state.messages.size,1);
+  assert.equal(state.push.size,1);
+  const notification=[...state.push.values()][0];
+  assert.equal(notification.title,'Арина Халитова');
+  assert.equal(notification.body,'📎 5 вложений');
+  const again=await store.send(payload({type:'gallery',text:'',fileId,
+    clientMessageId:'synthetic_gallery_send_001'}));
+  assert.equal(again.status,'duplicate');
+  assert.equal(state.messages.size,1);assert.equal(state.push.size,1);
+});
+test('gallery cannot reference an arbitrary or malformed S3 object',()=>{
+  const one='s3:chat/'+ 'a'.repeat(64)+'.jpg';
+  assert.throws(()=>prepareChatMessage(payload({type:'gallery',
+    fileId:'gallery:'+JSON.stringify([{fileId:one,type:'image'}])})),/2 to 5/);
 });

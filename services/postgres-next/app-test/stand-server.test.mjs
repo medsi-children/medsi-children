@@ -449,7 +449,7 @@ test('current-device push diagnostic is bound to authorized parent or educator',
   try{
     const endpoint='https://push.example.invalid/test-only';
     let result=await testPush({role:'educator',endpoint});
-    assert.equal(result.status,503);
+    assert.equal(result.status,401);
     assert.equal(calls.length,0);
     result=await testPush({role:'parent',phone:'9000000001',parentSession:'synthetic-parent-token',endpoint});
     assert.equal(result.status,200);
@@ -460,7 +460,7 @@ test('current-device push diagnostic is bound to authorized parent or educator',
     assert.equal(result.status,200);
     assert.deepEqual(calls[1],{role:'educator',phone10:'',endpoint});
     const bad=await testPush({role:'parent',phone:'9000000002',parentSession:'synthetic-parent-token',endpoint});
-    assert.equal(bad.status,503);
+    assert.equal(bad.status,401);
     assert.equal(calls.length,2);
   }finally{await new Promise(resolve=>server.close(resolve));}
 });

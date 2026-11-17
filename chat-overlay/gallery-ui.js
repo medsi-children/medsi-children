@@ -52,6 +52,16 @@
     };
     close.onclick=remove;before.onclick=()=>step(-1);after.onclick=()=>step(1);
     dialog.onclick=event=>{if(event.target===dialog)remove()};
+    let firstX=null;
+    dialog.addEventListener('touchstart',event=>{
+      firstX=event.changedTouches[0]?.clientX??null;
+    },{passive:true});
+    dialog.addEventListener('touchend',event=>{
+      if(firstX===null)return;
+      const distance=(event.changedTouches[0]?.clientX??firstX)-firstX;
+      firstX=null;
+      if(Math.abs(distance)>45)step(distance<0?1:-1);
+    },{passive:true});
     panel.append(close,before,picture,after,counter);dialog.append(panel);
     document.body.append(dialog);document.addEventListener('keydown',keyDown);
     show();close.focus();

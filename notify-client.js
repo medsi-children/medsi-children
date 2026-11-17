@@ -332,6 +332,23 @@
     return registration.pushManager.getSubscription();
   }
 
+  async function checkDelivery() {
+    if(!isSupported())throw new Error('На этом устройстве уведомления не поддерживаются.');
+    if(Notification.permission!=='granted')throw new Error('Разрешите уведомления в настройках браузера.');
+    if(wanted()==='no')throw new Error('Сначала включите уведомления.');
+    const subscription=await getSubscription();
+    if(!subscription)throw new Error('Подписка отсутствует. Включите уведомления заново.');
+    await syncSubscription(subscription);
+    const identity=state.identity||{};
+    if(identity.role==='parent'&&!identity.parentSession)
+      throw new Error('Сначала заново войдите в родительский кабинет.');
+    if(!state.pushServiceUrl)throw new Error('Сервер уведомлений не настроен.');
+    return sendPushRequest(state.pushServiceUrl+'/test',{
+      role:identity.role,phone:identity.phone||'',parentSession:identity.parentSession||'',
+      endpoint:subscription.endpoint
+    });
+  }
+
   async function subscribe() {
     if (state.browserUnsubscribePromise) {
       const settled = await waitForBrowserUnsubscribe(state.browserUnsubscribePromise);
@@ -602,6 +619,7 @@
 
   window.MedsiPush = {
     init,
+    checkDelivery,
     async getEnabled() { return isSupported() && wanted() !== 'no' && Notification.permission === 'granted' && !!(await getSubscription()); },
     async toggle() {
       const subscription = await getSubscription();

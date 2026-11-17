@@ -12,7 +12,7 @@
       const raw=typeof input==='string'?input:String(input&&input.url||'');
       const url=new URL(raw,window.location.origin);
       if(url.origin===window.location.origin &&
-         (['/push/subscribe','/push/unsubscribe','/push/test'].includes(url.pathname)) &&
+         (url.pathname==='/push/subscribe'||url.pathname==='/push/unsubscribe') &&
          init&&typeof init.body==='string'){
         const body=JSON.parse(init.body);
         if(String(body?.role||'').toLowerCase()==='educator'){

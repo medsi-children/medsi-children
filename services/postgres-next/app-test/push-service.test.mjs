@@ -147,3 +147,19 @@ test('direct delivery of an old push fails closed even if invoked outside the qu
   assert.equal(result.expired,true);
   assert.equal(row.status,'expired');
 });
+
+test('readiness counts include only enabled subscriptions, never endpoints or account data',async()=>{
+  const sql={async begin(_opts,callback){
+    const tx=async strings=>{
+      const query=strings.join('?').replace(/\s+/g,' ');
+      assert.match(query,/FROM push_subscriptions WHERE enabled=/);
+      assert.match(query,/GROUP BY role/);
+      return [[{role:'parent',n:'4'},{role:'educator',n:'2'}]];
+    };
+    return callback(tx);
+  }};
+  const service=createPushService({sql,env,webpushClient:{setVapidDetails(){}}});
+  const counts=await service.subscriptionCounts();
+  assert.deepEqual(counts,{parent:4,educator:2});
+  assert.deepEqual(Object.keys(counts).sort(),['educator','parent']);
+});

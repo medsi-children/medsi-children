@@ -39,7 +39,7 @@ export function prepareChatMessage(input, timestamp = Date.now()) {
   };
 }
 
-export function createChatStore(sql) {
+export function createChatStore(sql,{queuePush=true}={}) {
   if (!sql || typeof sql.begin !== 'function') throw new Error('PostgreSQL query client required.');
   return {
     async send(input) {
@@ -95,6 +95,10 @@ export function createChatStore(sql) {
            educator_has_unread, parent_has_unread)
           VALUES (${phone10}, ${messageKey}, ${side}, ${type}, ${text}, ${now},
                   ${educatorUnread}, ${parentUnread})`;
+
+        // Disabled push must not accumulate deferred notifications in PostgreSQL.
+        // The chat message itself is committed normally regardless of this switch.
+        if(!queuePush)return {status:'created',messageKey,phone10,timestamp};
 
         // The recipient sees the actual sender and a short message preview.
         // Push content may be shown on the device lock screen by the browser.

@@ -6,6 +6,12 @@ const PHONE=/^\d{10}$/;
 const VALID_ROLES=new Set(['parent','educator']);
 // A crashed dispatcher must not strand an outbox event in 'processing'.
 const PROCESSING_LEASE_MS=5*60*1000;
+// Push is an ephemeral signal; the message/report remains in PostgreSQL.
+// Strict age and batch caps prevent delayed floods after outages.
+const MAX_PUSH_AGE_MS=3*60*1000;
+const MAX_PUSH_EVENTS_PER_TICK=12;
+const MAX_PUSH_ATTEMPTS=5;
+const CUTOVER_KEY='push_dispatch_safe_activation_v3';
 const nowUint=()=>BigInt(Date.now());
 
 function validateSubscription(value) {
@@ -22,9 +28,26 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
   if(!sql?.begin)throw new Error('PostgreSQL query client required.');
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
-  // A newly enabled worker must not flood every device with old chat events.
-  // Keep historical rows intact for a separate, audited cleanup.
-  const activatedAt=BigInt(Date.now());
+  // The activation boundary is created only after the dispatcher is explicitly
+  // enabled. Persist it so an ordinary process restart can finish recent events,
+  // without ever replaying historical notifications queued while push was off.
+  let activationPromise=null;
+  function activationStart(){
+    if(!activationPromise){
+      activationPromise=write(async tx=>{
+        await tx`INSERT INTO migration_state (stream_id,cursor_value)
+          VALUES (${CUTOVER_KEY},${String(Date.now())})
+          ON CONFLICT (stream_id) DO NOTHING`;
+        const [[record]]=await tx`SELECT cursor_value FROM migration_state
+          WHERE stream_id=${CUTOVER_KEY}`;
+        const value=Number(record?.cursor_value);
+        if(!Number.isSafeInteger(value)||value<=0||value>Date.now()+60000)
+          throw new Error('Push activation boundary unavailable.');
+        return BigInt(value);
+      }).catch(error=>{activationPromise=null;throw error});
+    }
+    return activationPromise;
+  }
   let configured=false;
   function ensureConfigured() {
     if(configured)return;
@@ -75,11 +98,19 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     ensureConfigured();
     if(!/^[a-z0-9_-]{16,160}$/i.test(String(eventId||'')))throw new Error('Invalid push event.');
     const now=Date.now();
+    const start=await activationStart();
+    const cutoff=Math.max(Number(start),now-MAX_PUSH_AGE_MS);
     const job=await write(async tx=>{
-      const [[row]]=await tx`SELECT event_id,role,phone10,notification_json,status,attempts,next_attempt_at
+      const [[row]]=await tx`SELECT event_id,role,phone10,notification_json,status,attempts,next_attempt_at,created_at
         FROM push_outbox WHERE event_id=${eventId} FOR UPDATE`;
-      if(!row||!['pending','retry','processing'].includes(row.status)||
-         Number(row.next_attempt_at||0)>now)return null;
+      if(!row||!['pending','retry','processing'].includes(row.status))return null;
+      // Defend the actual sender too, not only the queue scanner.
+      if(Number(row.created_at||0)<=cutoff){
+        await tx`UPDATE push_outbox SET status=${'expired'}
+          WHERE event_id=${eventId}`;
+        return {expired:true};
+      }
+      if(Number(row.next_attempt_at||0)>now)return null;
       const attempt=Number(row.attempts||0)+1;
       const leaseUntil=now+PROCESSING_LEASE_MS;
       await tx`UPDATE push_outbox
@@ -89,6 +120,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       return {...row,attempt,leaseUntil};
     });
     if(!job)return {ok:true,skipped:true};
+    if(job.expired)return {ok:true,expired:true};
     const [subscriptions]=await read(tx=>tx`SELECT subscription_id,role,phone10,subscription_json,enabled
       FROM push_subscriptions`);
     const targets=subscriptions.filter(s=>s.enabled&&s.role===job.role&&
@@ -127,7 +159,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       }
     }
     await write(async tx=>{
-      const nextStatus=failed?(attempts<48?'retry':'failed'):'completed';
+      const nextStatus=failed?(attempts<MAX_PUSH_ATTEMPTS?'retry':'failed'):'completed';
       const due=BigInt(now+Math.min(900000,10000*2**Math.min(8,attempts)));
       // A late sender may not overwrite a newer attempt which recovered its lease.
       await tx`UPDATE push_outbox
@@ -138,17 +170,37 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     });
     return {ok:true,sent,failed};
   }
-  async function pendingEvents(limit=30) {
+  async function expireStale(limit=80){
+    const activated=await activationStart();
+    const cutoff=BigInt(Math.max(Number(activated),Date.now()-MAX_PUSH_AGE_MS));
+    const count=Math.max(1,Math.min(100,Number(limit)||80));
+    // Leave historical events intact for audit; only their push-delivery
+    // status changes. Clinical messages and reports are never deleted here.
+    return write(async tx=>{
+      const [expired]=await tx`UPDATE push_outbox SET status=${'expired'}
+        WHERE event_id IN (
+          SELECT event_id FROM push_outbox
+          WHERE (status=${'pending'} OR status=${'retry'} OR status=${'processing'})
+            AND created_at<=${cutoff}
+          ORDER BY created_at ASC,event_id ASC LIMIT ${count}
+        ) RETURNING event_id`;
+      return expired.length;
+    });
+  }
+  async function pendingEvents(limit=MAX_PUSH_EVENTS_PER_TICK) {
+    const activated=await activationStart();
     return read(async tx=>{
-      const due=BigInt(Date.now());
-      const count=Math.max(1,Math.min(100,Number(limit)||30));
+      const now=Date.now();
+      const due=BigInt(now);
+      const cutoff=BigInt(Math.max(Number(activated),now-MAX_PUSH_AGE_MS));
+      const count=Math.max(1,Math.min(MAX_PUSH_EVENTS_PER_TICK,Number(limit)||MAX_PUSH_EVENTS_PER_TICK));
       const [events]=await tx`SELECT event_id FROM push_outbox
         WHERE (status=${'pending'} OR status=${'retry'} OR status=${'processing'})
           AND COALESCE(next_attempt_at,0)<=${due}
-          AND created_at>=${activatedAt}
+          AND created_at>${cutoff}
         ORDER BY next_attempt_at ASC,event_id ASC LIMIT ${count}`;
       return events.map(row=>row.event_id);
     });
   }
-  return {subscribe,unsubscribe,deliverEvent,pendingEvents};
+  return {subscribe,unsubscribe,deliverEvent,pendingEvents,expireStale};
 }

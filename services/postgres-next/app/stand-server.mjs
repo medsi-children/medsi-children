@@ -127,8 +127,10 @@ export function createNextServices({sql,env=process.env}) {
     currentChildMode:true,...readLegacyAuthConfig(env)
   });
   const reportReader=createCurrentParentReportReader(sql);
-  const reports=createCurrentReportSubmissionService(sql);
-  const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
+  // Disabled push means no new queue rows. Reports and chats still save normally.
+  const queuePush=shouldDispatchPush(env);
+  const reports=createCurrentReportSubmissionService(sql,{queuePush});
+  const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql,{queuePush});
   const dashboard=createCurrentEducatorDashboardStore(sql);
   const roster=createCurrentEducatorRosterStore(sql);
   const nameVariants=createNameVariantsStore(sql);
@@ -427,7 +429,10 @@ export async function startIsolatedStand(env=process.env,{
           working=true;
           try{
             if(dispatchPush){
-              const ids=await services.push.pendingEvents(40);
+              // Never flood all devices after an outage or a new deployment.
+              // Historical queue rows are marked expired, never sent.
+              await services.push.expireStale(80);
+              const ids=await services.push.pendingEvents(12);
               for(const id of ids){
                 if(stopped)break;
                 try{await services.push.deliverEvent(id)}

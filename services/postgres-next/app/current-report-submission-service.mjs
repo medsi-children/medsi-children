@@ -1,8 +1,8 @@
 import {createCurrentReportPublisher} from './current-report-publications.mjs';
 import {findLegacyReportReceipt} from './legacy-report-receipts.mjs';
 const ID=/^[A-Za-z0-9_-]{8,128}$/;
-export function createCurrentReportSubmissionService(sql){
-  const publisher=createCurrentReportPublisher(sql);
+export function createCurrentReportSubmissionService(sql,{queuePush=true}={}){
+  const publisher=createCurrentReportPublisher(sql,{queuePush});
   async function submit({kind,rawText,submissionId,authorId,submittedAt=Date.now(),
     correctionOf,clarification}={}){
     const legacy=await sql.begin({isolation:'snapshotReadOnly',idempotent:true},

@@ -138,3 +138,16 @@ test('gallery cannot reference an arbitrary or malformed S3 object',()=>{
   assert.throws(()=>prepareChatMessage(payload({type:'gallery',
     fileId:'gallery:'+JSON.stringify([{fileId:one,type:'image'}])})),/2 to 5/);
 });
+
+test('disabled push never builds a chat notification backlog',async()=>{
+  const {sql,state}=fakeSql();
+  const store=createChatStore(sql,{queuePush:false});
+  const sent=await store.send(payload({clientMessageId:'synthetic_push_off_001'}));
+  assert.equal(sent.status,'created');
+  assert.equal(state.messages.size,1);
+  assert.equal(state.push.size,0);
+  assert.equal(state.threads.size,1);
+  const same=await store.send(payload({clientMessageId:'synthetic_push_off_001'}));
+  assert.equal(same.status,'duplicate');
+  assert.equal(state.push.size,0);
+});

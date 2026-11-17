@@ -12,7 +12,7 @@
       <header class="medsi-directory-header">
         <div>
           <h2 id="medsiDirectoryTitle">База родителей</h2>
-          <p>История регистраций. Выписка ребёнка не удаляет записи из этой базы.</p>
+          <p>Контакты сохраняются после выписки ребёнка.</p>
         </div>
         <button id="medsiDirectoryClose" type="button" aria-label="Закрыть">×</button>
       </header>

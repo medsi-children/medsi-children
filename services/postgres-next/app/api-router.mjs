@@ -4,7 +4,7 @@ import {createHash} from 'node:crypto';
 // Mount ONLY inside the independent test application until approved cutover.
 // app.use('/lab', createNextLabRouter(services)) is intentionally absent from
 // production server.js, so no live users can accidentally reach this code.
-export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,reportHistoryReview,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push}) {
+export function createNextLabRouter({sessions,chatStore,chatOperations,reportReader,reports,dashboard,roster,reportEdits,reportHistoryReview,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,parentDirectory,push}) {
   const services=[sessions,chatStore,chatOperations,reportReader,reports,dashboard,reportHistoryReview,nameVariants,passkeys,parentRegistration,parentAccess,parentDeletion,push];
   if(services.some(x=>!x))throw new Error('NEXT requires all protected services before mounting.');
   const router=express.Router();
@@ -229,6 +229,21 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     }
     return {ok:true,complete:failed===0,count:snapshot.recipients.length,
       delivered,duplicates,failed};
+  }));
+  router.get('/admin/parent-directory',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    return parentDirectory.list();
+  }));
+  router.post('/admin/parent-directory/import',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    return parentDirectory.importRows(req.body?.rows);
+  }));
+  router.delete('/admin/parent-directory/:entryId',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    return parentDirectory.remove(req.params.entryId);
   }));
   router.get('/chats',run(async(req,res)=>{
     if(!await educator(req,res))return;

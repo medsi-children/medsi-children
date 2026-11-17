@@ -25,11 +25,20 @@ export async function probePostgresNext(env=process.env) {
     const actualTables=tableResult.rows.map(row=>String(row.table_name));
     const actualIndexes=new Set(indexResult.rows.map(row=>String(row.indexname)));
     const legacyReady=schemaMatches(actualTables,[...actualIndexes],otherRelations.rows[0]?.n);
-    // After the optional DDL-only contract, admissions is the ONLY missing
-    // legacy table. Existing indexes and both child_id report columns remain.
+    // Parent directory is a known, isolated post-cutover extension. Do not
+    // relax schema verification to arbitrary extra patient tables.
+    const optionalArchive=actualTables.includes('parent_directory_archive');
+    const archiveIndex=optionalArchive?actualIndexes.has('parent_directory_phone_idx'):true;
+    const extensionAllowed=archiveIndex&&actualTables.every(name=>
+      SCHEMA_TABLES.includes(name)||name==='parent_directory_archive');
+    const legacyWithArchive=optionalArchive&&extensionAllowed&&
+      Number(otherRelations.rows[0]?.n)===0&&
+      actualTables.length===SCHEMA_TABLES.length+1&&
+      SCHEMA_TABLES.every(name=>actualTables.includes(name))&&
+      SCHEMA_INDEXES.every(name=>actualIndexes.has(name));
     const currentTables=SCHEMA_TABLES.filter(name=>name!=='admissions');
     const physicalSchemaReady=Number(otherRelations.rows[0]?.n)===0&&
-      actualTables.length===currentTables.length&&
+      extensionAllowed&&actualTables.length===currentTables.length+(optionalArchive?1:0)&&
       currentTables.every(name=>actualTables.includes(name))&&
       SCHEMA_INDEXES.every(name=>actualIndexes.has(name));
     let currentReady=false;
@@ -42,7 +51,7 @@ export async function probePostgresNext(env=process.env) {
         keys.has('parent_report_history.child_id');
     }
     return {ok:true,major:18,tables:actualTables.length,indexes:SCHEMA_INDEXES.length,
-      schemaReady:legacyReady||currentReady};
+      schemaReady:legacyReady||legacyWithArchive||currentReady};
   } catch (_) {
     // CA, account names and connection URLs may be part of native pg errors.
     throw new Error('PostgreSQL TLS probe failed; review Timeweb network, CA and credentials securely.');

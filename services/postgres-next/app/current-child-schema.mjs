@@ -70,12 +70,34 @@ export async function retireHospitalAdmissions(sql){
   });
 }
 
+// Independent parent directory. No foreign keys to current children/profiles:
+// ordinary discharge deletes active access but leaves this historical record.
+export async function ensureParentDirectoryArchive(sql){
+  if(!sql?.begin)throw new Error('PostgreSQL required.');
+  return sql.begin({isolation:'serializableReadWrite',idempotent:true},async tx=>{
+    await tx`CREATE TABLE IF NOT EXISTS parent_directory_archive (
+      entry_id TEXT PRIMARY KEY,
+      phone10 TEXT NOT NULL,
+      parent_name TEXT NOT NULL,
+      child_name TEXT NOT NULL,
+      child_surname TEXT NOT NULL DEFAULT '',
+      source TEXT NOT NULL,
+      registered_at BIGINT,
+      created_at BIGINT NOT NULL
+    )`;
+    await tx`CREATE INDEX IF NOT EXISTS parent_directory_phone_idx
+      ON parent_directory_archive (phone10)`;
+    return {ok:true};
+  });
+}
+
 // The only supported production schema preparation. Existing installations
 // and newly created historical snapshots converge to the same 26-table model.
 export async function prepareCurrentChildSchema(sql){
   // Ownership preparation is required for safe access. Physical cleanup may
   // be deferred if locks are busy or an old row needs manual review.
   await ensureCurrentChildColumns(sql);
+  await ensureParentDirectoryArchive(sql);
   try{return await retireHospitalAdmissions(sql)}
   catch{return {ok:true,retired:false,deferred:true}}
 }

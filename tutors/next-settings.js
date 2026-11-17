@@ -13,7 +13,6 @@
   const deleteIcon = icon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>');
 
   const broadcastIcon = icon('<path d="M4 11v3a2 2 0 0 0 2 2h2l2 4h3l-2-5 8 3V7l-8 3H6a2 2 0 0 0-2 1Z"/><path d="M21 9c1.2 1.7 1.2 4.3 0 6"/>');
-  const qrIcon = icon('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3v4m7-7v7h-4"/>');
 
   const root = document.createElement('div');
   root.id = 'medsiSettingsNext';
@@ -44,11 +43,6 @@
         <span class="medsi-tile-icon">${broadcastIcon}</span>
         <span class="medsi-tile-heading">Отправить рассылку</span>
         <span class="medsi-tile-sub">Сообщение всем действующим родителям</span>
-      </button>
-      <button type="button" id="medsiPushTestCard" class="medsi-setting-tile medsi-tile-qr">
-        <span class="medsi-tile-icon">${qrIcon}</span>
-        <span class="medsi-tile-heading">Проверить уведомления</span>
-        <span class="medsi-tile-sub">Тест на этом устройстве</span>
       </button>
     </div>
     <p id="medsiSettingFeedback" class="medsi-setting-feedback" role="status"></p>
@@ -141,26 +135,6 @@
     renderPicker();
     // Full-web.js refreshes the hidden legacy selects asynchronously.
   }
-  byId('medsiPushTestCard').addEventListener('click', async () => {
-    const button=byId('medsiPushTestCard');
-    if(button.disabled)return;
-    button.disabled=true;
-    feedback.textContent='Проверяем доставку уведомления…';
-    try{
-      if(!window.MedsiPush?.checkDelivery)throw new Error('Сервис уведомлений ещё загружается.');
-      const result=await MedsiPush.checkDelivery();
-      feedback.textContent=result.dispatch?.dispatchEnabled
-        ?'Тестовое уведомление отправлено. Проверьте, появилось ли оно на устройстве.'
-        :'Тест отправлен, но автоматическая отправка уведомлений на сервере выключена. Сообщите администратору.';
-    }catch(error){
-      const reason=String(error?.message||'Ошибка проверки');
-      feedback.textContent=error?.code==='SUBSCRIPTION_NOT_REGISTERED'
-        ?'Подписка отсутствует на сервере. Отключите и снова включите уведомления.'
-        :error?.code==='SUBSCRIPTION_EXPIRED'
-          ?'Подписка устарела. Отключите и снова включите уведомления.'
-          :'Не удалось проверить уведомления. '+reason;
-    }finally{button.disabled=false;}
-  });
   byId('medsiParentPreviewCard').addEventListener('click', () =>
     openPicker('Родительская панель', 'previewChildSelect', 'previewParentButton'));
   byId('medsiDeleteParentCard').addEventListener('click', () =>

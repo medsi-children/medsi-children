@@ -297,11 +297,22 @@ test('real PostgreSQL push worker: deliver saved outbox and mark expired endpoin
       env:{VAPID_PUBLIC_KEY:'synthetic-key',VAPID_PRIVATE_KEY:'synthetic-private',
         VAPID_SUBJECT:'mailto:ci@example.invalid'}
     });
-    const [events]=await sql([
+    // Only events created AFTER first activation may be delivered.
+    // Prior pending rows remain historical and must never burst on restart.
+    const [prior]=await sql([
       'SELECT event_id FROM push_outbox WHERE phone10='," AND role='parent' AND status='pending'"
     ],'9000000001');
-    assert.ok(events.length>0);
-    const result=await push.deliverEvent(events[0].event_id);
+    assert.ok(prior.length>0);
+    await push.pendingEvents(); // persist the safe first-activation cutoff
+    await new Promise(resolve=>setTimeout(resolve,8));
+    const eventId='ci_new_push_'+Date.now();
+    const now=BigInt(Date.now());
+    await sql.upsert`INSERT INTO push_outbox
+      (event_id,role,phone10,notification_json,status,attempts,next_attempt_at,created_at)
+      VALUES (${eventId},${'parent'},${'9000000001'},
+        ${JSON.stringify({title:'Медси Бот',body:'Синтетическое сообщение',type:'chat'})},
+        ${'pending'},${0n},${now},${now})`;
+    const result=await push.deliverEvent(eventId);
     assert.equal(result.ok,true);
     assert.ok(sent.some(endpoint=>endpoint.endsWith('/parent-A-endpoint')));
     const id=createHash('sha256')
@@ -321,7 +332,7 @@ test('real PostgreSQL push worker: deliver saved outbox and mark expired endpoin
       }),
       error=>error.code==='PUSH_SUBSCRIPTION_EXPIRED'
     );
-    const [done]=await sql(['SELECT status FROM push_outbox WHERE event_id=', ''],events[0].event_id);
+    const [done]=await sql(['SELECT status FROM push_outbox WHERE event_id=', ''],eventId);
     assert.equal(done[0].status,'completed');
   } finally{
     await conn.driver.close();

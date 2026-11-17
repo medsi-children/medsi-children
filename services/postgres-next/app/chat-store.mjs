@@ -100,7 +100,7 @@ export function createChatStore(sql) {
             .map(value=>String(value||'').trim()).filter(Boolean).join(' ');
           if(currentName)childName=currentName;
         }
-        const previewText=text.replace(/\\s+/g,' ').slice(0,180);
+        const previewText=text.replace(/\s+/g,' ').slice(0,180);
         const body=type==='text'?previewText
           :[type==='video'?'🎬 Видео':'📷 Фото',previewText].filter(Boolean).join(' · ');
         const eventId = 'chat_' + digest(phone10 + '\u0000' + clientMessageId);

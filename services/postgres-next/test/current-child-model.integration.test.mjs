@@ -276,6 +276,9 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     await sql`DELETE FROM migration_state
       WHERE stream_id=${'parent_directory_active_seed_v1'}`;
     await ensureParentDirectoryArchive(sql);
+    const [seedMarkers]=await sql`SELECT stream_id FROM migration_state
+      WHERE stream_id=${'parent_directory_active_seed_v1'}`;
+    assert.equal(seedMarkers.length,1,'one-time backfill marker must be durable');
     const [backfilled]=await sql`SELECT phone10,source,child_name,child_surname
       FROM parent_directory_archive WHERE phone10=${phoneC}`;
     assert.equal(backfilled.length,1);

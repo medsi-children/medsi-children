@@ -12,7 +12,7 @@ function fixture(){
         return [rows];
       }
       if(q.startsWith('INSERT INTO parent_directory_archive')){
-        if(archive.has(values[0]))return [[]];
+        if([...archive.values()].some(row=>row.phone10===values[1]))return [[]];
         const row={entry_id:values[0],phone10:values[1],parent_name:values[2],
           child_name:values[3],child_surname:values[4],source:values[5],
           registered_at:values[6],created_at:values[7]};
@@ -51,6 +51,19 @@ test('legacy import is independent, idempotent and preserves missing surname/dat
   assert.equal((await service.remove(entryId)).deleted,true);
   assert.equal((await service.list()).rows.length,1);
   assert.equal(currentProfiles.size,0);
+});
+test('one normalized phone cannot create duplicates from differing rows or reused registration data',async()=>{
+  const {service,archive}=fixture();
+  const first=await service.importRows([importData[0]]);
+  assert.equal(first.inserted,1);
+  const second=await service.importRows([
+    {...importData[0],phone:'+7 (900) 000-00-01',
+      childName:'Другой ребёнок',sourceRow:105}
+  ]);
+  assert.equal(second.inserted,0);
+  assert.equal(second.skipped,1);
+  assert.equal(archive.size,1);
+  assert.equal((await service.list()).rows[0].childName,'Тестовый ребёнок');
 });
 test('archive import rejects bad phones and missing required names',()=>{
   assert.throws(()=>validateParentDirectoryImport([]),/1 to 500/);

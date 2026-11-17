@@ -11,11 +11,19 @@ function makeFixture({status,nextAttemptAt,attempts=1}) {
     created_at:Date.now()+1000,
     next_attempt_at:nextAttemptAt
   };
+  let activation=null;
   const sql={async begin(_mode,callback){
     const tx=async(strings,...params)=>{
       const query=strings.join('?').replace(/\s+/g,' ').trim();
+      if(query.startsWith('INSERT INTO migration_state')){activation??=Number(params[1]);return [[]]}
+      if(query.startsWith('SELECT cursor_value FROM migration_state'))return [[{cursor_value:String(activation)}]];
+      if(query.startsWith('UPDATE push_outbox SET status=')&&query.includes('WHERE event_id IN')){
+        const cutoff=Number(params.at(-2));
+        if(['pending','retry','processing'].includes(row.status)&&Number(row.created_at)<=cutoff){row.status='expired';return [[{event_id:row.event_id}]]}
+        return [[]];
+      }
       if(query.includes('FROM push_outbox WHERE event_id='))return [[{...row}]];
-      if(query.includes('FROM push_outbox')&&query.includes('WHERE (status='))return [Number(row.next_attempt_at)<=Number(params.at(-3))&&Number(row.created_at)>=Number(params.at(-2))? [{event_id:row.event_id}]:[]];
+      if(query.includes('FROM push_outbox')&&query.includes('WHERE (status='))return [Number(row.next_attempt_at)<=Number(params.at(-3))&&Number(row.created_at)>Number(params.at(-2))? [{event_id:row.event_id}]:[]];
       if(query.includes('FROM push_subscriptions'))return [[]];
       if(query.startsWith('UPDATE push_outbox')) {
         if(query.includes(',attempts=?')) {
@@ -76,9 +84,12 @@ test('retry never resends an event to a device whose push provider already accep
   ];
   const calls=[];
   let failB=true;
+  let activation=null;
   const sql={async begin(_mode,callback){
     const tx=async(strings,...params)=>{
       const query=strings.join('?').replace(/\s+/g,' ').trim();
+      if(query.startsWith('INSERT INTO migration_state')){activation??=Number(params[1]);return [[]]}
+      if(query.startsWith('SELECT cursor_value FROM migration_state'))return [[{cursor_value:String(activation)}]];
       if(query.includes('FROM push_outbox WHERE event_id='))return [[{...row}]];
       if(query.includes('FROM push_subscriptions'))return [targets];
       if(query.startsWith('UPDATE push_outbox SET status=')){
@@ -119,4 +130,20 @@ test('retry never resends an event to a device whose push provider already accep
     'https://push.invalid.example/b',
     'https://push.invalid.example/b'
   ]);
+});
+
+test('a persistent activation boundary survives process restart and never replays a disabled-period queue',async()=>{
+  const {row,service}=makeFixture({status:'pending',nextAttemptAt:Date.now()-10000,attempts:0});
+  row.created_at=Date.now()-2*60*60*1000;
+  assert.deepEqual(await service.pendingEvents(),[]);
+  assert.equal(await service.expireStale(),1);
+  assert.equal(row.status,'expired');
+  assert.deepEqual(await service.pendingEvents(),[]);
+});
+test('direct delivery of an old push fails closed even if invoked outside the queue scanner',async()=>{
+  const {row,service}=makeFixture({status:'pending',nextAttemptAt:Date.now()-10000,attempts:0});
+  row.created_at=Date.now()-3600000;
+  const result=await service.deliverEvent(row.event_id);
+  assert.equal(result.expired,true);
+  assert.equal(row.status,'expired');
 });

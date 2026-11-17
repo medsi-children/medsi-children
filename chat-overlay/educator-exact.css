@@ -539,3 +539,10 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   .link-modal-actions.child-delete-actions{ flex-direction:row; justify-content:center; align-items:center; }
   .child-delete-actions .link-modal-cancel,.child-delete-actions .link-modal-save{ width:auto; min-width:120px; }
 }
+
+/* Consistent child-first identity in chat cards and opened threads. */
+.educator-exact-clone .chat-card-title{font-weight:850}
+.educator-exact-clone .chat-card-meta{font-size:.86rem;line-height:1.4}
+.educator-exact-clone .chat-info .chat-identity-title{font-size:1.1rem;font-weight:850;line-height:1.35}
+.educator-exact-clone .chat-info .chat-identity-parent{font-size:.92rem;font-weight:650;line-height:1.4;margin-top:3px}
+.educator-exact-clone .chat-info .chat-identity-phone{font-size:.85rem;font-weight:450;line-height:1.4;margin-top:2px}

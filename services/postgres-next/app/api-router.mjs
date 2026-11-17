@@ -185,6 +185,51 @@ export function createNextLabRouter({sessions,chatStore,chatOperations,reportRea
     if(!await educator(req,res))return;
     return chatOperations.listParents();
   }));
+  const broadcastSnapshot=async()=>{
+    const recipients=await chatOperations.broadcastRecipients();
+    if(recipients.length>200)throw new Error('Too many announcement recipients.');
+    const signature=createHash('sha256').update(
+      recipients.map(row=>row.phone+'|'+row.childId).join('\\n')
+    ).digest('hex');
+    return {recipients,signature};
+  };
+  router.get('/broadcast/preview',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    const snapshot=await broadcastSnapshot();
+    return {ok:true,count:snapshot.recipients.length,signature:snapshot.signature};
+  }));
+  router.post('/broadcast/send',run(async(req,res)=>{
+    const auth=await educator(req,res);if(!auth)return;
+    if(rejectPreview(auth,res))return;
+    const text=String(req.body?.text||'').trim();
+    const operationId=String(req.body?.operationId||'');
+    const signature=String(req.body?.signature||'');
+    if(!text||text.length>4000||!/^[a-zA-Z0-9_-]{8,100}$/.test(operationId))
+      return res.status(400).json({ok:false,message:'Проверьте текст рассылки.'});
+    const snapshot=await broadcastSnapshot();
+    if(signature!==snapshot.signature)
+      return res.status(409).json({ok:false,code:'RECIPIENTS_CHANGED',message:'Список родителей изменился. Проверьте получателей заново.'});
+    if(!snapshot.recipients.length)
+      return res.status(409).json({ok:false,message:'Нет доступных родителей для рассылки.'});
+    let delivered=0,duplicates=0,failed=0;
+    for(const recipient of snapshot.recipients){
+      const clientMessageId='broadcast_'+createHash('sha256').update(
+        operationId+'\\0'+recipient.phone
+      ).digest('hex').slice(0,40);
+      try{
+        const result=await chatStore.send({phone10:recipient.phone,side:'educator',
+          type:'text',text,clientMessageId});
+        if(result.status==='duplicate')duplicates++;
+        else delivered++;
+      }catch(_){
+        // Do not expose recipient identifiers or message contents in diagnostics.
+        failed++;
+      }
+    }
+    return {ok:true,complete:failed===0,count:snapshot.recipients.length,
+      delivered,duplicates,failed};
+  }));
   router.get('/chats',run(async(req,res)=>{
     if(!await educator(req,res))return;
     return chatOperations.listChats(String(req.query.bucket||'all'));

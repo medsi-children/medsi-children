@@ -370,3 +370,61 @@ test('canonical report routes on Timeweb accept one write and return a PostgreSQ
     await new Promise((resolve,reject)=>server.close(error=>error?reject(error):resolve()));
   }
 });
+
+test('broadcast requires educator, previews count and safely retries one recipient failure',async()=>{
+  const services=fakeServices();
+  services.sessions.verifyWorker=async token=>token==='staff-token'?{role:'educator'}
+    :token==='parent-token'?{role:'parent',phone10:'9000000001'}:null;
+  services.chatOperations.broadcastRecipients=async()=>[
+    {phone:'9000000001',childId:'child-a'},
+    {phone:'9000000002',childId:'child-b'}
+  ];
+  const seen=new Map();
+  let failSecond=true;
+  services.chatStore.send=async input=>{
+    assert.equal(input.side,'educator');
+    assert.equal(input.type,'text');
+    assert.match(input.clientMessageId,/^broadcast_[a-f0-9]{40}$/);
+    const key=input.phone10+'|'+input.clientMessageId;
+    if(input.phone10==='9000000002'&&failSecond){failSecond=false;throw new Error('synthetic DB failure')}
+    if(seen.has(key)){
+      assert.equal(seen.get(key),input.text);
+      return {status:'duplicate'};
+    }
+    seen.set(key,input.text);
+    return {status:'created'};
+  };
+  const app=createNextStandApp(services,{env});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const base='http://127.0.0.1:'+server.address().port;
+  async function call(path,token,body){
+    const response=await fetch(base+path,{method:body?'POST':'GET',
+      headers:{'X-Medsi-Chat-Session':token,...(body?{'content-type':'application/json'}:{})},
+      ...(body?{body:JSON.stringify(body)}:{})});
+    return {status:response.status,result:await response.json()};
+  }
+  try{
+    assert.equal((await call('/lab/broadcast/preview','parent-token')).status,401);
+    assert.equal((await call('/lab/broadcast/send','parent-token',{text:'Test'})).status,401);
+    const preview=await call('/lab/broadcast/preview','staff-token');
+    assert.equal(preview.status,200);
+    assert.equal(preview.result.count,2);
+    const payload={text:'Тестовое объявление',operationId:'bulk_synthetic_01',signature:preview.result.signature};
+    const wrong=await call('/lab/broadcast/send','staff-token',{...payload,signature:'stale'});
+    assert.equal(wrong.status,409);assert.equal(seen.size,0);
+    const partial=await call('/lab/broadcast/send','staff-token',payload);
+    assert.equal(partial.status,200);
+    assert.equal(partial.result.complete,false);
+    assert.equal(partial.result.delivered,1);
+    assert.equal(partial.result.failed,1);
+    const retry=await call('/lab/broadcast/send','staff-token',payload);
+    assert.equal(retry.status,200);
+    assert.equal(retry.result.complete,true);
+    assert.equal(retry.result.duplicates,1);
+    assert.equal(retry.result.delivered,1);
+    assert.equal(seen.size,2);
+    const third=await call('/lab/broadcast/send','staff-token',payload);
+    assert.equal(third.result.duplicates,2);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});

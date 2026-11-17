@@ -44,6 +44,28 @@ export function createChatOperations(sql) {
       }).sort((a,b)=>a.childName.localeCompare(b.childName,'ru'))};
     });
   }
+  // Only currently linked profiles can receive a department-wide announcement.
+  // Detached/legacy-only profiles are deliberately excluded.
+  async function broadcastRecipients() {
+    return read(async tx => {
+      const [[rows]] = await Promise.all([
+        tx`SELECT p.phone10, p.child_id FROM parent_profiles p
+          INNER JOIN children c ON c.child_id = p.child_id`
+      ]);
+      const unique=new Map(),conflicted=new Set();
+      for (const row of rows) {
+        const phone=String(row.phone10||'');
+        const childId=String(row.child_id||'');
+        if (!PHONE.test(phone)||!childId) continue;
+        if (unique.has(phone) && unique.get(phone)!==childId) conflicted.add(phone);
+        else unique.set(phone,childId);
+      }
+      return [...unique].filter(([phone])=>!conflicted.has(phone))
+        .map(([phone,childId])=>({phone,childId}))
+        .sort((a,b)=>a.phone.localeCompare(b.phone));
+    });
+  }
+
   async function listChats(bucket='all') {
     if (!['all','unread','read'].includes(bucket)) throw new Error('Unsupported chat filter.');
     return read(async tx => {
@@ -211,5 +233,5 @@ export function createChatOperations(sql) {
       return {ok:true};
     });
   }
-  return {listParents,listChats,thread,markRead,parentUnread,pin,mutate};
+  return {listParents,listChats,broadcastRecipients,thread,markRead,parentUnread,pin,mutate};
 }

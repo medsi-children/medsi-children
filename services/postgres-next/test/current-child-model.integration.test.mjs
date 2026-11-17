@@ -284,12 +284,17 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(backfilled.length,1);
     assert.equal(backfilled[0].source,'current_profile');
     await ensureParentDirectoryArchive(sql);
-    assert.equal((await sql`SELECT entry_id FROM parent_directory_archive
-      WHERE phone10=${phoneC}`).length,1);
+    const [afterSecondSeed]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`;
+    assert.equal(afterSecondSeed.length,1);
     await sql`DELETE FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    const [afterArchiveDelete]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`;
+    assert.equal(afterArchiveDelete.length,0,'manual archive deletion must take effect');
     await ensureParentDirectoryArchive(sql);
-    assert.equal((await sql`SELECT entry_id FROM parent_directory_archive
-      WHERE phone10=${phoneC}`).length,0,
+    const [afterAppRestart]=await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`;
+    assert.equal(afterAppRestart.length,0,
       'explicit archive deletion must not be undone by app restart');
 
     // Rehearse migration from the previous non-unique phone index with

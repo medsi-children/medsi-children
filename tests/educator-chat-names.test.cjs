@@ -22,8 +22,8 @@ function makeElement(tag){
     setAttribute(){},
   };
 }
-const displayPhone=v=>'8'+String(v||'').replace(/\D/g,'').slice(-10);
-test('chat metadata abbreviates only the repeated lines, preserving full heading',()=>{
+const displayPhone=v=>'+7'+String(v||'').replace(/\D/g,'').slice(-10);
+test('chat metadata keeps child heading, relationship and one phone line',()=>{
   const shortName=getShortName(main);
   for(const [value,expected] of [
     ['Аня Иванова','Аня'],['Тамара Петрова','Тамара'],
@@ -43,12 +43,12 @@ test('chat metadata abbreviates only the repeated lines, preserving full heading
     relationship:'Мама',phone:'9000000001',lastType:'text'});
   assert.equal(card.children[1].textContent,'Аня Иванова');
   assert.equal(card.children[2].textContent,
-    'Родитель: Тамара\nРебёнок: Аня\nНомер телефона: 89000000001');
+    'Мама Тамара\nТелефон: +79000000001');
   assert.equal(card.children[3].textContent,'Последнее сообщение');
   assert.equal(card.dataset.phone,'9000000001');
 });
 
-test('open thread shows the same short labels and keeps telephone intact',()=>{
+test('open thread shows the same three-line child-first identity',()=>{
   const shortName=getShortName(main);
   const from=main.indexOf('    function renderThreadHeader(chat){');
   const to=main.indexOf('\n',from);
@@ -57,9 +57,9 @@ test('open thread shows the same short labels and keeps telephone intact',()=>{
   const fn=new Function('chatThreadHeader','document','shortName','displayPhone',
     main.slice(from,to)+'\nreturn renderThreadHeader;')(
       wrapper,{createElement:makeElement},shortName,displayPhone);
-  fn({childName:'Аня Иванова',parentName:'Тамара Петрова',phone:'9000000001'});
+  fn({childName:'Аня Иванова',parentName:'Тамара Петрова',relationship:'Мама',phone:'9000000001'});
   assert.deepEqual(wrapper.children.map(c=>c.textContent),[
-    'Родитель: Тамара','Ребёнок: Аня','Номер телефона: 89000000001']);
+    'Аня Иванова','Мама Тамара','Телефон: +79000000001']);
   assert.match(main,/author\.textContent=m\.side==='parent'[\s\S]*?shortName\(activeChat\.parentName\)/);
 });
 
@@ -79,11 +79,11 @@ test('new chat picker uses the same parent/child detail labels',()=>{
   const card=list.children[0];
   assert.equal(card.children[0].textContent,'Мишель Морозова');
   assert.equal(card.children[1].textContent,
-    'Родитель: Алина\nРебёнок: Мишель\nНомер телефона: 89000000002');
+    'Мама Алина\nТелефон: +79000000002');
 });
 
 test('educator chat scripts have fresh cache keys, unrelated identity API remains intact',()=>{
-  assert.match(html,/educator-chat\.js\?v=20261111-short-labels-1/);
+  assert.match(html,/educator-chat\.js\?v=20261117-child-first-identity-1/);
   assert.match(html,/educator-new-chat\.js\?v=20261111-short-labels-1/);
   const backend=read('services/postgres-next/app/chat-operations.mjs');
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);

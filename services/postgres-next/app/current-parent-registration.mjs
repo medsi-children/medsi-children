@@ -64,6 +64,13 @@ export function createCurrentParentRegistrationService({sql,sessions,now=()=>Dat
           approved_by,created_at,updated_at)
         VALUES (${attemptId},${phone10},${parentName},${childName},${'COMPLETED'},
           ${''},${''},${at},${at})`;
+      // One immutable historical snapshot for each new registration.
+      // No child/parent FK: later discharge must not erase the archive.
+      await tx`INSERT INTO parent_directory_archive
+        (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
+        VALUES (${'registration_'+attemptId},${phone10},${parentName},${childName},
+          ${''},${'registration'},${at},${at})
+        ON CONFLICT (entry_id) DO NOTHING`;
       return {ok:true,duplicate:false};
     });
     if(!result.ok)return result;

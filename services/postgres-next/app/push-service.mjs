@@ -48,6 +48,24 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     }
     return activationPromise;
   }
+  // Rate-limit generic operational logs. Never log endpoints, account
+  // numbers, message text, subscription secrets, or notification payloads.
+  const lastNotice=new Map();
+  function logPush(code){
+    const now=Date.now();
+    if(now-(lastNotice.get(code)||0)<60000)return;
+    lastNotice.set(code,now);
+    console.warn('MEDSI_PUSH_'+code);
+  }
+  async function subscriptionCounts(){
+    const [counts]=await read(tx=>tx`SELECT role,COUNT(*) AS n
+      FROM push_subscriptions WHERE enabled=${true} GROUP BY role`);
+    const byRole={parent:0,educator:0};
+    for(const item of counts){
+      if(Object.hasOwn(byRole,item.role))byRole[item.role]=Number(item.n)||0;
+    }
+    return byRole;
+  }
   let configured=false;
   function ensureConfigured() {
     if(configured)return;
@@ -125,6 +143,8 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       FROM push_subscriptions`);
     const targets=subscriptions.filter(s=>s.enabled&&s.role===job.role&&
       (job.role==='educator'||s.phone10===job.phone10));
+    if(!targets.length)logPush(job.role==='educator'
+      ?'NO_EDUCATOR_TARGETS':'NO_PARENT_TARGETS');
     let failed=0,sent=0;
     const attempts=job.attempt;
     const payload=JSON.parse(job.notification_json||'{}');
@@ -150,8 +170,15 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
               AND next_attempt_at=${BigInt(job.leaseUntil)}`;
         });
         sent++;
+        logPush('PROVIDER_ACCEPTED_'+job.role.toUpperCase());
       }catch(error) {
-        if([404,410].includes(Number(error?.statusCode))) {
+        const status=Number(error?.statusCode)||0;
+        if(status===401||status===403)logPush('PROVIDER_AUTH_REJECTED');
+        else if(status===429)logPush('PROVIDER_RATE_LIMITED');
+        else if(status>=500)logPush('PROVIDER_UNAVAILABLE');
+        else if(status!==404&&status!==410)logPush('PROVIDER_NETWORK_OR_TIMEOUT');
+        if([404,410].includes(status)) {
+          logPush('SUBSCRIPTION_EXPIRED');
           await write(async tx=>{await tx`UPDATE push_subscriptions
             SET enabled=${false},disabled_reason=${'subscription_expired'},updated_at=${nowUint()}
             WHERE subscription_id=${target.subscription_id}`;});
@@ -202,5 +229,5 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       return events.map(row=>row.event_id);
     });
   }
-  return {subscribe,unsubscribe,deliverEvent,pendingEvents,expireStale};
+  return {subscribe,unsubscribe,deliverEvent,pendingEvents,expireStale,subscriptionCounts};
 }

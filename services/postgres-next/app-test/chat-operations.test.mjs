@@ -130,9 +130,9 @@ function mutableChatFixture(lastKey='latest-001') {
   };
   const messages=new Map([
     ['latest-001',{phone10:state.phone10,message_key:'latest-001',
-      side:'educator',type:'text',text:'Старый предпросмотр',status:'active'}],
+      side:'educator',type:'text',text:'Старый предпросмотр',status:'active',created_at:1700}],
     ['older-001',{phone10:state.phone10,message_key:'older-001',
-      side:'educator',type:'text',text:'Прежний текст',status:'active'}]
+      side:'educator',type:'text',text:'Прежний текст',status:'active',created_at:1000}]
   ]);
   const queries=[];
   const sql={async begin(options,run){
@@ -141,6 +141,24 @@ function mutableChatFixture(lastKey='latest-001') {
       queries.push(query);
       if(query.includes('SELECT phone10,message_key,side,type,text,reaction,status')&&query.includes('FROM chat_messages')) {
         return [[messages.get(values[0])||null]];
+      }
+      if(query.startsWith('UPDATE chat_messages SET status=')) {
+        const row=messages.get(values[2]); // status, phone, key
+        if(row&&row.phone10===values[1])row.status=values[0];
+        return [[]];
+      }
+      if(query.includes('SELECT message_key,side,type,text,created_at')&&query.includes('FROM chat_messages')) {
+        const candidates=[...messages.values()].filter(m=>m.phone10===values[0]&&m.status===values[1]);
+        candidates.sort((a,b)=>b.created_at-a.created_at||b.message_key.localeCompare(a.message_key));
+        return [[candidates[0]||null]];
+      }
+      if(query.startsWith('UPDATE chat_thread_state SET last_message_key=')) {
+        const oldKey=values[6],phone=values[5];
+        if(state.phone10===phone&&state.last_message_key===oldKey){
+          Object.assign(state,{last_message_key:values[0],last_side:values[1],
+            last_type:values[2],last_text:values[3],last_at:Number(values[4])});
+        }
+        return [[]];
       }
       if(query.startsWith('UPDATE chat_messages SET text=')) {
         const row=messages.get(values[3]); // text, edited_at, phone, message key
@@ -197,7 +215,7 @@ test('already edited historical messages are shown in preview without resending'
   const chats=await createChatOperations(sql).listChats();
   assert.equal(state.last_text,'Старый предпросмотр');
   assert.equal(chats.chats[0].lastText,'Актуальный текст из сообщений');
-  assert.ok(queries.some(query=>query.includes('COALESCE(m.text, s.last_text)')&&
+  assert.ok(queries.some(query=>query.includes("COALESCE(m.text, '')")&&
     query.includes('m.message_key=s.last_message_key')));
 });
 
@@ -220,4 +238,30 @@ test('broadcast recipients include only linked and unambiguous current child pro
     {phone:'9000000001',childId:'child-a'},
     {phone:'9000000003',childId:'child-c'}
   ]);
+});
+
+test('deleting latest chat message promotes the newest active message in list preview',async()=>{
+  const {sql,state,messages,queries}=mutableChatFixture();
+  const ops=createChatOperations(sql);
+  await ops.mutate('delete','latest-001',{role:'educator'});
+  assert.equal(messages.get('latest-001').status,'deleted');
+  assert.equal(state.last_message_key,'older-001');
+  assert.equal(state.last_text,'Прежний текст');
+  assert.equal(state.last_at,1000);
+  assert.equal((await ops.listChats()).chats[0].lastText,'Прежний текст');
+  assert.ok(queries.some(q=>q.includes('UPDATE chat_thread_state SET last_message_key=')));
+});
+test('deleting an older chat message leaves latest chat preview intact',async()=>{
+  const {sql,state}=mutableChatFixture();
+  await createChatOperations(sql).mutate('delete','older-001',{role:'educator'});
+  assert.equal(state.last_message_key,'latest-001');
+  assert.equal(state.last_text,'Старый предпросмотр');
+});
+test('deleted last message never reappears from legacy snapshot fallback',async()=>{
+  const {sql,state,messages}=mutableChatFixture();
+  messages.get('latest-001').status='deleted';
+  messages.get('older-001').status='deleted';
+  const chats=await createChatOperations(sql).listChats();
+  assert.equal(state.last_text,'Старый предпросмотр');
+  assert.equal(chats.chats[0].lastText,'');
 });

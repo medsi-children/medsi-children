@@ -35,6 +35,7 @@ import {createPushService} from './push-service.mjs';
 import {createParentPasskeyService} from './parent-passkeys.mjs';
 import {createParentAccessService} from './parent-access.mjs';
 import {createParentDeletionService} from './parent-deletion.mjs';
+import {createParentDirectory} from './parent-directory.mjs';
 import {createMediaService} from './media-service.mjs';
 import {createNextLabRouter} from './api-router.mjs';
 import {createLegacyBridge} from './legacy-bridge.mjs';
@@ -136,6 +137,7 @@ export function createNextServices({sql,env=process.env}) {
   const push=createPushService({sql,env});
   const parentRegistration=createCurrentParentRegistrationService({sql,sessions});
   const parentAccess=createParentAccessService({sql,sessions});
+  const parentDirectory=createParentDirectory({sql});
   const storage=require('../../../lib/s3-storage.js');
   const parentDeletion=createParentDeletionService({sql,currentChildMode:true,
     enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1',
@@ -154,7 +156,7 @@ export function createNextServices({sql,env=process.env}) {
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   const dbSchemaHealth=()=>checkCurrentChildSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,roster,
-    nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
+    nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDirectory,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
 
 // Fail closed. Deployments must never replay dormant push queues merely

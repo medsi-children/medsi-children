@@ -119,6 +119,38 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     });
     return {ok:true,sent,failed};
   }
+  // A safe, explicit diagnostics push to the caller's OWN subscription.
+  // No patient text, recipient names or endpoints are returned to the browser.
+  async function testSubscription({role,phone10='',endpoint}) {
+    if(!VALID_ROLES.has(role)||(role==='parent'&&!PHONE.test(phone10)))
+      throw new Error('Invalid role or phone.');
+    const id=sha(String(endpoint||''));
+    const [[subscription]]=await read(tx=>tx`SELECT subscription_id,role,phone10,subscription_json,enabled
+      FROM push_subscriptions WHERE subscription_id=${id}`);
+    if(!subscription||!subscription.enabled||subscription.role!==role||
+       (role==='parent'&&subscription.phone10!==phone10)) {
+      return {ok:false,code:'SUBSCRIPTION_NOT_REGISTERED'};
+    }
+    ensureConfigured();
+    try{
+      await webpushClient.sendNotification(JSON.parse(subscription.subscription_json),
+        JSON.stringify({title:'Медси Бот',body:'Проверка уведомлений. Всё работает!',
+          type:'chat',url:role==='educator'?'/tutors':'/',tag:'medsi-push-test'}));
+      return {ok:true,accepted:true};
+    }catch(error){
+      if([404,410].includes(Number(error?.statusCode))){
+        await write(async tx=>{await tx`UPDATE push_subscriptions SET enabled=${false},
+          disabled_reason=${'subscription_expired'},updated_at=${nowUint()}
+          WHERE subscription_id=${id}`});
+        return {ok:false,code:'SUBSCRIPTION_EXPIRED'};
+      }
+      return {ok:false,code:'PUSH_PROVIDER_UNAVAILABLE'};
+    }
+  }
+  function dispatchStatus() {
+    return {configured:!!(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT),
+      dispatchEnabled:env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='1'};
+  }
   async function pendingEvents(limit=30) {
     return read(async tx=>{
       const [events]=await tx`SELECT event_id,status,next_attempt_at
@@ -128,5 +160,5 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
         .map(r=>r.event_id);
     });
   }
-  return {subscribe,unsubscribe,deliverEvent,pendingEvents};
+  return {subscribe,unsubscribe,deliverEvent,pendingEvents,testSubscription,dispatchStatus};
 }

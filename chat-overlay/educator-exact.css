@@ -578,52 +578,6 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   }
 }
 
-/* Keep the call affordance visible next to the compact identity on small screens. */
-.educator-exact-clone #screenChatThread #chatThreadHeader.chat-info{
-  display:grid;
-  grid-template-columns:minmax(0,1fr) auto;
-  align-items:center;
-  column-gap:8px;
-  max-width:100%;
-  min-width:0;
-}
-.educator-exact-clone #screenChatThread .chat-identity-details{min-width:0;overflow-wrap:anywhere}
-.educator-exact-clone #screenChatThread .chat-call-action{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-height:34px;
-  padding:6px 9px;
-  background:#e0f6f6;
-  border:1px solid rgba(22,184,192,.3);
-  border-radius:10px;
-  color:#0a858f;
-  font-size:.76rem;
-  font-weight:750;
-  text-decoration:none;
-  white-space:nowrap;
-  box-sizing:border-box;
-}
-.educator-exact-clone #screenChatThread .chat-call-action:focus-visible{
-  outline:2px solid #159ca6;outline-offset:2px;
-}
-@media(max-width:560px){
-  .educator-exact-clone #screenChatThread:not(.hidden){
-    grid-template-rows:auto minmax(0,1fr) auto auto auto auto auto auto!important;
-    overflow:hidden;
-  }
-  .educator-exact-clone #screenChatThread #chatThreadHeader.chat-info{
-    margin-bottom:0;
-    padding:7px 9px;
-    column-gap:6px;
-  }
-  .educator-exact-clone #screenChatThread .chat-call-action{
-    padding:6px 8px;
-    font-size:.73rem;
-    min-height:34px;
-  }
-}
-
 /* Consistent child-first identity in chat cards and opened threads. */
 .educator-exact-clone .chat-card-title{font-weight:850}
 .educator-exact-clone .chat-card-meta{font-size:.86rem;line-height:1.4}

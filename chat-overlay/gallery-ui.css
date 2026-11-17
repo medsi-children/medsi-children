@@ -13,3 +13,10 @@
 .medsi-gallery-counter{position:absolute;bottom:0;left:50%;transform:translateX(-50%);border-radius:999px;background:rgba(255,255,255,.13);color:#fff;padding:5px 13px;font-size:13px;font-weight:700}
 .medsi-gallery-lightbox button:focus-visible,.medsi-gallery-tile:focus-visible{outline:3px solid #17c2ca;outline-offset:2px}
 @media(max-width:560px){.medsi-gallery-lightbox{padding:5px}.medsi-gallery-lightbox-panel{grid-template-columns:33px minmax(0,1fr) 33px;height:90dvh;gap:2px}.medsi-gallery-arrow{min-width:30px;font-size:30px}.medsi-gallery-lightbox-media img,.medsi-gallery-lightbox-media video{max-height:80dvh}}
+
+/* Keep the five selected thumbnails inside the mobile composer width. */
+.educator-exact-clone #chatImagePreview.chat-image-preview{box-sizing:border-box;display:flex;flex-wrap:wrap;gap:6px;max-width:100%;padding:4px 0;margin:0}
+.educator-exact-clone #chatImagePreview .preview-item{flex:none;width:62px;height:62px}
+.educator-exact-clone #chatImagePreview .preview-item img,
+.educator-exact-clone #chatImagePreview .preview-item video{width:100%;height:100%;object-fit:cover}
+.educator-exact-clone #chatImagePreview .preview-remove-btn{width:23px;height:23px;min-height:23px;font-size:16px}

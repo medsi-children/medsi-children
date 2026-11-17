@@ -20,3 +20,23 @@ test('a browser unsubscribe that never settles cannot leave the push control pen
   assert.equal(deleteCalls,1);
   assert.match(window.audit.state.status.textContent,/Браузер завершает удаление подписки/);
 });
+
+test('educator notification check sends tutor proof only to the Timeweb same-origin push route',async()=>{
+  const vm=require('node:vm');
+  const requests=[];
+  const location={origin:'https://example.invalid'};
+  const nativeFetch=async(url,options)=>{
+    requests.push({url,options,body:JSON.parse(options.body)});
+    return {ok:true};
+  };
+  const storage=new Map([['medsi_tutor_session_v1','synthetic-tutor-token']]);
+  const window={location,fetch:nativeFetch};
+  const context={window,localStorage:{getItem:key=>storage.get(key)||null},URL};
+  vm.runInNewContext(fs.readFileSync('tutors/push-auth.js','utf8'),context);
+  await window.fetch('/push/test',{body:JSON.stringify({role:'educator',endpoint:'https://push.example.invalid/test'})});
+  assert.equal(requests[0].body.tutorToken,'synthetic-tutor-token');
+  await window.fetch('/push/test',{body:JSON.stringify({role:'parent',parentSession:'synthetic-parent-session'})});
+  assert.equal(requests[1].body.tutorToken,undefined);
+  await window.fetch('/lab/messages',{body:JSON.stringify({role:'educator'})});
+  assert.equal(requests[2].body.tutorToken,undefined);
+});

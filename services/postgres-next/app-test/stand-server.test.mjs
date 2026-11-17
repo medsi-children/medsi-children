@@ -441,3 +441,40 @@ test('push dispatch runs when VAPID is complete, but explicit maintenance off sw
   assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'0'}),false);
   assert.equal(shouldDispatchPush({...vapid,VAPID_PRIVATE_KEY:''}),false);
 });
+
+test('historical parent directory is educator-only and preview sessions cannot change it',async()=>{
+  const services=fakeServices();
+  const calls=[];
+  services.sessions.verifyWorker=async token=>{
+    if(token==='synthetic-parent')return {role:'parent',phone10:'9000000001'};
+    if(token==='synthetic-educator')return {role:'educator',preview:false};
+    if(token==='synthetic-preview')return {role:'educator',preview:true};
+    return null;
+  };
+  services.parentDirectory={
+    list:async()=>{calls.push('list');return {ok:true,rows:[]}},
+    importRows:async rows=>{calls.push('import');return {ok:true,total:rows.length,inserted:rows.length,skipped:0}},
+    remove:async id=>{calls.push('remove');return {ok:true,deleted:id==='legacy_synthetic_123'}}
+  };
+  const app=createNextStandApp(services,{env}),server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const origin='http://127.0.0.1:'+server.address().port;
+  async function req(path,token,method='GET',body){
+    const response=await fetch(origin+path,{method,
+      headers:{'X-Medsi-Chat-Session':token,...(body?{'content-type':'application/json'}:{})},
+      ...(body?{body:JSON.stringify(body)}:{})});
+    return {status:response.status,body:await response.json()};
+  }
+  try{
+    for(const token of ['synthetic-parent','synthetic-preview','']){
+      assert.notEqual((await req('/lab/admin/parent-directory',token)).status,200);
+      assert.notEqual((await req('/lab/admin/parent-directory/import',token,'POST',{rows:[{}]})).status,200);
+      assert.notEqual((await req('/lab/admin/parent-directory/legacy_synthetic_123',token,'DELETE')).status,200);
+    }
+    assert.deepEqual(calls,[]);
+    assert.equal((await req('/lab/admin/parent-directory','synthetic-educator')).status,200);
+    assert.equal((await req('/lab/admin/parent-directory/import','synthetic-educator','POST',{rows:[{}]})).status,200);
+    assert.equal((await req('/lab/admin/parent-directory/legacy_synthetic_123','synthetic-educator','DELETE')).status,200);
+    assert.deepEqual(calls,['list','import','remove']);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});

@@ -71,7 +71,7 @@ export function createChatOperations(sql) {
     return read(async tx => {
       const [states,pins,profiles,children] = (await Promise.all([
         tx`SELECT s.phone10, s.last_side, s.last_type,
-            COALESCE(m.text, s.last_text) AS last_text,
+            COALESCE(m.text, '') AS last_text,
             s.last_at, s.educator_has_unread
           FROM chat_thread_state AS s
           LEFT JOIN chat_messages AS m ON m.phone10=s.phone10
@@ -230,6 +230,15 @@ export function createChatOperations(sql) {
       }
       await tx`UPDATE chat_messages SET status=${'deleted'}
         WHERE phone10=${row.phone10} AND message_key=${key}`;
+      // Replace the last-message snapshot when its message was removed.
+      // Never leak the deleted message back through chat_thread_state.
+      const [[last]]=await tx`SELECT message_key,side,type,text,created_at
+        FROM chat_messages WHERE phone10=${row.phone10} AND status=${'active'}
+        ORDER BY created_at DESC,message_key DESC LIMIT 1`;
+      await tx`UPDATE chat_thread_state SET last_message_key=${last?.message_key||''},
+        last_side=${last?.side||''},last_type=${last?.type||''},
+        last_text=${last?.text||''},last_at=${last?.created_at||0n}
+        WHERE phone10=${row.phone10} AND last_message_key=${key}`;
       return {ok:true};
     });
   }

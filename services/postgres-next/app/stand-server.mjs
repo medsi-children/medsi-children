@@ -32,6 +32,7 @@ import {createChatStore} from './chat-store.mjs';
 import {createChatOperations} from './chat-operations.mjs';
 import {createNameVariantsStore} from './name-variants-store.mjs';
 import {createPushService} from './push-service.mjs';
+import {verifyVapidKeyPair} from './push-continuity.mjs';
 import {createParentPasskeyService} from './parent-passkeys.mjs';
 import {createParentAccessService} from './parent-access.mjs';
 import {createParentDeletionService} from './parent-deletion.mjs';
@@ -163,9 +164,20 @@ export function createNextServices({sql,env=process.env}) {
 
 // Fail closed. Deployments must never replay dormant push queues merely
 // because VAPID credentials were already configured.
+// Do not silently accept an enabled flag when there is no usable VAPID
+// identity. Public/private mismatch makes browser subscriptions undeliverable.
+export function pushReadiness(env={}) {
+  if(env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED!=='1')return 'DISABLED';
+  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)
+    return 'MISSING_VAPID';
+  if(!verifyVapidKeyPair(env.VAPID_PUBLIC_KEY,env.VAPID_PRIVATE_KEY))
+    return 'VAPID_KEY_PAIR_MISMATCH';
+  if(!/^(mailto:|https:\/\/)/i.test(String(env.VAPID_SUBJECT)))
+    return 'VAPID_SUBJECT_INVALID';
+  return 'READY';
+}
 export function shouldDispatchPush(env={}) {
-  return env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='1'&&
-    !!env.VAPID_PUBLIC_KEY&&!!env.VAPID_PRIVATE_KEY&&!!env.VAPID_SUBJECT;
+  return pushReadiness(env)==='READY';
 }
 
 function handler(fn) {
@@ -421,7 +433,19 @@ export async function startIsolatedStand(env=process.env,{
           }
         );
       }
-      const dispatchPush=shouldDispatchPush(env);
+      const pushState=pushReadiness(env);
+      const dispatchPush=pushState==='READY';
+      // Safe operational codes only: no patient details, subscription endpoints
+      // or private keys are ever written to the Timeweb log.
+      console.log('MEDSI_PUSH_READINESS_'+pushState);
+      if(dispatchPush&&typeof services.push?.subscriptionCounts==='function'){
+        void services.push.subscriptionCounts().then(counts=>{
+          console.log('MEDSI_PUSH_ENABLED_SUBSCRIPTIONS educator='+counts.educator+
+            ' parent='+counts.parent);
+          if(!counts.educator)console.warn('MEDSI_PUSH_NO_EDUCATOR_SUBSCRIPTIONS');
+          if(!counts.parent)console.warn('MEDSI_PUSH_NO_PARENT_SUBSCRIPTIONS');
+        },()=>console.warn('MEDSI_PUSH_SUBSCRIPTION_COUNTS_UNAVAILABLE'));
+      }
       const processDeletion=env.MEDSI_NEXT_DELETION_ENABLED==='1';
       if(dispatchPush||processDeletion){
         const runBackgroundJobs=async()=>{
@@ -431,12 +455,13 @@ export async function startIsolatedStand(env=process.env,{
             if(dispatchPush){
               // Never flood all devices after an outage or a new deployment.
               // Historical queue rows are marked expired, never sent.
-              await services.push.expireStale(80);
+              try{await services.push.expireStale(80)}
+              catch(_){console.warn('MEDSI_PUSH_EXPIRE_STALE_FAILED')}
               const ids=await services.push.pendingEvents(12);
               for(const id of ids){
                 if(stopped)break;
                 try{await services.push.deliverEvent(id)}
-                catch(_){console.warn('NEXT_PUSH_EVENT_RETRY_REQUIRED')}
+                catch(_){console.warn('MEDSI_PUSH_EVENT_PROCESSING_FAILED')}
               }
             }
             if(processDeletion){
@@ -444,7 +469,7 @@ export async function startIsolatedStand(env=process.env,{
               if(cleanup.ok===false)console.warn('NEXT_PARENT_DELETION_RETRY_REQUIRED');
             }
           }catch(_){
-            console.warn('NEXT_BACKGROUND_JOBS_UNAVAILABLE');
+            console.warn('MEDSI_BACKGROUND_QUEUE_UNAVAILABLE');
           }finally{working=false;}
         };
         // Do not strand the first new message for a full 30-second tick.

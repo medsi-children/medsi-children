@@ -13,7 +13,7 @@ const dateMoscow=value=>{
 // Replacement writer. One serializable transaction owns source, matching,
 // parent reports, immutable block ownership, idempotency and push events.
 // NO admissions relation. Suitable for schema 002 expansion and later contract.
-export function createCurrentReportPublisher(sql){
+export function createCurrentReportPublisher(sql,{queuePush=true}={}){
   if(!sql?.begin)throw new Error('PostgreSQL required.');
   async function preview({kind,rawText,correctionOf=''}={}){
     return sql.begin({isolation:'snapshotReadOnly',idempotent:true},async tx=>{
@@ -116,7 +116,7 @@ export function createCurrentReportPublisher(sql){
           (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
           VALUES (${row.phone10},${kind},${reportDate},${row.childId},${publicationId},
             ${rev},${row.text},${time})`;
-        if(!unchanged&&kind!=='psychology'&&!correctionOf){
+        if(queuePush&&!unchanged&&kind!=='psychology'&&!correctionOf){
           const eventId='report_'+sha(publicationId+':'+row.phone10);
           await tx.upsert`INSERT INTO push_outbox
             (event_id,role,phone10,notification_json,status,attempts,next_attempt_at,created_at)

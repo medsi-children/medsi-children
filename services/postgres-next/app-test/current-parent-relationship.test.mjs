@@ -71,11 +71,12 @@ test('an educator can edit an old placeholder profile using its displayed inferr
 async function registerRole(parentName){
   const writes=[];
   const sql={begin:async(_config,cb)=>{
-    const tx=async(strings)=>{
+    const tx=async(strings,...values)=>{
       const q=strings.join('?').replace(/\s+/g,' ').trim();
       if(q.startsWith('SELECT status FROM parent_deletion_queue'))return [[]];
       if(q.startsWith('SELECT attempt_id,phone10,parent_name,child_name,status'))return [[null]];
       if(q.startsWith('SELECT phone10,profile_generation FROM parent_profiles'))return [[null]];
+      if(q.startsWith('INSERT INTO parent_directory_archive')){writes.push({q,values});return [[]]}
       throw Error('Unexpected SQL '+q);
     };
     tx.upsert=async(strings,...values)=>{

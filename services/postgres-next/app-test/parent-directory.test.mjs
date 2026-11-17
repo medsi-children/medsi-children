@@ -33,7 +33,7 @@ const importData=[{phone:'89000000001',parentName:'Тестовый взросл
   childName:'Тестовый ребёнок',childSurname:'Синтетический',sourceRow:2},
   {phone:'89000000002',parentName:'Другой взрослый',
   childName:'Второй ребёнок',childSurname:'',sourceRow:3}];
-test('legacy import is independent, idempotent and preserves missing surname/date',async()=>{
+test('legacy import is independent, idempotent and shows contact fields only',async()=>{
   const {service,archive,currentProfiles}=fixture();
   const first=await service.importRows(importData);
   assert.equal(first.inserted,2);assert.equal(first.skipped,0);
@@ -43,7 +43,7 @@ test('legacy import is independent, idempotent and preserves missing surname/dat
   let result=await service.list();
   assert.equal(result.rows.length,2);
   assert.equal(result.rows.find(r=>r.phone==='79000000002').childSurname,'');
-  assert.equal(result.rows.every(r=>r.registeredAt===null),true);
+  assert.equal(result.rows.every(r=>!Object.hasOwn(r,'registeredAt')&&!Object.hasOwn(r,'source')),true);
   // Simulate discharge: the archive is not bound to the active parent profile.
   currentProfiles.delete('9000000001');
   assert.equal((await service.list()).rows.length,2);

@@ -200,3 +200,24 @@ test('already edited historical messages are shown in preview without resending'
   assert.ok(queries.some(query=>query.includes('COALESCE(m.text, s.last_text)')&&
     query.includes('m.message_key=s.last_message_key')));
 });
+
+test('broadcast recipients include only linked and unambiguous current child profiles',async()=>{
+  const rows=[
+    {phone10:'9000000001',child_id:'child-a'},
+    {phone10:'9000000002',child_id:'child-b'},
+    {phone10:'9000000002',child_id:'child-c'},
+    {phone10:'9000000003',child_id:'child-c'},
+    {phone10:'9000000003',child_id:'child-c'},
+    {phone10:'not-a-phone',child_id:'child-c'}
+  ];
+  const sql={async begin(_opts,fn){return fn(async strings=>{
+    const query=strings.join('?').replace(/\\s+/g,' ');
+    assert.match(query,/INNER JOIN children c ON c.child_id = p.child_id/);
+    return [rows];
+  });}};
+  const recipients=await createChatOperations(sql).broadcastRecipients();
+  assert.deepEqual(recipients,[
+    {phone:'9000000001',childId:'child-a'},
+    {phone:'9000000003',childId:'child-c'}
+  ]);
+});

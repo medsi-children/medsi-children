@@ -1,7 +1,8 @@
 import { createHash, randomUUID } from 'node:crypto';
+import {parseChatGallery} from './chat-gallery.mjs';
 
 const PHONE_RE = /^\d{10}$/;
-const TYPES = new Set(['text', 'image', 'video']);
+const TYPES = new Set(['text', 'image', 'video', 'gallery']);
 const SIDES = new Set(['parent', 'educator']);
 
 const digest = str => createHash('sha256').update(str, 'utf8').digest('hex');
@@ -21,11 +22,14 @@ export function prepareChatMessage(input, timestamp = Date.now()) {
   if (clientMessageId.length < 8 || clientMessageId.length > 200 ||
       !/^[A-Za-z0-9_-]+$/.test(clientMessageId)) throw new Error('Invalid client message identifier.');
   if (!text && !fileId) throw new Error('Empty chat message.');
-  if (text.length > 4000 || fileId.length > 200 || replyToKey.length > 200) {
+  if (text.length > 4000 || fileId.length > (type==='gallery'?1200:200) || replyToKey.length > 200) {
     throw new Error('Message exceeds allowed length.');
   }
   if (type === 'text' && !text) throw new Error('Text message has no text.');
-  if (type !== 'text' && !fileId.startsWith('s3:')) {
+  if (type === 'gallery' && !parseChatGallery(fileId)) {
+    throw new Error('Gallery must contain 2 to 5 owned photos or videos.');
+  }
+  if (type !== 'text' && type !== 'gallery' && !fileId.startsWith('s3:')) {
     throw new Error('New media messages must refer to private Timeweb S3 objects.');
   }
   if (!Number.isSafeInteger(timestamp) || timestamp < 1) throw new Error('Invalid timestamp.');
@@ -54,9 +58,11 @@ export function createChatStore(sql) {
         const [[profile]] = await tx`SELECT phone10,child_name,child_id FROM parent_profiles WHERE phone10 = ${phone10}`;
         if (!profile) throw new Error('Chat is closed: parent profile is inactive.');
         if (type !== 'text') {
-          const [[registered]]=await tx`SELECT phone10 FROM chat_media WHERE file_id=${fileId}`;
-          if (!registered || registered.phone10 !== phone10) {
-            throw new Error('Media upload does not belong to this chat.');
+          const files=type==='gallery'?parseChatGallery(fileId).map(item=>item.fileId):[fileId];
+          for(const mediaId of files){
+            const [[registered]]=await tx`SELECT phone10 FROM chat_media WHERE file_id=${mediaId}`;
+            if(!registered||registered.phone10!==phone10)
+              throw new Error('Media upload does not belong to this chat.');
           }
         }
         if (replyToKey) {
@@ -101,8 +107,11 @@ export function createChatStore(sql) {
           if(currentName)childName=currentName;
         }
         const previewText=text.replace(/\s+/g,' ').slice(0,180);
-        const body=type==='text'?previewText
-          :[type==='video'?'🎬 Видео':'📷 Фото',previewText].filter(Boolean).join(' · ');
+        const galleryItems=type==='gallery'?parseChatGallery(fileId):null;
+        const mediaLabel=type==='video'?'🎬 Видео':type==='gallery'?
+          '📎 '+galleryItems.length+' вложений':'📷 Фото';
+        const body=type==='text'?previewText:
+          [mediaLabel,previewText].filter(Boolean).join(' · ');
         const eventId = 'chat_' + digest(phone10 + '\u0000' + clientMessageId);
         const role = isParent ? 'educator' : 'parent';
         const notification = JSON.stringify({

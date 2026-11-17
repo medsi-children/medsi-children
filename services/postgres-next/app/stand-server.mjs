@@ -157,6 +157,14 @@ export function createNextServices({sql,env=process.env}) {
     nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
 }
 
+// Enable notifications on a configured post-cutover server. The explicit
+// operator off switch remains authoritative, including during migrations.
+export function shouldDispatchPush(env={}) {
+  if(env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='0')return false;
+  if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)return false;
+  return true;
+}
+
 function handler(fn) {
   return async(req,res)=>{
     try {
@@ -410,12 +418,7 @@ export async function startIsolatedStand(env=process.env,{
           }
         );
       }
-      // Live Timeweb deployment has already cut over. With a configured
-      // VAPID pair, keep push delivery running by default; an explicit "0"
-      // still disables the dispatcher during maintenance or migration.
-      const dispatchPush=env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED==='1'||
-        (env.MEDSI_NEXT_PUSH_DISPATCH_ENABLED!=='0'&&
-          !!env.VAPID_PUBLIC_KEY&&!!env.VAPID_PRIVATE_KEY&&!!env.VAPID_SUBJECT);
+      const dispatchPush=shouldDispatchPush(env);
       const processDeletion=env.MEDSI_NEXT_DELETION_ENABLED==='1';
       if(dispatchPush||processDeletion){
         const runBackgroundJobs=async()=>{

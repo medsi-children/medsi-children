@@ -60,9 +60,8 @@ test('open thread shows the same three-line child-first identity',()=>{
   fn({childName:'Аня Иванова',parentName:'Тамара Петрова',relationship:'Мама',phone:'9000000001'});
   assert.deepEqual(wrapper.children[0].children.map(c=>c.textContent),[
     'Аня Иванова','Мама Тамара','Телефон: +79000000001']);
-  assert.equal(wrapper.children[1].textContent,'Позвонить');
-  assert.equal(wrapper.children[1].href,'tel:+79000000001');
-  assert.equal(wrapper.children[1].className,'chat-call-action');
+  assert.equal(wrapper.children.length,1);
+  assert.equal(wrapper.children[0].className,'chat-identity-details');
   assert.match(main,/author\.textContent=m\.side==='parent'[\s\S]*?shortName\(activeChat\.parentName\)/);
 });
 
@@ -86,7 +85,7 @@ test('new chat picker uses the same parent/child detail labels',()=>{
 });
 
 test('educator chat scripts have fresh cache keys, unrelated identity API remains intact',()=>{
-  assert.match(html,/educator-chat\.js\?v=20261117-call-action-1/);
+  assert.match(html,/educator-chat\.js\?v=20261117-phone-label-1/);
   assert.match(html,/educator-new-chat\.js\?v=20261111-short-labels-1/);
   const backend=read('services/postgres-next/app/chat-operations.mjs');
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);
@@ -100,8 +99,10 @@ test('opened chat identity stays compact on mobile while preserving child-first 
   assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-parent\{\s*font-size:\.82rem;/);
   assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-phone\{\s*font-size:\.77rem;/);
   assert.match(css, /@media\(max-width:560px\)/);
-  assert.match(html,/educator-exact\.css\?v=20261117-call-action-1/);
-  assert.match(main,/chatThreadHeader\.append\(details,call\)/);
-  assert.match(css,/#screenChatThread \.chat-call-action\{/);
-  assert.match(css,/grid-template-columns:minmax\(0,1fr\) auto/);
+  assert.match(html,/educator-exact\.css\?v=20261117-phone-label-1/);
+  assert.match(main,/chatThreadHeader\.append\(details\)/);
+  const composer=read('chat-overlay/composer-ui.js');
+  assert.match(composer,/\(\?:Номер телефона\|Телефон\)/);
+  assert.match(composer,/tel:\+7/);
+  assert.match(html,/composer-ui\.js\?v=20261117-phone-label-1/);
 });

@@ -8,13 +8,14 @@ function makeFixture({status,nextAttemptAt,attempts=1}) {
   const row={
     event_id:'push_event_test_001',role:'parent',phone10:'9000000001',
     notification_json:JSON.stringify({type:'chat'}),status,attempts,
+    created_at:Date.now()+1000,
     next_attempt_at:nextAttemptAt
   };
   const sql={async begin(_mode,callback){
     const tx=async(strings,...params)=>{
       const query=strings.join('?').replace(/\s+/g,' ').trim();
       if(query.includes('FROM push_outbox WHERE event_id='))return [[{...row}]];
-      if(query.includes('FROM push_outbox')&&query.includes('WHERE (status='))return [Number(row.next_attempt_at)<=Number(params.at(-2))? [{event_id:row.event_id}]:[]];
+      if(query.includes('FROM push_outbox')&&query.includes('WHERE (status='))return [Number(row.next_attempt_at)<=Number(params.at(-3))&&Number(row.created_at)>=Number(params.at(-2))? [{event_id:row.event_id}]:[]];
       if(query.includes('FROM push_subscriptions'))return [[]];
       if(query.startsWith('UPDATE push_outbox')) {
         if(query.includes(',attempts=?')) {
@@ -52,4 +53,12 @@ test('a processing event with a live lease is not claimed twice',async()=>{
   assert.equal(result.skipped,true);
   assert.equal(row.status,'processing');
   assert.equal(row.attempts,1);
+});
+
+test('a newly enabled dispatcher never replays notifications queued before server activation',async()=>{
+  const {row,service}=makeFixture({status:'pending',nextAttemptAt:Date.now()-10000,attempts:0});
+  row.created_at=Date.now()-60*60*1000;
+  assert.deepEqual(await service.pendingEvents(),[]);
+  // The source event remains intact for an audited cleanup.
+  assert.equal(row.status,'pending');
 });

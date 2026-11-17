@@ -112,10 +112,9 @@ export async function ensureParentDirectoryArchive(sql){
     // The marker prevents a deliberate archive deletion from being undone
     // on the next app restart. Subsequent registrations write themselves.
     const marker='parent_directory_active_seed_v1';
-    const [newMarker]=await tx`INSERT INTO migration_state (stream_id,cursor_value)
-      VALUES (${marker},${'seeded'}) ON CONFLICT (stream_id) DO NOTHING
-      RETURNING stream_id`;
-    if(newMarker.length){
+    const [[previousSeed]]=await tx`SELECT stream_id FROM migration_state
+      WHERE stream_id=${marker}`;
+    if(!previousSeed){
       await tx`INSERT INTO parent_directory_archive
         (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
         SELECT ${'current_'}||p.phone10, p.phone10, p.parent_name,
@@ -126,6 +125,8 @@ export async function ensureParentDirectoryArchive(sql){
         LEFT JOIN children AS c ON c.child_id=p.child_id
         WHERE LENGTH(p.phone10)=10
         ON CONFLICT (phone10) DO NOTHING`;
+      await tx`INSERT INTO migration_state (stream_id,cursor_value)
+        VALUES (${marker},${'seeded'}) ON CONFLICT (stream_id) DO NOTHING`;
     }
     return {ok:true};
   });

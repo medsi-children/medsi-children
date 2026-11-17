@@ -73,16 +73,11 @@
       const title=document.createElement('strong');title.className='medsi-directory-child';title.textContent=childTitle(row);
       const parent=document.createElement('span');parent.className='medsi-directory-parent';parent.textContent='Родитель '+row.parentName;
       const phone=document.createElement('span');phone.className='medsi-directory-phone';phone.textContent='Телефон: +'+row.phone;
-      const origin=document.createElement('span');origin.className='medsi-directory-source';
-      const date=row.registeredAt?new Date(row.registeredAt).toLocaleDateString('ru-RU'):'дата неизвестна';
-      origin.textContent=row.source==='registration'
-        ?'Регистрация в боте · '+date
-        :row.source==='current_profile'
-          ?'Действующий родитель · '+date
-          :'Импорт из старой базы · дата регистрации неизвестна';
-      info.append(title,parent,phone,origin);
+      info.append(title,parent,phone);
       const remove=document.createElement('button');remove.type='button';remove.className='medsi-directory-remove';
-      remove.textContent='Удалить';remove.setAttribute('aria-label','Удалить запись из базы родителей');
+      remove.setAttribute('aria-label','Удалить запись из базы родителей');
+      remove.title='Удалить запись';
+      remove.innerHTML='<svg xmlns="http://www.w3.org/2000/svg" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18"/><path d="M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2"/><path d="M19 6l-1 14a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1L5 6"/><path d="M10 11v6M14 11v6"/></svg>';
       remove.onclick=async()=>{
         if(busy||!window.confirm('Удалить эту запись только из «Базы родителей»? Активный профиль ребёнка и переписка не изменятся.'))return;
         setBusy(true);feedback.textContent='Удаляем запись…';

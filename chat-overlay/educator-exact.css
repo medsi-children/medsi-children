@@ -540,6 +540,44 @@ body[data-screen="screenChatThread"] #meta{ display:none; }
   .child-delete-actions .link-modal-cancel,.child-delete-actions .link-modal-save{ width:auto; min-width:120px; }
 }
 
+/* Chat detail identity: compact like the list, not a large hero card.
+   Keep the child-first hierarchy while saving vertical chat space. */
+.educator-exact-clone #screenChatThread #chatThreadHeader.chat-info{
+  box-sizing:border-box;
+  padding:9px 12px;
+  margin-bottom:5px;
+  border:1px solid rgba(22,184,192,.35);
+  border-radius:13px;
+  background:#f5fcfd;
+  box-shadow:0 2px 8px rgba(16,115,127,.045);
+  line-height:1.25;
+  color:#179dab;
+}
+.educator-exact-clone #screenChatThread #chatThreadHeader .chat-identity-title{
+  font-size:.95rem;
+  font-weight:800;
+  line-height:1.26;
+  overflow-wrap:anywhere;
+}
+.educator-exact-clone #screenChatThread #chatThreadHeader .chat-identity-parent{
+  font-size:.82rem;
+  font-weight:620;
+  line-height:1.28;
+  margin-top:1px;
+}
+.educator-exact-clone #screenChatThread #chatThreadHeader .chat-identity-phone{
+  font-size:.77rem;
+  font-weight:480;
+  line-height:1.27;
+  margin-top:1px;
+}
+@media(max-width:560px){
+  .educator-exact-clone #screenChatThread #chatThreadHeader.chat-info{
+    padding:8px 11px;
+    margin-bottom:4px;
+  }
+}
+
 /* Consistent child-first identity in chat cards and opened threads. */
 .educator-exact-clone .chat-card-title{font-weight:850}
 .educator-exact-clone .chat-card-meta{font-size:.86rem;line-height:1.4}

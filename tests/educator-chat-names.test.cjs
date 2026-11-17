@@ -89,3 +89,14 @@ test('educator chat scripts have fresh cache keys, unrelated identity API remain
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);
   assert.match(backend,/parentName:profile\.parent_name/);
 });
+test('opened chat identity stays compact on mobile while preserving child-first hierarchy',()=>{
+  const css=read('chat-overlay/educator-exact.css');
+  const html=read('tutors.html');
+  assert.match(css,/#screenChatThread #chatThreadHeader\.chat-info\{/);
+  assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-title\{\s*font-size:\.95rem;/);
+  assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-parent\{\s*font-size:\.82rem;/);
+  assert.match(css,/#screenChatThread #chatThreadHeader \.chat-identity-phone\{\s*font-size:\.77rem;/);
+  assert.match(css, /@media\(max-width:560px\)/);
+  assert.match(html,/educator-exact\.css\?v=20261117-compact-detail-1/);
+  assert.match(main,/chatThreadHeader\.append\(heading,parent,phone\)/);
+});

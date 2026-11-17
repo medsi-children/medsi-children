@@ -78,7 +78,7 @@ test('retry never resends an event to a device whose push provider already accep
   let failB=true;
   const sql={async begin(_mode,callback){
     const tx=async(strings,...params)=>{
-      const query=strings.join('?').replace(/\\s+/g,' ').trim();
+      const query=strings.join('?').replace(/\s+/g,' ').trim();
       if(query.includes('FROM push_outbox WHERE event_id='))return [[{...row}]];
       if(query.includes('FROM push_subscriptions'))return [targets];
       if(query.startsWith('UPDATE push_outbox SET status=')){

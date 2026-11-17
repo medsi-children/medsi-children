@@ -303,11 +303,11 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     await sql`CREATE INDEX parent_directory_phone_idx
       ON parent_directory_archive (phone10)`;
     const legacyPhone='9999991111';
-    await sql.upsert`INSERT INTO parent_directory_archive
+    await sql`INSERT INTO parent_directory_archive
       (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
       VALUES (${'ci_dup_registration'},${legacyPhone},${'Синтетический взрослый'},
         ${'Маша'},${''},${'registration'},${1n},${1n})`;
-    await sql.upsert`INSERT INTO parent_directory_archive
+    await sql`INSERT INTO parent_directory_archive
       (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
       VALUES (${'ci_dup_legacy'},${legacyPhone},${'Синтетический взрослый'},
         ${'Маша'},${'Синтетическая'},${'legacy_import'},${null},${2n})`;

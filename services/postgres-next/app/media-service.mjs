@@ -1,3 +1,4 @@
+import {parseChatGallery} from './chat-gallery.mjs';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
 
 const MAX_UPLOAD_BYTES=100*1024*1024;
@@ -128,6 +129,16 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
         (claims.role==='educator'||m.phone10===claims.phone10));
       for(const row of relevant) {
         if(await activePhone(tx,row.phone10))return true;
+      }
+      // Gallery media is stored as a validated item list inside one
+      // message. Match the entire JSON string and independently validate
+      // membership before authorizing any individual S3 object.
+      const [groups]=await tx`SELECT phone10,status,file_id FROM chat_messages
+        WHERE type=${'gallery'} AND POSITION(${JSON.stringify(fileId)} IN file_id)>0`;
+      for(const row of groups){
+        if(row.status!=='active'||(claims.role!=='educator'&&row.phone10!==claims.phone10))continue;
+        const items=parseChatGallery(row.file_id);
+        if(items?.some(item=>item.fileId===fileId)&&await activePhone(tx,row.phone10))return true;
       }
       return false;
     });

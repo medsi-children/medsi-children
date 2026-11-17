@@ -435,7 +435,8 @@ test('push dispatch runs when VAPID is complete, but explicit maintenance off sw
   assert.equal(shouldDispatchPush({}),false);
   assert.equal(shouldDispatchPush({MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),false,
     'a missing VAPID configuration cannot send notifications');
-  assert.equal(shouldDispatchPush(vapid),true);
+  assert.equal(shouldDispatchPush(vapid),false,
+    'having VAPID keys must never activate a dormant notification queue');
   assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'1'}),true);
   assert.equal(shouldDispatchPush({...vapid,MEDSI_NEXT_PUSH_DISPATCH_ENABLED:'0'}),false);
   assert.equal(shouldDispatchPush({...vapid,VAPID_PRIVATE_KEY:''}),false);

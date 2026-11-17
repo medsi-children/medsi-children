@@ -267,6 +267,27 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.equal(staffSource.raw_text,text);
     const [[parentStillRegistered]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${phoneC}`;
     assert.equal(parentStillRegistered.child_id,thirdProfile.child_id);
+    // Old active parents are seeded exactly once, preserving later independent
+    // removal from the archive even while the parent remains registered.
+    const [[uniqueIndex]]=await sql`SELECT indexdef FROM pg_indexes
+      WHERE indexname=${'parent_directory_phone_idx'}`;
+    assert.match(uniqueIndex.indexdef,/CREATE UNIQUE INDEX/i);
+    await sql`DELETE FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    await sql`DELETE FROM migration_state
+      WHERE stream_id=${'parent_directory_active_seed_v1'}`;
+    await ensureParentDirectoryArchive(sql);
+    const [backfilled]=await sql`SELECT phone10,source,child_name,child_surname
+      FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    assert.equal(backfilled.length,1);
+    assert.equal(backfilled[0].source,'current_profile');
+    await ensureParentDirectoryArchive(sql);
+    assert.equal((await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`).length,1);
+    await sql`DELETE FROM parent_directory_archive WHERE phone10=${phoneC}`;
+    await ensureParentDirectoryArchive(sql);
+    assert.equal((await sql`SELECT entry_id FROM parent_directory_archive
+      WHERE phone10=${phoneC}`).length,0,
+      'explicit archive deletion must not be undone by app restart');
     assert.equal((await probePostgresNext(env)).schemaReady,true);
     assert.deepEqual(await checkCurrentChildSchema(sql),{ok:true});
   }finally{await conn.driver.close()}

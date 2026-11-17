@@ -12,6 +12,9 @@
   const personIcon = icon('<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-7 7-7s7 3 7 7"/>');
   const deleteIcon = icon('<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5"/>');
 
+  const broadcastIcon = icon('<path d="M4 11v3a2 2 0 0 0 2 2h2l2 4h3l-2-5 8 3V7l-8 3H6a2 2 0 0 0-2 1Z"/><path d="M21 9c1.2 1.7 1.2 4.3 0 6"/>');
+  const qrIcon = icon('<rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M14 14h3v3h-3v4m7-7v7h-4"/>');
+
   const root = document.createElement('div');
   root.id = 'medsiSettingsNext';
   root.className = 'medsi-settings-next';
@@ -36,6 +39,16 @@
         <span class="medsi-tile-icon">${deleteIcon}</span>
         <span class="medsi-tile-heading">Удалить ребёнка</span>
         <span class="medsi-tile-sub">Выбрать профиль для удаления</span>
+      </button>
+      <button type="button" id="medsiBroadcastCard" class="medsi-setting-tile medsi-tile-broadcast">
+        <span class="medsi-tile-icon">${broadcastIcon}</span>
+        <span class="medsi-tile-heading">Отправить рассылку</span>
+        <span class="medsi-tile-sub">Сообщение всем действующим родителям</span>
+      </button>
+      <button type="button" id="medsiQrCard" class="medsi-setting-tile medsi-tile-qr">
+        <span class="medsi-tile-icon">${qrIcon}</span>
+        <span class="medsi-tile-heading">QR-код для родителей</span>
+        <span class="medsi-tile-sub">Быстро открыть код подключения</span>
       </button>
     </div>
     <p id="medsiSettingFeedback" class="medsi-setting-feedback" role="status"></p>
@@ -128,6 +141,11 @@
     renderPicker();
     // Full-web.js refreshes the hidden legacy selects asynchronously.
   }
+  byId('medsiQrCard').addEventListener('click', () => {
+    const close=byId('tutorSettingsClose');
+    const trigger=byId('tutorQrTrigger');
+    if(close&&trigger){close.click();trigger.click();}
+  });
   byId('medsiParentPreviewCard').addEventListener('click', () =>
     openPicker('Родительская панель', 'previewChildSelect', 'previewParentButton'));
   byId('medsiDeleteParentCard').addEventListener('click', () =>

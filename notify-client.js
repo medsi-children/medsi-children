@@ -134,7 +134,8 @@
     const pending = (async () => {
       try { return await sendSubscriptionToApp(subscription); }
       catch (error) {
-        if (error.code !== 'PUSH_SUBSCRIPTION_EXPIRED' || wanted() === 'no' || identity !== JSON.stringify(state.identity)) throw error;
+        if (!['PUSH_SUBSCRIPTION_EXPIRED', 'PUSH_ACCOUNT_MISMATCH'].includes(error.code) ||
+            wanted() === 'no' || identity !== JSON.stringify(state.identity)) throw error;
         await subscription.unsubscribe();
         if (wanted() === 'no' || identity !== JSON.stringify(state.identity)) return;
         const registration = await navigator.serviceWorker.register(SERVICE_WORKER_URL);

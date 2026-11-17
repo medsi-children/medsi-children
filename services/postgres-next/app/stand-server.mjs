@@ -127,8 +127,10 @@ export function createNextServices({sql,env=process.env}) {
     currentChildMode:true,...readLegacyAuthConfig(env)
   });
   const reportReader=createCurrentParentReportReader(sql);
-  const reports=createCurrentReportSubmissionService(sql);
-  const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql);
+  // Disabled push means no new queue rows. Reports and chats still save normally.
+  const queuePush=shouldDispatchPush(env);
+  const reports=createCurrentReportSubmissionService(sql,{queuePush});
+  const chatOperations=createChatOperations(sql),chatStore=createChatStore(sql,{queuePush});
   const dashboard=createCurrentEducatorDashboardStore(sql);
   const roster=createCurrentEducatorRosterStore(sql);
   const nameVariants=createNameVariantsStore(sql);

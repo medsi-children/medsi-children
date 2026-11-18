@@ -85,6 +85,10 @@ export async function ensureParentDirectoryArchive(sql){
       registered_at BIGINT,
       created_at BIGINT NOT NULL
     )`;
+    // Historical contacts must not retain a registration/admission date.
+    // Keep the nullable column for compatibility with existing insert contracts.
+    await tx`UPDATE parent_directory_archive SET registered_at=NULL
+      WHERE registered_at IS NOT NULL`;
     // Existing records may have been imported before phone deduplication.
     // Keep the oldest richer legacy row when available, otherwise the newest
     // registration. This migration only touches the independent archive.

@@ -49,6 +49,26 @@ test('stand keeps public entry limited, requires educator auth and closes media 
   }finally{await new Promise((resolve,reject)=>server.close(e=>e?reject(e):resolve()));}
 });
 
+test('Timeweb liveness stays healthy when a later PostgreSQL probe fails',async()=>{
+  const services=fakeServices();
+  let dbProbes=0;
+  services.dbHealth=async()=>{dbProbes++;throw new Error('Synthetic database failure');};
+  const app=createNextStandApp(services,{env});
+  const server=app.listen(0,'127.0.0.1');
+  await new Promise(resolve=>server.once('listening',resolve));
+  const base='http://127.0.0.1:'+server.address().port;
+  try{
+    const live=await fetch(base+'/health');
+    assert.equal(live.status,200);
+    assert.deepEqual(await live.json(),{
+      ok:true,service:'medsi-next',mode:'isolated',status:'ready'
+    });
+    const db=await fetch(base+'/__health');
+    assert.equal(db.status,503);
+    assert.equal(dbProbes,1);
+  }finally{await new Promise(resolve=>server.close(resolve));}
+});
+
 test('legacy browser request envelope remains compatible for tutor login and rejects old writes',async()=>{
   const services=fakeServices();
   services.sessions.verifyTutor=token=>token==='valid-tutor';
@@ -118,6 +138,8 @@ test('Timeweb can scan HTTP port before a slow database connection, while data r
   }
   const base='http://127.0.0.1:'+started.server.address().port;
   try {
+    const pendingLiveness=await fetch(base+'/health');
+    assert.equal(pendingLiveness.status,503);
     const health=await fetch(base+'/__health');
     assert.equal(health.status,503);
     const body=await health.json();
@@ -134,6 +156,9 @@ test('Timeweb can scan HTTP port before a slow database connection, while data r
     const ready=await fetch(base+'/__health');
     assert.equal(ready.status,200);
     assert.equal((await ready.json()).database,'reachable');
+    const live=await fetch(base+'/health');
+    assert.equal(live.status,200);
+    assert.equal((await live.json()).status,'ready');
     assert.equal(started.status.code,'READY');
   }finally{
     await started.shutdown();
@@ -157,6 +182,7 @@ test('admission-free schema preparation failure keeps every patient route closed
     const data=await health.json();
     assert.equal(data.code,'CURRENT_CHILD_SCHEMA_NOT_READY');
     assert.equal(JSON.stringify(data).includes('synthetic private'),false);
+    assert.equal((await fetch(base+'/health')).status,503);
     const response=await fetch(base+'/lab/admin/reports/dashboard');
     assert.equal(response.status,503);
   }finally{await started.shutdown()}

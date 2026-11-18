@@ -211,6 +211,12 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
     res.setHeader('referrer-policy','no-referrer');
     next();
   });
+  // Timeweb's liveness probe must not depend on an external database query.
+  // This router is only installed after the protected services are initialized.
+  // The separate /__health endpoint remains the PostgreSQL connectivity check.
+  app.get('/health',(_req,res)=>{
+    res.json({ok:true,service:'medsi-next',mode:'isolated',status:'ready'});
+  });
   app.get('/__health',handler(async()=>{
     if(typeof services.dbHealth!=='function')throw new Error('PostgreSQL health probe unavailable.');
     await services.dbHealth();

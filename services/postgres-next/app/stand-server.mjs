@@ -502,6 +502,9 @@ export async function startIsolatedStand(env=process.env,{
       state.phase='failed';
       state.code=code;
       console.error('MEDSI_NEXT_STAND_BOOT_FAILED:',code);
+      // SQLSTATE is a fixed PostgreSQL category, never SQL or record contents.
+      if(/^[0-9A-Z]{5}$/.test(String(error?.code||'')))
+        console.error('MEDSI_NEXT_STARTUP_SQLSTATE_'+error.code);
       await closeDatabaseDriver(driver);
       driver=null;
     }

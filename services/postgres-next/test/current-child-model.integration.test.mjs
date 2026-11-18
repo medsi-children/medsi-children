@@ -310,8 +310,10 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     await sql`INSERT INTO parent_directory_archive
       (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
       VALUES (${'ci_dup_legacy'},${legacyPhone},${'Синтетический взрослый'},
-        ${'Маша'},${'Синтетическая'},${'legacy_import'},${null},${2n})`;
+        ${'Маша'},${'Синтетическая'},${'legacy_import'},${2n},${2n})`;
     await ensureParentDirectoryArchive(sql);
+    const [datedContacts]=await sql`SELECT entry_id FROM parent_directory_archive WHERE registered_at IS NOT NULL`;
+    assert.equal(datedContacts.length,0);
     const [deduped]=await sql`SELECT entry_id,child_surname FROM parent_directory_archive
       WHERE phone10=${legacyPhone}`;
     assert.deepEqual(deduped.map(x=>x.entry_id),['ci_dup_legacy']);

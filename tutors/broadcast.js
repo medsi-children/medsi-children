@@ -11,15 +11,13 @@
   overlay.innerHTML=`
     <section class="medsi-broadcast-card">
       <header class="medsi-broadcast-head">
-        <div><h2 id="medsiBroadcastTitle">Рассылка родителям</h2>
-        <p>Одно сообщение в личный чат каждого действующего родителя.</p></div>
+        <div><h2 id="medsiBroadcastTitle">Рассылка родителям</h2></div>
         <button id="medsiBroadcastClose" type="button" aria-label="Закрыть">×</button>
       </header>
       <div class="medsi-broadcast-content">
         <p id="medsiBroadcastAudience" class="medsi-broadcast-audience" role="status">Проверяем список родителей…</p>
         <label for="medsiBroadcastText">Текст сообщения</label>
         <textarea id="medsiBroadcastText" rows="6" maxlength="4000" placeholder="Напишите объявление для родителей…"></textarea>
-        <p class="medsi-broadcast-hint">Родители получат сообщение в своих чатах. После отправки отменить рассылку нельзя.</p>
         <p id="medsiBroadcastFeedback" class="medsi-broadcast-feedback" role="status"></p>
         <button id="medsiBroadcastSend" class="medsi-broadcast-send" type="button" disabled>Проверяем получателей…</button>
       </div>
@@ -55,8 +53,8 @@
     try{
       snapshot=await request('/lab/broadcast/preview');
       audience.textContent=snapshot.count
-        ?'Получателей: '+snapshot.count+'. Только родители с действующей привязкой к ребёнку.'
-        :'Нет зарегистрированных родителей с подтверждённой привязкой.';
+        ?'Сообщение появится в личных чатах родителей.'
+        :'Нет получателей.';
     }catch(error){audience.textContent='Не удалось загрузить список.';feedback.textContent=error.message;}
     setBusy(false);updateButton();
   }
@@ -89,14 +87,14 @@
       if(result.complete){
         completed=true;
         feedback.textContent='Рассылка отправлена: '+result.count+' родителям.';
-        audience.textContent='Готово. Сообщения появились в личных чатах.';
+        audience.textContent='Сообщения отправлены.';
         send.textContent='Рассылка завершена';
         document.dispatchEvent(new CustomEvent('medsi:refresh-educator-chats'));
       }else{
-        feedback.textContent='Не отправлено: '+result.failed+' из '+result.count+'. Можно повторить без дублирования уже доставленных сообщений.';
+        feedback.textContent='Не отправлено: '+result.failed+' из '+result.count+'. Нажмите «Повторить отправку оставшимся».';
       }
     }catch(error){
-      feedback.textContent=error.message+' Если связь прервалась, повторите отправку здесь, чтобы избежать дублей.';
+      feedback.textContent=error.message+' Повторите отправку.';
     }finally{setBusy(false);if(completed)send.disabled=true;else updateButton()}
   });
 })();

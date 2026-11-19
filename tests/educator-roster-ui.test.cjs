@@ -29,8 +29,8 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.doesNotMatch(css,/dark layered Settings tiles/);
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
-  assert.match(html,/next-settings\.css\?v=20261118-broadcast-compact-1/);
-  assert.match(html,/next-settings\.js\?v=20261117-parent-directory-1/);
+  assert.match(html,/next-settings\.css\?v=20261119-feedback-1/);
+  assert.match(html,/next-settings\.js\?v=20261119-feedback-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);
   assert.match(js,/Нужна проверка привязки/);
@@ -143,7 +143,7 @@ test('unlinked parent can be deleted without manual child assignment',async()=>{
   const requests=[],confirms=[],feedback={textContent:''};
   const render=new Function('byId','textNode','icon','deleteIcon','rosterEdit','request','refreshRoster',
     'refreshLibrary','window','setTimeout','document',
-    source.slice(begin,end)+'\nreturn renderRoster;')(
+    'const notifyOperation=message=>{byId("medsiReportsFeedback").textContent=message;};'+source.slice(begin,end)+'\nreturn renderRoster;')(
       id=>id==='medsiReportsFeedback'?feedback:pane,node,()=>'<svg/>','',()=>{},
       (...args)=>{requests.push(args);return Promise.resolve({ok:true,accepted:true})},
       ()=>true,()=>{}, {confirm:message=>{confirms.push(message);return true}},()=>{},{createElement:tag=>({...node(tag),focus(){}})}
@@ -219,7 +219,7 @@ test('linked children first, muted unlinked and review profiles last; multi-pare
   const requests=[],confirms=[],feedback={textContent:''};
   const render=new Function('byId','textNode','icon','deleteIcon','rosterEdit','request','refreshRoster',
     'refreshLibrary','window','setTimeout','document',
-    source.slice(begin,end)+'\nreturn renderRoster;')(
+    'const notifyOperation=message=>{byId("medsiReportsFeedback").textContent=message;};'+source.slice(begin,end)+'\nreturn renderRoster;')(
     id=>id==='medsiReportsFeedback'?feedback:pane,node,()=>'<svg/>','',()=>{},
     (...args)=>{requests.push(args);return Promise.resolve({ok:true,accepted:true})},
     ()=>true,()=>{}, {confirm:message=>{confirms.push(message);return true}},()=>{},

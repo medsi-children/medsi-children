@@ -492,3 +492,9 @@ body.medsi-report-library-open {overflow:hidden}
 @media(max-width:560px){.medsi-broadcast-backdrop{align-items:center;padding:12px}.medsi-broadcast-head{padding:18px 16px 13px}.medsi-broadcast-content{padding:0 16px 18px}.medsi-broadcast-head h2{font-size:1.22rem}}
 
 .medsi-broadcast-feedback:empty{display:none}
+
+.medsi-operation-overlay{position:fixed;inset:0;z-index:30000;display:grid;place-items:center;background:rgba(237,248,249,.7);backdrop-filter:blur(3px)}
+.medsi-operation-overlay.hidden,.medsi-operation-notice.hidden{display:none}
+.medsi-operation-card{padding:24px;border-radius:20px;background:#fff;box-shadow:0 12px 40px rgba(17,66,74,.12)}
+.medsi-operation-card .boot-spinner{margin:0}
+.medsi-operation-notice{position:fixed;z-index:31000;top:max(24px,env(safe-area-inset-top));left:50%;transform:translateX(-50%);width:max-content;max-width:calc(100vw - 32px);padding:16px 22px;border:1px solid #c5e6e7;border-radius:16px;background:#fff;color:#174a52;box-shadow:0 10px 35px rgba(17,66,74,.18);font-size:15px;line-height:1.5;text-align:center}

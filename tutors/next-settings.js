@@ -429,7 +429,7 @@
     };
     const linkedParents=Array.isArray(child.parents)?child.parents:[];
     for(const parent of linkedParents){
-      details.append(detailRow('parent',(parent.relationship||'Родитель')+':',parent.parentName||'—'));
+      details.append(detailRow('parent',parent.relationship||'Родитель',String(parent.parentName||'').trim().split(/\s+/u)[0]||'—'));
       if(parent.phone)details.append(detailRow('phone','',parent.phone));
     }
     details.append(detailRow('child','Ребёнок:',child.childName||'—'));
@@ -441,7 +441,7 @@
     const views=Array.isArray(child.parentViews)?child.parentViews:[];
     for(const view of views){
       const block=textNode('article','medsi-child-deck-reports','');
-      if(views.length>1)block.append(textNode('h4','medsi-view-parent',view.parentName||view.phone||'Родитель'));
+      if(views.length>1)block.append(textNode('h4','medsi-view-parent',String(view.parentName||'').trim().split(/\s+/u)[0]||view.phone||'Родитель'));
       for(const kind of ['morning','evening']){
         const current=view.reports?.[kind]||'';
         const section=textNode('section','medsi-child-report-section medsi-child-report-section-'+kind,'');
@@ -515,7 +515,7 @@
       info.append(name);
       const parentText=textNode('div','medsi-roster-line-parent','');
       for(const parent of parents){
-        const parentButton=textNode('button','',[(parent.relationship||'Родитель'),parent.parentName||'—'].join(' '));
+        const parentButton=textNode('button','',[(parent.relationship||'Родитель'),String(parent.parentName||'').trim().split(/\s+/u)[0]||'—'].join(' '));
         parentButton.type='button';parentButton.title='Изменить данные родителя';
         parentButton.onclick=()=>info.replaceChildren(rosterEdit([
           {id:'parentName',label:'Имя родителя',value:parent.parentName},
@@ -613,7 +613,7 @@
         info.append(textNode('div','medsi-roster-line-name',
           String(parent.childName||'').trim()||'Ребёнок не указан'));
         info.append(textNode('div','medsi-roster-line-parent',
-          [(parent.relationship||'Родитель'),parent.parentName||'—'].join(' ')));
+          [(parent.relationship||'Родитель'),String(parent.parentName||'').trim().split(/\s+/u)[0]||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
         const actions=textNode('div','medsi-roster-line-actions','');
         actions.append(
@@ -648,7 +648,7 @@
         const card=textNode('article','medsi-roster-line medsi-roster-line-unlinked','');
         const info=textNode('div','medsi-roster-line-info','');
         info.append(textNode('div','medsi-roster-line-name',String(parent.childName||'').trim()||'Ребёнок не указан'));
-        info.append(textNode('div','medsi-roster-line-parent',[(parent.relationship||'Родитель'),parent.parentName||'—'].join(' ')));
+        info.append(textNode('div','medsi-roster-line-parent',[(parent.relationship||'Родитель'),String(parent.parentName||'').trim().split(/\s+/u)[0]||'—'].join(' ')));
         info.append(textNode('div','medsi-roster-unlinked-phone',parent.phone||('8'+parent.phone10)));
         info.append(textNode('div','medsi-roster-review-note','Нужна проверка привязки'));
         card.title='Требуется проверка профиля перед предоставлением доступа к индивидуальным отчётам';

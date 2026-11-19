@@ -30,7 +30,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
   assert.match(html,/next-settings\.css\?v=20261119-feedback-1/);
-  assert.match(html,/next-settings\.js\?v=20261119-feedback-1/);
+  assert.match(html,/next-settings\.js\?v=20261119-parent-name-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);
   assert.match(js,/Нужна проверка привязки/);
@@ -157,7 +157,8 @@ test('unlinked parent can be deleted without manual child assignment',async()=>{
   assert.match(card.className,/medsi-roster-line-unlinked/);
   const allText=JSON.stringify(card);
   assert.match(allText,/Новый ребёнок/);
-  assert.match(allText,/Тестовый родитель/);
+  assert.match(allText,/Мама Тестовый/);
+  assert.doesNotMatch(allText,/Тестовый родитель/);
   assert.match(allText,/89000000091/);
   const actions=card.children.find(item=>item.className==='medsi-roster-line-actions');
   assert.ok(actions);
@@ -256,8 +257,8 @@ test('linked children first, muted unlinked and review profiles last; multi-pare
   const parentLabel=card=>card.children
     .find(child=>child.className==='medsi-roster-line-info').children
     .find(child=>child.className==='medsi-roster-line-parent').textContent;
-  assert.equal(parentLabel(pane.children[1]),'Мама Другой родитель');
-  assert.equal(parentLabel(pane.children[2]),'Папа Родитель для проверки');
+  assert.equal(parentLabel(pane.children[1]),'Мама Другой');
+  assert.equal(parentLabel(pane.children[2]),'Папа Родитель');
   assert.doesNotMatch(parentLabel(pane.children[1]),/Мама:/);
   assert.doesNotMatch(parentLabel(pane.children[2]),/Папа:/);
   const actions=pane.children[0].children.find(x=>x.className==='medsi-roster-line-actions');

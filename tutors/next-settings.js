@@ -682,10 +682,14 @@
         const pane=byId('medsiRosterPane');
         const editing=!!pane.querySelector('.medsi-roster-form, .medsi-roster-line-delete:disabled');
         if(activeTab==='roster' && (renderEvenIfEditing||!editing) &&
-          rosterRenderedSignature!==JSON.stringify(data))renderRoster(data);
+          (renderEvenIfEditing || rosterRenderedSignature!==JSON.stringify(data)))renderRoster(data);
         return true;
       }catch(error){
         // Background failures must leave the last good list on screen.
+        if(opened&&!rosterData&&activeTab==='roster'){
+          const pane=byId('medsiRosterPane');
+          pane.replaceChildren(textNode('p','medsi-reports-empty','Не удалось загрузить список. Повторяем попытку в фоне.'));
+        }
         if(opened&&!silent)notifyOperation(error.message||'Не удалось загрузить список детей и родителей.');
         return false;
       }

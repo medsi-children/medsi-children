@@ -18,6 +18,8 @@ self.addEventListener('push', event => {
     };
   }
 
+  if (!payload || typeof payload !== 'object') return;
+
   if (payload.action === 'close-notification') {
     event.waitUntil(
       self.registration.getNotifications({ tag: payload.tag || 'medsi-message' })
@@ -25,6 +27,8 @@ self.addEventListener('push', event => {
     );
     return;
   }
+
+  if (typeof payload.body !== 'string' || !payload.body.trim()) return;
 
   const title = payload.title || 'Медси Бот';
   const options = {

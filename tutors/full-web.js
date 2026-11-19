@@ -230,8 +230,8 @@
       const card=document.createElement('div');card.className='phone-card card-enter';card.style.animationDelay=Math.min(index*24,160)+'ms';
       const title=document.createElement('div');title.className='phone-card-title';title.textContent=r.childName||'Без имени ребёнка';
       const meta=document.createElement('div');meta.className='phone-card-meta';
-      const parentLine=document.createElement('div');parentLine.textContent=(r.relationship||'Родитель')+': '+(r.parentName||'—');
-      const phoneLine=document.createElement('div');phoneLine.append('Номер телефона: ');const strong=document.createElement('span');strong.className='phone-number-strong';strong.textContent=displayPhone(r.phone)||'—';phoneLine.appendChild(strong);meta.append(parentLine,phoneLine);
+      const parentLine=document.createElement('div');parentLine.textContent=(r.relationship||'Родитель')+' '+(String(r.parentName||'').trim().split(/\s+/u)[0]||'—');
+      const phoneLine=document.createElement('div');phoneLine.append('Телефон: ');const strong=document.createElement('span');strong.className='phone-number-strong';strong.textContent=displayPhone(r.phone)||'—';phoneLine.appendChild(strong);meta.append(parentLine,phoneLine);
       const actions=document.createElement('div');actions.className='phone-card-actions';
       const copy=document.createElement('button');copy.type='button';copy.className='btn btn-teal phone-action-btn';copy.textContent='Скопировать';copy.onclick=()=>copyPhone(displayPhone(r.phone),copy);
       const call=document.createElement('a');call.className='btn btn-mint phone-action-btn';call.href='tel:'+String(r.phone||'').replace(/\D+/g,'');call.textContent='Позвонить';

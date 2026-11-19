@@ -22,12 +22,12 @@ export function prepareChatMessage(input, timestamp = Date.now()) {
   if (clientMessageId.length < 8 || clientMessageId.length > 200 ||
       !/^[A-Za-z0-9_-]+$/.test(clientMessageId)) throw new Error('Invalid client message identifier.');
   if (!text && !fileId) throw new Error('Empty chat message.');
-  if (text.length > 4000 || fileId.length > (type==='gallery'?1200:200) || replyToKey.length > 200) {
+  if (text.length > 4000 || fileId.length > (type==='gallery'?2400:200) || replyToKey.length > 200) {
     throw new Error('Message exceeds allowed length.');
   }
   if (type === 'text' && !text) throw new Error('Text message has no text.');
   if (type === 'gallery' && !parseChatGallery(fileId)) {
-    throw new Error('Gallery must contain 2 to 5 owned photos or videos.');
+    throw new Error('Gallery must contain 2 to 10 owned photos or videos.');
   }
   if (type !== 'text' && type !== 'gallery' && !fileId.startsWith('s3:')) {
     throw new Error('New media messages must refer to private Timeweb S3 objects.');

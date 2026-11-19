@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import sharp from 'sharp';
+import {Readable} from 'node:stream';
 import {createMediaService} from '../app/media-service.mjs';
 import {createChatGallery} from '../app/chat-gallery.mjs';
 
@@ -45,7 +47,7 @@ function harness({unlinked=false,closed=false}={}) {
       setHeader(name,value){this.headers[name]=value;return this;}};
     return res;
   };
-  return {service,state,response};
+  return {service,state,response,storage};
 }
 test('S3 upload binds file identifier to verified active parent phone',async()=>{
   const {service,state,response}=harness();
@@ -121,4 +123,25 @@ test('private media in an active gallery stays accessible to its parent only',as
   assert.equal((await open()).statusCode,200);
   state.messages.set('gallery',[{phone10:phone,status:'deleted',file_id:gallery}]);
   assert.equal((await open()).statusCode,404);
+});
+
+test('cached gallery previews still require current message ownership',async()=>{
+  const {service,state,response,storage}=harness();
+  const bytes=await sharp({create:{width:1600,height:1200,channels:3,background:'#123456'}}).jpeg().toBuffer();
+  storage.getObject=async()=>{state.reads++;return {ContentType:'image/jpeg',ContentLength:bytes.length,Body:Readable.from([bytes])};};
+  const issued=response();
+  await service.grantCookie({get:()=> 'parent'},issued,()=>{});
+  const cookie=issued.cookies[0];
+  const read=async()=>{const res=response();await service.open({
+    params:{key},query:{variant:'preview'},headers:{cookie:cookie.name+'='+cookie.value},get:()=>''
+  },res);return res;};
+  state.messages.set('s3:'+key,[{phone10:phone,status:'active'}]);
+  const first=await read();
+  assert.equal(first.statusCode,200);
+  assert.equal((await sharp(first.body).metadata()).width,640);
+  assert.equal(first.headers['cache-control'],'private, no-store');
+  await read();assert.equal(state.reads,1);
+  state.messages.set('s3:'+key,[{phone10:other,status:'active'}]);
+  assert.equal((await read()).statusCode,404);
+  assert.equal(state.reads,1);
 });

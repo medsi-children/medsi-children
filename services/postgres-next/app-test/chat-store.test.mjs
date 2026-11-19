@@ -114,9 +114,9 @@ test('outgoing educator and media pushes show department name and a compact prev
   assert.equal(latest.body,'📷 Фото · Подпись');
 });
 
-test('five separately uploaded attachments form one stored chat message and one push',async()=>{
+test('ten separately uploaded attachments form one stored chat message and one push',async()=>{
   const {state,sql}=fakeSql(),store=createChatStore(sql);
-  const items=Array.from({length:5},(_,i)=>({
+  const items=Array.from({length:10},(_,i)=>({
     fileId:'s3:chat/'+String(i+1).repeat(64)+'.jpg',type:i===4?'video':'image'
   }));
   const fileId=createChatGallery(items);
@@ -127,7 +127,7 @@ test('five separately uploaded attachments form one stored chat message and one 
   assert.equal(state.push.size,1);
   const notification=[...state.push.values()][0];
   assert.equal(notification.title,'Арина Халитова');
-  assert.equal(notification.body,'📎 5 вложений');
+  assert.equal(notification.body,'📎 10 вложений');
   const again=await store.send(payload({type:'gallery',text:'',fileId,
     clientMessageId:'synthetic_gallery_send_001'}));
   assert.equal(again.status,'duplicate');
@@ -136,7 +136,7 @@ test('five separately uploaded attachments form one stored chat message and one 
 test('gallery cannot reference an arbitrary or malformed S3 object',()=>{
   const one='s3:chat/'+ 'a'.repeat(64)+'.jpg';
   assert.throws(()=>prepareChatMessage(payload({type:'gallery',
-    fileId:'gallery:'+JSON.stringify([{fileId:one,type:'image'}])})),/2 to 5/);
+    fileId:'gallery:'+JSON.stringify([{fileId:one,type:'image'}])})),/2 to 10/);
 });
 
 test('disabled push never builds a chat notification backlog',async()=>{

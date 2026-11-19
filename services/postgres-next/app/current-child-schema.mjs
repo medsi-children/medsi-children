@@ -85,10 +85,6 @@ export async function ensureParentDirectoryArchive(sql){
       registered_at BIGINT,
       created_at BIGINT NOT NULL
     )`;
-    // Historical contacts must not retain a registration/admission date.
-    // Keep the nullable column for compatibility with existing insert contracts.
-    await tx`UPDATE parent_directory_archive SET registered_at=NULL
-      WHERE registered_at IS NOT NULL`;
     // Existing records may have been imported before phone deduplication.
     // Keep the oldest richer legacy row when available, otherwise the newest
     // registration. This migration only touches the independent archive.
@@ -121,10 +117,10 @@ export async function ensureParentDirectoryArchive(sql){
     if(!previousSeed){
       await tx`INSERT INTO parent_directory_archive
         (entry_id,phone10,parent_name,child_name,child_surname,source,registered_at,created_at)
-        SELECT ${'current_'}||p.phone10, p.phone10, p.parent_name,
-          COALESCE(NULLIF(c.registered_first_name,${''}),p.child_name),
+        SELECT ${'current_'}||p.phone10, p.phone10, COALESCE(p.parent_name,${''}),
+          COALESCE(NULLIF(c.registered_first_name,${''}),p.child_name,${''}),
           COALESCE(c.surname,${''}), ${'current_profile'}, ${null},
-          p.created_at
+          ${BigInt(Date.now())}
         FROM parent_profiles AS p
         LEFT JOIN children AS c ON c.child_id=p.child_id
         WHERE LENGTH(p.phone10)=10

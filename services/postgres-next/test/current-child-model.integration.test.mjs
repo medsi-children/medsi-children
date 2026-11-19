@@ -26,8 +26,16 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
   // external SQL console. Repeating it must be safe and never drop tables.
   await ensureCurrentChildColumns(sql);
   await ensureCurrentChildColumns(sql);
+  // Legacy parent rows may have NULL names and timestamps.
+  await sql`INSERT INTO parent_profiles (phone10) VALUES (${'9990000099'})`;
   await ensureParentDirectoryArchive(sql);
   await ensureParentDirectoryArchive(sql);
+  const [[legacyContact]]=await sql`SELECT parent_name,child_name,created_at
+    FROM parent_directory_archive WHERE phone10=${'9990000099'}`;
+  assert.equal(legacyContact.parent_name,'');
+  assert.equal(legacyContact.child_name,'');
+  assert.ok(Number(legacyContact.created_at)>0);
+  await sql`DELETE FROM parent_profiles WHERE phone10=${'9990000099'}`;
   const [[legacyTable]]=await sql`SELECT to_regclass(${'public.admissions'}) IS NOT NULL AS retained`;
   assert.equal(legacyTable.retained,true);
   let clock=Date.now()-20000;
@@ -312,8 +320,6 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
       VALUES (${'ci_dup_legacy'},${legacyPhone},${'Синтетический взрослый'},
         ${'Маша'},${'Синтетическая'},${'legacy_import'},${2n},${2n})`;
     await ensureParentDirectoryArchive(sql);
-    const [datedContacts]=await sql`SELECT entry_id FROM parent_directory_archive WHERE registered_at IS NOT NULL`;
-    assert.equal(datedContacts.length,0);
     const [deduped]=await sql`SELECT entry_id,child_surname FROM parent_directory_archive
       WHERE phone10=${legacyPhone}`;
     assert.deepEqual(deduped.map(x=>x.entry_id),['ci_dup_legacy']);

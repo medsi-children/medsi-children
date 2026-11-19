@@ -30,7 +30,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
   assert.match(html,/next-settings\.css\?v=20261119-feedback-1/);
-  assert.match(html,/next-settings\.js\?v=20261119-parent-name-1/);
+  assert.match(html,/next-settings\.js\?v=20261119-roster-poll-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);
   assert.match(js,/Нужна проверка привязки/);
@@ -130,7 +130,7 @@ test('raw morning and evening reports visually separate child blocks but keep on
 test('unlinked parent can be deleted without manual child assignment',async()=>{
   const source=read('tutors/next-settings.js');
   const begin=source.indexOf('function renderRoster(data){');
-  const end=source.indexOf('  async function refreshRoster(){',begin);
+  const end=source.indexOf('  async function refreshRoster(',begin);
   assert.ok(begin>=0&&end>begin,'Directory renderer must remain extractable');
   const pane={tag:'div',className:'',children:[],replaceChildren(...items){this.children=[...items]},append(...items){this.children.push(...items)}};
   const node=(tag,className='',value='')=>({
@@ -207,7 +207,7 @@ test('unlinked directory omits redundant bot-presence status',()=>{
 test('linked children first, muted unlinked and review profiles last; multi-parent deletion remains per profile',async()=>{
   const source=read('tutors/next-settings.js');
   const begin=source.indexOf('function renderRoster(data){');
-  const end=source.indexOf('  async function refreshRoster(){',begin);
+  const end=source.indexOf('  async function refreshRoster(',begin);
   assert.ok(begin>=0&&end>begin);
   const pane={children:[],replaceChildren(...items){this.children=[...items]},append(...items){this.children.push(...items)}};
   const node=(tag,className='',value='')=>({
@@ -277,4 +277,71 @@ test('educator settings deletion uses the same short parent-access warning',()=>
   const js=read('tutors/full-web.js');
   assert.match(js,/Чат с родителем исчезнет, доступ к боту закроется/);
   assert.doesNotMatch(js,/Вся история сообщений будет удалена/);
+});
+
+test('roster polling reuses the last good snapshot, coalesces requests and preserves edits',async()=>{
+  const source=read('tutors/next-settings.js');
+  const start=source.indexOf('  async function refreshRoster(');
+  const end=source.indexOf('  function startRosterPolling()',start);
+  assert.ok(start>=0&&end>start,'Roster refresh remains independently testable');
+  const calls=[],notices=[],rendered=[],pending=[];
+  let editing=false;
+  const pane={querySelector:()=>editing?{}:null,replaceChildren(){}};
+  const request=(path,method,body,options)=>{
+    calls.push({path,method,body,options});
+    return new Promise((resolve,reject)=>pending.push({resolve,reject}));
+  };
+  const factory=new Function('request','byId','notifyOperation','textNode','rendered',
+    `let opened=true,activeTab='raw',rosterData=null,rosterRenderedSignature='',rosterRefreshPromise=null;
+    function renderRoster(data){rosterRenderedSignature=JSON.stringify(data);rendered.push(data);}
+    `+source.slice(start,end)+`
+    return {refreshRoster,setTab:value=>{activeTab=value;},snapshot:()=>rosterData};`);
+  const controller=factory(request,()=>pane,value=>notices.push(value),
+    (_tag,_className,value)=>value,rendered);
+  const original={ok:true,children:[{childId:'synthetic-a',morning:false,evening:false}]};
+  const first=controller.refreshRoster({silent:true});
+  const overlap=controller.refreshRoster({silent:true});
+  assert.equal(calls.length,1,'background ticks never overlap queries');
+  assert.deepEqual(calls[0],{path:'/lab/admin/roster',method:'GET',body:undefined,options:{silent:true}});
+  pending.shift().resolve(original);
+  await Promise.all([first,overlap]);
+  assert.deepEqual(controller.snapshot(),original);
+  assert.equal(rendered.length,0,'another tab should keep the roster cached without rendering');
+  controller.setTab('roster');
+  const second=controller.refreshRoster({silent:true});
+  pending.shift().resolve(original);
+  await second;
+  assert.equal(rendered.length,1);
+  const third=controller.refreshRoster({silent:true});
+  pending.shift().resolve(original);
+  await third;
+  assert.equal(rendered.length,1,'identical background data should not reset the cards');
+  editing=true;
+  const changed={ok:true,children:[{childId:'synthetic-a',morning:true,evening:false}]};
+  const fourth=controller.refreshRoster({silent:true});
+  pending.shift().resolve(changed);
+  await fourth;
+  assert.deepEqual(controller.snapshot(),changed);
+  assert.equal(rendered.length,1,'a background response must not close an editor');
+  const forced=controller.refreshRoster({silent:true,force:true,renderEvenIfEditing:true});
+  pending.shift().resolve(changed);
+  await forced;
+  assert.equal(rendered.length,2,'a completed edit should repaint even when server data is unchanged');
+  const failed=controller.refreshRoster({silent:true});
+  pending.shift().reject(new Error('Synthetic connection failure'));
+  assert.equal(await failed,false);
+  assert.deepEqual(controller.snapshot(),changed,'network errors retain last confirmed roster data');
+  assert.equal(notices.length,0,'background polling should not spam failure popups');
+});
+
+test('roster refresh runs only in the open reports-and-names panel',()=>{
+  const js=read('tutors/next-settings.js'),html=read('tutors.html');
+  assert.match(js,/const ROSTER_REFRESH_MS=15000/);
+  assert.match(js,/function startRosterPolling\(\)/);
+  assert.match(js,/if\(opened&&!document.hidden\)void refreshRoster\(\{silent:true\}\)/);
+  assert.match(js,/function stopRosterPolling\(\)/);
+  assert.match(js,/library.classList.remove\('hidden'\);\s*startRosterPolling\(\)/);
+  assert.match(js,/stopRosterPolling\(\);\s*\/\/ Return to the settings cards/);
+  assert.match(js,/if\(!silent\)beginOperation\(\)/);
+  assert.match(html,/next-settings\.js\?v=20261119-roster-poll-1/);
 });

@@ -227,8 +227,8 @@
     operationNotice.classList.remove('hidden');
     noticeTimer=setTimeout(()=>operationNotice.classList.add('hidden'),3500);
   }
-  async function request(path,method='GET',body){
-    beginOperation();
+  async function request(path,method='GET',body,{silent=false}={}){
+    if(!silent)beginOperation();
     const controller=new AbortController();
     const timeout=setTimeout(()=>controller.abort(),20000);
     try{
@@ -247,7 +247,7 @@
     }
     if(!response.ok||!data.ok)throw new Error(data.message||'Не удалось сохранить изменения.');
     return data;
-    }finally{clearTimeout(timeout);endOperation();}
+    }finally{clearTimeout(timeout);if(!silent)endOperation();}
   }
   // A raw morning/evening publication stays a single editable text value.
   // These visual cards are computed from its lines without changing the
@@ -341,7 +341,15 @@
       byId(id).setAttribute('aria-selected',String(kind===name));byId(pane).classList.toggle('hidden',kind!==name);
     }
     if(kind==='names')await refreshNames();
-    if(kind==='roster')await refreshRoster();
+    if(kind==='roster'){
+      const pane=byId('medsiRosterPane');
+      if(rosterData){
+        if(rosterRenderedSignature!==JSON.stringify(rosterData) && !pane.querySelector('.medsi-roster-form'))renderRoster(rosterData);
+      }else if(!pane.hasChildNodes()){
+        pane.append(textNode('p','medsi-reports-empty','Загружаем список детей и родителей…'));
+      }
+      void refreshRoster({silent:true});
+    }
   }
   byId('medsiTabRaw').addEventListener('click',()=>showTab('raw'));
   byId('medsiTabChildren').addEventListener('click',()=>showTab('children'));
@@ -460,7 +468,9 @@
     }
     if(!views.length)pane.append(textNode('p','medsi-reports-empty','Для ребёнка пока нет распределённых отчётов.'));
   }
-  let rosterData=null;
+  // Keep the last confirmed roster snapshot while the educator switches tabs.
+  let rosterData=null,rosterRenderedSignature='',rosterRefreshPromise=null,rosterPollTimer=null;
+  const ROSTER_REFRESH_MS=15000;
   function rosterEdit(fields,onSave){
     const form=textNode('form','medsi-roster-form','');
     const inputs={};
@@ -477,7 +487,7 @@
       event.preventDefault();save.disabled=true;cancel.disabled=true;
       try{
         await onSave(Object.fromEntries(Object.entries(inputs).map(([key,input])=>[key,input.value.trim()])));
-        await refreshRoster();refreshLibrary();
+        await refreshRoster({force:true,renderEvenIfEditing:true});refreshLibrary();
         notifyOperation('Данные сохранены.');
       }catch(error){
         notifyOperation(error.message||'Не удалось сохранить.');
@@ -488,6 +498,7 @@
   }
   function renderRoster(data){
     const pane=byId('medsiRosterPane');pane.replaceChildren();
+    rosterRenderedSignature=JSON.stringify(data);
     // All parent profiles share one directory. Unlinked and review-needed
     // profiles follow linked children as muted rows, with no separate header.
     const deletionPrompt=(childName,parentCount=1)=>
@@ -570,13 +581,13 @@
             if(answer?.accepted!==true)throw new Error(answer?.message||'Сервер не принял удаление профиля.');
             accepted++;
           }
-          const refreshed=await refreshRoster();
+          const refreshed=await refreshRoster({force:true,renderEvenIfEditing:true});
           if(!refreshed)throw new Error('Справочник не удалось обновить после удаления.');
           await refreshLibrary();
           notifyOperation('Профиль удалён.');
         }catch(error){
           del.disabled=false;
-          await refreshRoster();
+          await refreshRoster({force:true,renderEvenIfEditing:true});
           const reason=String(error?.message||'Ошибка удаления');
           notifyOperation(accepted===parents.length
             ?'Удаление профилей принято, но список пока не обновился. '+reason+' Попробуйте обновить раздел.'
@@ -634,7 +645,7 @@
               ?window.crypto.randomUUID().replace(/-/g,''):Date.now().toString(36)+Math.random().toString(36).slice(2);
             const answer=await request('/lab/parent-delete','POST',{phone:parent.phone,operationId:'del_'+uuid});
             if(answer?.accepted!==true)throw new Error(answer?.message||'Сервер не принял удаление профиля.');
-            await refreshRoster();await refreshLibrary();
+            await refreshRoster({force:true,renderEvenIfEditing:true});await refreshLibrary();
             notifyOperation('Профиль удалён.');
           }catch(error){del.disabled=false;notifyOperation(error.message||'Не удалось удалить профиль.');}
         };
@@ -656,16 +667,50 @@
       }
     }
   }
-  async function refreshRoster(){
-    try{
-      rosterData=await request('/lab/admin/roster');
-      if(activeTab==='roster')renderRoster(rosterData);
-      return true;
-    }catch(error){
-      notifyOperation(error.message||'Не удалось загрузить список детей и родителей.');
-      return false;
+  async function refreshRoster({silent=true,force=false,renderEvenIfEditing=false}={}){
+    // One in-flight read at a time. After a write, force a fresh read so an
+    // older background response cannot restore a deleted or edited profile.
+    if(rosterRefreshPromise){
+      if(!force)return rosterRefreshPromise;
+      await rosterRefreshPromise;
     }
+    const run=(async()=>{
+      try{
+        const data=await request('/lab/admin/roster','GET',undefined,{silent});
+        if(!opened)return false;
+        rosterData=data;
+        const pane=byId('medsiRosterPane');
+        const editing=!!pane.querySelector('.medsi-roster-form, .medsi-roster-line-delete:disabled');
+        if(activeTab==='roster' && (renderEvenIfEditing||!editing) &&
+          (renderEvenIfEditing || rosterRenderedSignature!==JSON.stringify(data)))renderRoster(data);
+        return true;
+      }catch(error){
+        // Background failures must leave the last good list on screen.
+        if(opened&&!rosterData&&activeTab==='roster'){
+          const pane=byId('medsiRosterPane');
+          pane.replaceChildren(textNode('p','medsi-reports-empty','Не удалось загрузить список. Повторяем попытку в фоне.'));
+        }
+        if(opened&&!silent)notifyOperation(error.message||'Не удалось загрузить список детей и родителей.');
+        return false;
+      }
+    })();
+    rosterRefreshPromise=run;
+    try{return await run;}
+    finally{if(rosterRefreshPromise===run)rosterRefreshPromise=null;}
   }
+  function startRosterPolling(){
+    stopRosterPolling();
+    void refreshRoster({silent:true});
+    rosterPollTimer=setInterval(()=>{
+      if(opened&&!document.hidden)void refreshRoster({silent:true});
+    },ROSTER_REFRESH_MS);
+  }
+  function stopRosterPolling(){
+    if(rosterPollTimer){clearInterval(rosterPollTimer);rosterPollTimer=null;}
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(opened&&!document.hidden)void refreshRoster({silent:true});
+  });
   function nameToken(row,name,canonical){
     const token=textNode('span','medsi-name-token'+(canonical?' medsi-name-canonical':''),'');token.dataset.tone=String(Math.max(0,row.variants.indexOf(name)-1)%4);
     const button=textNode('button','medsi-name-word',name);button.type='button';
@@ -724,13 +769,13 @@
   }
   window.addEventListener('beforeunload',event=>{if(namesDirty()){event.preventDefault();event.returnValue='';}});
 
-  async function refreshLibrary() {
+  async function refreshLibrary({silent=Boolean(reportData || (activeTab==='roster' && rosterData))}={}) {
     if (!opened) return;
     if (refreshController) refreshController.abort();
     const controller = new AbortController();
     refreshController = controller;
     const timeout=setTimeout(()=>controller.abort(),20000);
-    beginOperation();
+    if(!silent)beginOperation();
     try {
       if (!window.MedsiEducatorSession) throw new Error('Сессия воспитателя недоступна.');
       const session = await MedsiEducatorSession.get();
@@ -763,7 +808,7 @@
       notifyOperation('Не удалось загрузить отчёты. Попробуйте обновить раздел.');
     } finally {
       clearTimeout(timeout);
-      endOperation();
+      if(!silent)endOperation();
       if (refreshController === controller) refreshController = null;
     }
   }
@@ -773,6 +818,7 @@
     opened = true;
     document.body.classList.add('medsi-report-library-open');
     library.classList.remove('hidden');
+    startRosterPolling();
     showTab(activeTab);
     refreshLibrary();
   }
@@ -782,12 +828,13 @@
     document.body.classList.remove('medsi-report-library-open');
     library.classList.add('hidden');
     if (refreshController) { refreshController.abort(); refreshController = null; }
+    stopRosterPolling();
     // Return to the settings cards, preserving the original parent menu.
     byId('tutorSettingsOpen').click();
   }
   byId('medsiOpenReportLibrary').addEventListener('click', openLibrary);
   byId('medsiReportsBack').addEventListener('click', closeLibrary);
-  byId('medsiReportsRefresh').addEventListener('click', async()=>{if(!await leaveNames())return;namesLoaded=false;if(activeTab==='names')await refreshNames();if(activeTab==='roster')await refreshRoster();await refreshLibrary();});
+  byId('medsiReportsRefresh').addEventListener('click', async()=>{if(!await leaveNames())return;namesLoaded=false;if(activeTab==='names')await refreshNames();if(activeTab==='roster')await refreshRoster({force:true,renderEvenIfEditing:true,silent:false});await refreshLibrary({silent:false});});
   library.addEventListener('keydown', event => {
     if (event.key === 'Escape') { event.preventDefault(); closeLibrary(); }
   });

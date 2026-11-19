@@ -1,3 +1,5 @@
+import {pipeline} from 'node:stream/promises';
+import {createMediaPreviews} from './media-previews.mjs';
 import {parseChatGallery} from './chat-gallery.mjs';
 import {createHash,createHmac,timingSafeEqual} from 'node:crypto';
 
@@ -38,6 +40,8 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
   }
   const read=fn=>sql.begin({isolation:'snapshotReadOnly',idempotent:true},fn);
   const write=fn=>sql.begin({isolation:'serializableReadWrite',idempotent:true},fn);
+
+  const preview=createMediaPreviews();
 
   async function activePhone(tx,phone10) {
     if(currentChildMode){
@@ -118,6 +122,7 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
     }
   }
   async function open(req,res) {
+    const started=Date.now();
     const claims=parseClaims(cookieValue(req.headers.cookie),secret,now());
     const key=String(req.params.key||'');
     if(!claims||!isChatMediaKey(key)||!storage.configured)return res.status(404).end();
@@ -143,8 +148,19 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
       return false;
     });
     if(!allowed)return res.status(404).end();
+    const authMs=Date.now()-started;
     try{
+      if(req.query?.variant==='preview'){
+        const buffer=await preview(key,signal=>storage.getObject(key,undefined,signal));
+        res.setHeader('server-timing','auth;dur='+authMs+',preview;dur='+(Date.now()-started-authMs));
+        res.setHeader('content-type','image/jpeg');
+        res.setHeader('content-length',String(buffer.length));
+        res.setHeader('cache-control','private, no-store');
+        res.setHeader('x-content-type-options','nosniff');
+        return res.status(200).end(buffer);
+      }
       const object=await storage.getObject(key,req.get('range')||undefined);
+      res.setHeader('server-timing','auth;dur='+authMs+',s3;dur='+(Date.now()-started-authMs));
       if(object.ContentType)res.setHeader('content-type',object.ContentType);
       if(object.ContentDisposition)res.setHeader('content-disposition',object.ContentDisposition);
       if(object.ContentLength!=null)res.setHeader('content-length',String(object.ContentLength));
@@ -154,7 +170,7 @@ export function createMediaService({sql,sessions,storage,secret,now=()=>Date.now
       res.setHeader('x-content-type-options','nosniff');
       res.status(object.ContentRange?206:200);
       if(object.Body&&typeof object.Body.pipe==='function'){
-        object.Body.pipe(res);
+        await pipeline(object.Body,res);
       }else if(object.Body){
         res.end(Buffer.from(await object.Body.transformToByteArray()));
       }else res.end();

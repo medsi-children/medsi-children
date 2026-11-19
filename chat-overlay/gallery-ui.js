@@ -2,13 +2,13 @@
   'use strict';
   const PREFIX='gallery:';
   const FILE=/^s3:chat\/[A-Za-z0-9._-]{8,180}$/;
-  const valid=items=>Array.isArray(items)&&items.length>=2&&items.length<=5&&
+  const valid=items=>Array.isArray(items)&&items.length>=2&&items.length<=10&&
     items.every(item=>item&&FILE.test(String(item.fileId||''))&&
       ['image','video'].includes(item.type))&&
     new Set(items.map(item=>item.fileId)).size===items.length;
   function parse(input){
     const raw=String(input||'');
-    if(!raw.startsWith(PREFIX)||raw.length>1200)return null;
+    if(!raw.startsWith(PREFIX)||raw.length>2400)return null;
     try{
       const list=JSON.parse(raw.slice(PREFIX.length));
       return valid(list)?list:null;
@@ -16,7 +16,7 @@
   }
   function pack(items){
     const encoded=PREFIX+JSON.stringify(items);
-    if(!parse(encoded))throw new Error('Для медиагруппы выберите от 2 до 5 файлов.');
+    if(!parse(encoded))throw new Error('Для медиагруппы выберите от 2 до 10 файлов.');
     return encoded;
   }
   function open(items,selected,transport){
@@ -40,7 +40,21 @@
       const medium=document.createElement(item.type==='video'?'video':'img');
       if(item.type==='video'){medium.controls=true;medium.preload='metadata';medium.playsInline=true}
       else medium.alt='Фотография '+(index+1)+' из '+items.length;
-      medium.src=url;picture.appendChild(medium);
+      const status=document.createElement('button');status.type='button';
+      status.className='medsi-gallery-load-status';status.textContent='Загрузка…';status.disabled=true;
+      let thumbnail=null;
+      if(item.type==='image'&&typeof transport.mediaPreviewUrl==='function'){
+        thumbnail=document.createElement('img');thumbnail.alt=medium.alt;
+        thumbnail.src=transport.mediaPreviewUrl(item.fileId);
+        picture.append(thumbnail);
+        medium.style.display='none';medium.fetchPriority='high';
+      }
+      picture.append(medium,status);
+      const loaded=()=>{thumbnail?.remove();medium.style.display='';status.remove();};
+      medium.onload=loaded;medium.onloadeddata=loaded;
+      medium.onerror=()=>{status.disabled=false;status.textContent='Не удалось загрузить. Повторить';};
+      status.onclick=()=>{status.disabled=true;status.textContent='Загрузка…';medium.src=url;};
+      medium.src=url;
       counter.textContent=(index+1)+' / '+items.length;
       before.disabled=index===0;after.disabled=index===items.length-1;
     };
@@ -75,10 +89,20 @@
       const btn=document.createElement('button');btn.type='button';btn.className='medsi-gallery-tile';
       btn.setAttribute('aria-label','Посмотреть вложение '+(index+1)+' из '+items.length);
       const media=document.createElement(item.type==='video'?'video':'img');
-      if(item.type==='video'){media.preload='metadata';media.muted=true;media.playsInline=true}
-      else media.alt='';
-      media.src=item.type==='image'&&typeof transport.mediaPreviewUrl==='function'
+      if(item.type==='video'){media.preload='none';media.muted=true;media.playsInline=true}
+      else {media.alt='';media.loading='lazy';media.decoding='async';}
+      let attempts=0;
+      const note=document.createElement('span');note.className='medsi-gallery-tile-status';note.textContent='Загрузка…';
+      btn.append(note);
+      media.onload=()=>note.remove();
+      media.onerror=()=>{
+        if(attempts++<1){setTimeout(()=>{media.src=previewUrl;},700);return;}
+        note.textContent='Открыть фото';
+      };
+      const previewUrl=item.type==='image'&&typeof transport.mediaPreviewUrl==='function'
         ?transport.mediaPreviewUrl(item.fileId):transport.mediaUrl(item.fileId);
+      media.src=previewUrl;
+      if(item.type==='video')note.textContent='Видео';
       btn.append(media);
       if(item.type==='video'){const symbol=document.createElement('span');symbol.className='medsi-gallery-play';symbol.textContent='▶';btn.append(symbol)}
       btn.addEventListener('click',event=>{event.stopPropagation();event.preventDefault();open(items,index,transport)});

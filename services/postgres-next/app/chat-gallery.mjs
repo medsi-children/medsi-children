@@ -4,10 +4,10 @@ const TYPES=new Set(['image','video']);
 export const GALLERY_PREFIX='gallery:';
 export function parseChatGallery(input){
   const raw=String(input||'');
-  if(!raw.startsWith(GALLERY_PREFIX)||raw.length>1200)return null;
+  if(!raw.startsWith(GALLERY_PREFIX)||raw.length>2400)return null;
   let items;
   try{items=JSON.parse(raw.slice(GALLERY_PREFIX.length))}catch{return null}
-  if(!Array.isArray(items)||items.length<2||items.length>5)return null;
+  if(!Array.isArray(items)||items.length<2||items.length>10)return null;
   const ids=new Set();
   for(const item of items){
     if(!item||typeof item!=='object'||!TYPES.has(item.type)||

@@ -302,11 +302,13 @@
       if(u){
         const frame=document.createElement('div');frame.className='parent-chat-media-frame';
         const md=document.createElement(m.type==='video'?'video':'img');md.className='parent-chat-media';
-        const markReady=()=>{frame.classList.add('medsi-media-ready');md.classList.add('is-loaded','medsi-media-ready');if(m.type==='image'&&window.MedsiMediaPreload)window.MedsiMediaPreload.queueOriginal(u);if(stick&&nearBottom())scrollBottom(false)};
+        const markReady=()=>{frame.classList.add('medsi-media-ready');md.classList.add('is-loaded','medsi-media-ready');if(stick&&nearBottom())scrollBottom(false)};
         if(m.type==='video'){
           frame.style.cursor='default';md.controls=true;md.preload='metadata';md.onloadedmetadata=markReady;
         } else {
-          md.alt='Фотография из чата';
+          md.alt='Фотография из чата';md.loading='lazy';md.decoding='async';
+          let retries=0;
+          md.onerror=()=>{if(retries++<1){setTimeout(()=>{md.src=previewUrl;},800);}else frame.classList.add('medsi-media-error');};
           md.onload=markReady;
           frame.onclick=e=>{e.preventDefault();e.stopPropagation();openLightbox(u,md.alt)};
         }
@@ -458,7 +460,7 @@
     if(!state||state.readOnly||busy||chatClosed)return;
     const input=$('parentChatFile'),files=Array.from(input.files||[]);
     input.value='';if(!files.length)return;
-    if(files.length>5){showError('Можно отправить не более пяти файлов одновременно.');return}
+    if(files.length>10){showError('Можно отправить не более 10 файлов одновременно.');return}
     if(files.some(f=>!f.type.startsWith('image/')&&!f.type.startsWith('video/'))){
       showError('Можно прикреплять только фото или видео.');return
     }

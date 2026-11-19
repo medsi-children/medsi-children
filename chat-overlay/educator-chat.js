@@ -278,7 +278,7 @@
         const gallery=window.MedsiChatGallery.render(m.fileId,window.MedsiOverlayTransport);
         if(gallery)el.appendChild(gallery);
       }
-      const url=mediaUrl(m),previewUrl=m.type==='image'&&window.MedsiOverlayTransport&&typeof window.MedsiOverlayTransport.mediaPreviewUrl==='function'?window.MedsiOverlayTransport.mediaPreviewUrl(m.fileId,'w960'):url;if(url){const wrap=document.createElement('div');wrap.className='msg-image-wrap';const media=document.createElement(m.type==='video'?'video':'img');const markReady=()=>{wrap.classList.add('loaded','medsi-media-ready');if(m.type==='image'&&window.MedsiMediaPreload)window.MedsiMediaPreload.queueOriginal(url)};media.addEventListener('load',markReady,{once:true});media.addEventListener('loadedmetadata',markReady,{once:true});media.addEventListener('error',()=>wrap.classList.add('medsi-media-error'),{once:true});if(m.type==='video'){media.controls=true;media.preload='metadata'}wrap.appendChild(media);el.appendChild(wrap);media.src=previewUrl;if((media.tagName==='IMG'&&media.complete&&media.naturalWidth>0)||(media.tagName==='VIDEO'&&media.readyState>=1))markReady()}
+      const url=mediaUrl(m),previewUrl=m.type==='image'&&window.MedsiOverlayTransport&&typeof window.MedsiOverlayTransport.mediaPreviewUrl==='function'?window.MedsiOverlayTransport.mediaPreviewUrl(m.fileId,'w960'):url;if(url){const wrap=document.createElement('div');wrap.className='msg-image-wrap';const media=document.createElement(m.type==='video'?'video':'img');if(m.type==='image'){media.loading='lazy';media.decoding='async';}const markReady=()=>{wrap.classList.add('loaded','medsi-media-ready');};media.addEventListener('load',markReady,{once:true});media.addEventListener('loadedmetadata',markReady,{once:true});let retries=0;media.addEventListener('error',()=>{if(m.type==='image'&&retries++<1){setTimeout(()=>{media.src=previewUrl;},800);}else wrap.classList.add('medsi-media-error');});if(m.type==='video'){media.controls=true;media.preload='metadata'}wrap.appendChild(media);el.appendChild(wrap);media.src=previewUrl;if((media.tagName==='IMG'&&media.complete&&media.naturalWidth>0)||(media.tagName==='VIDEO'&&media.readyState>=1))markReady()}
       if(m.text){const body=document.createElement('div');body.className='msg-body';body.textContent=String(m.text);el.appendChild(body)}
       if(m.reaction){const r=document.createElement('span');r.className='msg-reaction';r.textContent=m.reaction;el.appendChild(r)}
       const time=document.createElement('span');time.className='msg-time';time.textContent=[fmt(m.timestamp),m.editedAt?'изм.':''].filter(Boolean).join(' · ');el.appendChild(time);
@@ -448,7 +448,7 @@
     fileInput.onchange=()=>{
       const files=Array.from(fileInput.files||[]);fileInput.value='';
       if(!files.length)return;
-      if(files.length>5){overlay.showError('Можно прикрепить не более пяти файлов.');return}
+      if(files.length>10){overlay.showError('Можно прикрепить не более 10 файлов.');return}
       const maxBytes=Number(transport.maxUploadBytes||100*1024*1024);
       if(files.some(f=>(!f.type.startsWith('image/')&&!f.type.startsWith('video/'))||f.size>maxBytes)||
          files.reduce((sum,f)=>sum+f.size,0)>150*1024*1024){

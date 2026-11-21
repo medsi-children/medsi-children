@@ -300,7 +300,8 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const [[dropped]]=await sql`SELECT to_regclass(${'public.admissions'}) IS NULL AS removed`;
     assert.equal(dropped.removed,true);
     assert.equal((await reader.current(phoneC)).reports.find(r=>r.kind==='psychology').text,therapy);
-    assert.match((await reader.current(phoneC)).reports.find(r=>r.kind==='evening').text,/Мерцалова/);
+    assert.equal((await reader.current(phoneC)).reports.find(r=>r.kind==='evening').text,
+      'Степан: Первый синтетический блок!');
     assert.equal((await reader.history(phoneC)).reports.some(r=>r.kind==='evening'),true);
     const [[staffSource]]=await sql`SELECT raw_text FROM raw_reports WHERE publication_id=${p1.publicationId}`;
     assert.equal(staffSource.raw_text,text);

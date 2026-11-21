@@ -12,3 +12,10 @@ export function normalizeCurrentReportPunctuation(text){
       .replace(/([а-яёa-z])\.([А-ЯЁA-Z])/gu,'$1. $2')
     ).join('\n');
 }
+
+// Warning badges are educator annotations, not parent-facing observations.
+// Preserve ordinary punctuation, paragraph boundaries and unrelated emoji.
+export function formatCurrentParentChildReport(text){
+  return String(text??'').replace(/[‼⁈⁉❕❗❢❣][\uFE0E\uFE0F]?/gu,'')
+    .split('\n').map(line=>line.replace(/[ \t]{2,}/g,' ').trimEnd()).join('\n').trim();
+}

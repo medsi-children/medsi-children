@@ -1,3 +1,4 @@
+import {formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {planCurrentReport,currentReportVersion} from './current-report-plan.mjs';
 import {currentStaffPublications,parseCurrentStaffBlocks,canonicalCurrentName,parseCurrentParentChildName} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
@@ -233,7 +234,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // skipped rather than silently choosing one.
         if(eligible.length!==1)continue;
         const {block,index,owned}=eligible[0];
-        const text=(child.registered_first_name||block.name)+': '+block.body.join('\n').trim();
+        const text=formatCurrentParentChildReport((child.registered_first_name||block.name)+': '+block.body.join('\n').trim());
         // In an unowned legacy source, parent history must also reproduce
         // the selected block. Otherwise a stale orphan may belong to another
         // child despite sharing this publication and report date.

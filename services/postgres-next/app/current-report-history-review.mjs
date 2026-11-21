@@ -1,3 +1,4 @@
+import {formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {createHash,randomUUID} from 'node:crypto';
 import {canonicalCurrentName,parseCurrentParentChildName,parseCurrentStaffBlocks} from './current-child-identity.mjs';
 
@@ -121,7 +122,7 @@ export function createCurrentReportHistoryReview(sql,{now=()=>Date.now()}={}){
       for(const p of parents){
         const prior=data.history.find(h=>h.phone10===p.phone10&&h.kind===source.kind&&h.report_date===source.report_date);
         if(prior){if(prior.publication_id===publicationId&&String(prior.child_id)===childId)continue;throw new Error('A different report already exists for this day.');}
-        const text=`${data.children.find(c=>String(c.child_id)===childId)?.registered_first_name||registeredFirstName||block.name}: ${block.body.join('\n').trim()}`;
+        const text=formatCurrentParentChildReport(`${data.children.find(c=>String(c.child_id)===childId)?.registered_first_name||registeredFirstName||block.name}: ${block.body.join('\n').trim()}`);
         const [inserted]=await tx`INSERT INTO parent_report_history
           (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
           VALUES (${p.phone10},${source.kind},${source.report_date},${childId},${publicationId},${BigInt(source.revision||1)},${text},${BigInt(source.submitted_at||now())})`;

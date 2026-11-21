@@ -1,5 +1,5 @@
 import {createHash} from 'node:crypto';
-import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
+import {normalizeCurrentReportPunctuation,formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {canonicalCurrentName,parseCurrentStaffBlocks,normalizeCurrentStaffHeaderLine,registeredChildRoster} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const norm=v=>String(v||'').normalize('NFC').trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
@@ -104,7 +104,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
       // Display the canonical child name without retroactively changing the
       // educator-authored text (and without accepting other namesakes).
       const name=child.registered_first_name||block.name;
-      return [{phone10:p.phone10,childId,text:name+': '+block.bodyText}];
+      return [{phone10:p.phone10,childId,text:formatCurrentParentChildReport(name+': '+block.bodyText)}];
     })};
 }
 export function currentReportVersion({kind,childId='',text='',publicationId=''}) {

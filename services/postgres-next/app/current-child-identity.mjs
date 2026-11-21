@@ -46,7 +46,7 @@ export function currentStaffPublications(rows=[],today){
 export function normalizeCurrentStaffHeaderLine(line){
   if(HEADER.test(line))return line;
   const candidate=String(line||'').replace(/^[^\p{L}\p{N}\r\n]+/u,'');
-  const match=/^([\p{L}-]{2,70})[ \t!！‼⁉❗❕\uFE0E\uFE0F]*(?:([\p{L}-]{1,100}\.?)[ \t!！‼⁉❗❕\uFE0E\uFE0F]*)?([:：—–-])([ \t]*)(.*)$/u.exec(candidate);
+  const match=/^([\p{L}-]{2,70})[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*(?:([\p{L}-]{1,100}\.?)[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*)?([:：—–-])([ \t]*)(.*)$/u.exec(candidate);
   return match?match[1]+(match[2]?' '+match[2]:'')+match[3]+match[4]+match[5]:line;
 }
 // Stored publications retain their original numeric ownership boundaries.

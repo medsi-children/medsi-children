@@ -230,10 +230,10 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     // unregistered child's block inside the preceding child's report.
     // A normal source correction must replace current/history atomically,
     // preserve the authored old revision and never enqueue correction pushes.
-    const legacyAlert='Степан Ме. — Первый синтетический блок!\n❗ Арсен: Второй синтетический блок.';
+    const legacyAlert='Степан Ме. — ❗️ Первый синтетический блок!\n❗ Арсен: Второй синтетический блок.';
     await sql`UPDATE raw_reports SET raw_text=${legacyAlert},normalized_text=${legacyAlert}
       WHERE publication_id=${edit.publicationId}`;
-    const legacyDelivery='Степан: Первый синтетический блок!\n❗ Арсен: Второй синтетический блок.';
+    const legacyDelivery='Степан: ❗️ Первый синтетический блок!\n❗ Арсен: Второй синтетический блок.';
     await sql`UPDATE parent_current_reports SET text=${legacyDelivery}
       WHERE publication_id=${edit.publicationId}`;
     await sql`UPDATE parent_report_history SET text=${legacyDelivery}

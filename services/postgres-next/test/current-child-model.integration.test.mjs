@@ -226,6 +226,37 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
       authorId:'educator_ci_v2_0001',submittedAt:clock,correctionOf:chosen.publicationId
     }),/Report source changed/);
 
+    // Synthetic legacy fixture: the old parser delivered an emoji-prefixed
+    // unregistered child's block inside the preceding child's report.
+    // A normal source correction must replace current/history atomically,
+    // preserve the authored old revision and never enqueue correction pushes.
+    const legacyAlert='Степан Ме. — Первый синтетический блок!\n❗ Арсен: Второй синтетический блок.';
+    await sql`UPDATE raw_reports SET raw_text=${legacyAlert},normalized_text=${legacyAlert}
+      WHERE publication_id=${edit.publicationId}`;
+    const legacyDelivery='Степан: Первый синтетический блок!\n❗ Арсен: Второй синтетический блок.';
+    await sql`UPDATE parent_current_reports SET text=${legacyDelivery}
+      WHERE publication_id=${edit.publicationId}`;
+    await sql`UPDATE parent_report_history SET text=${legacyDelivery}
+      WHERE publication_id=${edit.publicationId}`;
+    const [[pushBeforeAlert]]=await sql`SELECT count(*)::int AS n FROM push_outbox`;
+    clock+=2000;
+    const alertEdit=await publisher.publish({kind:'evening',rawText:legacyAlert,
+      submissionId:'ci_alert_header_correction_0001',authorId:'educator_ci_v2_0001',
+      submittedAt:clock,correctionOf:edit.publicationId});
+    assert.equal(alertEdit.notificationsQueued,0);
+    assert.equal((await reader.current(phoneC)).reports.find(r=>r.kind==='evening').text,
+      'Степан: Первый синтетический блок!');
+    assert.equal((await reader.history(phoneC)).reports.find(r=>r.kind==='evening').text,
+      'Степан: Первый синтетический блок!');
+    const [[pushAfterAlert]]=await sql`SELECT count(*)::int AS n FROM push_outbox`;
+    assert.equal(pushAfterAlert.n,pushBeforeAlert.n);
+    const [[oldAlertSource]]=await sql`SELECT raw_text FROM raw_reports WHERE publication_id=${edit.publicationId}`;
+    assert.equal(oldAlertSource.raw_text,legacyAlert);
+    const [alertOwners]=await sql`SELECT owner_key,record_json FROM report_ownership
+      WHERE owner_key LIKE ${'CURRENT_BLOCK_'+alertEdit.publicationId+'_%'}`;
+    assert.equal(alertOwners.length,2);
+    assert.equal(JSON.parse(alertOwners.find(r=>r.owner_key.endsWith('_1')).record_json).pending,true);
+
     // Latest shared group therapy remains available independently of child link.
     clock+=2000;
     const therapy='Групповая терапия: синтетическое занятие.\n\nВыводы.';

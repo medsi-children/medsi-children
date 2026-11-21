@@ -37,7 +37,7 @@ export function createCurrentReportHistoryReview(sql,{now=()=>Date.now()}={}){
       for(const row of data.owners){if(!String(row.owner_key).startsWith(prefix))continue;
         const index=Number(String(row.owner_key).slice(prefix.length));if(!Number.isSafeInteger(index)||index<0)continue;
         try{saved.set(index,JSON.parse(String(row.record_json||'')))}catch{saved.set(index,{blocked:true})}}
-      const blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants);
+      const blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants,{stored:true});
       blocks.forEach((block,index)=>{
         if(!block.body.join('\n').trim())return;
         const owner=saved.get(index);
@@ -87,7 +87,7 @@ export function createCurrentReportHistoryReview(sql,{now=()=>Date.now()}={}){
       }
       if(entry.token!==token)throw new Error('Report source or roster changed. Reload history review.');
       const selected=entry.candidates.find(c=>c.key===targetKey);if(!selected)throw new Error('Invalid child selected for report.');
-      const source=data.raw.find(r=>r.publication_id===publicationId),blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants),block=blocks[blockIndex];
+      const source=data.raw.find(r=>r.publication_id===publicationId),blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants,{stored:true}),block=blocks[blockIndex];
       let childId='',registeredFirstName='';
       if(targetKey.startsWith('parent:')){
         const phone10=targetKey.slice(7),p=data.profiles.find(x=>String(x.phone10)===phone10);

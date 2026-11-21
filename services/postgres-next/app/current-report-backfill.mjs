@@ -44,7 +44,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           saved.set(index,{key:row.owner_key,raw:row.record_json,record});
         }
         const plan=planCurrentReport({kind:source.kind,rawText:source.normalized_text||'',
-          profiles,children,nameVariants:variants,priorBlockOwners:owners});
+          profiles,children,nameVariants:variants,priorBlockOwners:owners,storedSource:true});
         for(const recipient of plan.recipients){
           if(phone10&&recipient.phone10!==phone10)continue;
           const child=children.find(c=>String(c.child_id)===recipient.childId);
@@ -157,7 +157,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           originals.set(index,{key:row.owner_key,raw:row.record_json});
         }
         snapshots.push({source,saved,originals,
-          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants)});
+          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants,{stored:true})});
       }
       // Only existing child-scoped deliveries and explicit block owners
       // establish continuity. A newly guessed block never anchors another.

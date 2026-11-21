@@ -49,7 +49,7 @@ export function reviewCurrentReport({kind,rawText,profiles=[],children=[],nameVa
 // roster or educator clarification, not claimed by the former indexed owner.
 export function remapCurrentBlockOwners({beforeText='',afterText='',priorOwners=[],
   nameVariants=[],children=[]}={}){
-  const before=parseCurrentStaffBlocks(beforeText,nameVariants);
+  const before=parseCurrentStaffBlocks(beforeText,nameVariants,{stored:true});
   const after=parseCurrentStaffBlocks(afterText,nameVariants);
   const result=Array(after.length).fill(undefined);
   const used=new Set();

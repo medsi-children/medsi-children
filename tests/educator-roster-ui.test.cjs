@@ -30,7 +30,7 @@ test('approved minimalist educator settings preserve reports, compact roster and
   assert.match(css,/medsi-tile-push\[data-enabled="1"\]/);
   assert.match(css,/medsi-roster-status-icon/);
   assert.match(html,/next-settings\.css\?v=20261119-feedback-1/);
-  assert.match(html,/next-settings\.js\?v=20261119-roster-poll-1/);
+  assert.match(html,/next-settings\.js\?v=20261121-report-headers-1/);
   assert.doesNotMatch(js,/Выбрать ребёнка по сырому отчёту|Очистить удалённых детей/);
   assert.doesNotMatch(js,/Старая привязка — нужна проверка/);
   assert.match(js,/Нужна проверка привязки/);
@@ -108,6 +108,13 @@ test('raw morning and evening reports visually separate child blocks but keep on
     'Общий комментарий: Пункты для врачей.'
   ].join('\n');
   const parts=segment(text);
+  for(const heading of ['❗ Борис:', '‼️Борис —', 'Борис ❕:', 'Борис !!! -']){
+    const decorated=segment('Арсен: Первый.\n'+heading+' Второй! ❗');
+    assert.equal(decorated.length,2,heading);
+    assert.equal(decorated[0].content,'Первый.');
+    assert.equal(decorated[1].name,'Борис');
+    assert.equal(decorated[1].content,'Второй! ❗');
+  }
   assert.equal(parts.length,2);
   assert.equal(parts[0].name,'Арина Ал');
   assert.equal(parts[0].content,'Поделилась переживаниями.');
@@ -343,5 +350,5 @@ test('roster refresh runs only in the open reports-and-names panel',()=>{
   assert.match(js,/library.classList.remove\('hidden'\);\s*startRosterPolling\(\)/);
   assert.match(js,/stopRosterPolling\(\);\s*\/\/ Return to the settings cards/);
   assert.match(js,/if\(!silent\)beginOperation\(\)/);
-  assert.match(html,/next-settings\.js\?v=20261119-roster-poll-1/);
+  assert.match(html,/next-settings\.js\?v=20261121-report-headers-1/);
 });

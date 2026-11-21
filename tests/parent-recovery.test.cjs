@@ -101,8 +101,12 @@ test('rejected read token is renewed once and the read resumes',async()=>{
 test('parent boot loads the chat dependencies in order after the menu is ready',async()=>{
   const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
   const loaded=[];
-  const window={MedsiParentApp:{ready:true,helpersReady(){}}};
-  const document={getElementById:()=>({classList:{add(){},remove(){}}}),createElement:()=>({remove(){}}),head:{appendChild(script){loaded.push(script.src.split('?')[0]);queueMicrotask(()=>script.onload?.());}}};
+  const window={MedsiParentApp:{ready:true,helpersReady(){}},addEventListener(){}};
+  const status={dataset:{},classList:{add(){},remove(){}},querySelector:selector=>
+    selector==='p'?{textContent:''}:{classList:{toggle(){}}}};
+  const document={getElementById:()=>status,addEventListener(){},
+    createElement:()=>({remove(){}}),
+    head:{appendChild(script){loaded.push(script.src.split('?')[0]);queueMicrotask(()=>script.onload?.());}}};
   const context={window,document,setTimeout:()=>1,clearTimeout(){},Promise};
   const inline=[...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)].filter(match=>!/^<script[^>]*\bsrc=/.test(match[0])).map(match=>match[1]);
   inline.forEach(code=>vm.runInNewContext(code,context));

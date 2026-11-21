@@ -102,9 +102,9 @@
   <div id="reportHistoryModal" class="report-history-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="reportHistoryModalTitle"><div class="report-history-modal-card"><div class="report-history-modal-head"><div><span class="report-history-kind">Отчёт за день</span><h2 id="reportHistoryModalTitle"></h2></div></div><div id="reportHistoryModalReports" class="report-history-day-reports"></div><button id="reportHistoryModalClose" class="btn" type="button">Закрыть</button></div></div>
 </article></div>
 
-<div id="parentBootStatus" class="hidden" role="status" style="text-align:center;padding:24px;color:#65858d">
-  <p>Восстанавливаем подключение к Медси Боту…</p>
-  <button class="btn" type="button" onclick="location.reload()">Обновить</button>
+<div id="parentBootStatus" role="status" aria-live="polite" style="max-width:560px;margin:10px auto 28px;padding:22px;text-align:center;color:#52747d;font:500 16px/1.55 system-ui,-apple-system,sans-serif">
+  <p style="margin:0 0 12px">Подключаем Медси Бот…</p>
+  <button class="btn hidden" type="button" style="max-width:250px;margin:0 auto">Повторить загрузку</button>
 </div>
 <dialog id="installPrompt" class="install-prompt" aria-labelledby="installPromptTitle" aria-describedby="installPromptDescription">
   <button id="installPromptClose" class="install-prompt-close" type="button" aria-label="Закрыть">
@@ -160,21 +160,79 @@
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');
-  var notice=setTimeout(function(){if(!window.MedsiParentApp||!window.MedsiParentApp.ready)status.classList.remove('hidden');},4000);
-  // The parent menu and registration must not wait for the assistant image.
+  var message=status.querySelector('p'),retryButton=status.querySelector('button');
+  var parentScript='/parents/full-web.js?v=20261116-registration-priority-1';
+  var bootPending=false,bootFinished=false,bootAttempts=0,bootRetryTimer=0;
+  function bootStatus(text,offerRetry,code){
+    if(bootFinished)return;
+    status.classList.remove('hidden');
+    message.textContent=text;
+    retryButton.classList.toggle('hidden',!offerRetry);
+    status.dataset.reason=code;
+  }
+  // Assistant and optional chat assets must not gate the parent menu.
   window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261119-contacts-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
-  load('/parents/full-web.js?v=20261116-registration-priority-1').then(function(){
-    if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
-    clearTimeout(notice);status.classList.add('hidden');
+  function loadAfterBoot(){
     window.MedsiLoadParentChat().then(function(){
       return series(["/chat-overlay/media-preload.js?v=20260907-1", "/chat-overlay/upload-ux.js?v=20260916-parent-recovery", "/chat-overlay/composer-ui.js?v=20260907-1", "/chat-overlay/reaction-icons.js?v=20260907-twemoji-2", "/chat-overlay/message-enhancements.js?v=20260924-message-input-1", "/chat-overlay/message-long-press.js?v=20261007-2", "/chat-overlay/chat-motion.js?v=20260911-first-open-only-1", "/chat-overlay/bottom-lock.js?v=20260906-1", "/chat-overlay/video-link.js?v=1"],true);
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20261117-device-test-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
     ["/parents/psychology-format.js?v=20261108-therapy-narrative-5", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20260907-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
     load('/parents/install-hint.js?v=20261022-2',1).catch(function(){});
-  }).catch(function(){clearTimeout(notice);status.classList.remove('hidden');});
+  }
+  function beginBoot(){
+    if(bootPending||bootFinished)return;
+    // Partial execution cannot safely be retried because the parent app
+    // guards against duplicate initialization. Offer a page restart.
+    if(status.dataset.reason==='BOOT_INIT_FAILED')return;
+    bootPending=true;
+    bootAttempts++;
+    bootStatus('Подключаем Медси Бот…',bootAttempts>1,'LOADING');
+    load(parentScript).then(function(){
+      if(!window.MedsiParentApp||!window.MedsiParentApp.ready)throw new Error('BOOT_FAILED');
+      bootFinished=true;
+      clearTimeout(bootRetryTimer);
+      status.classList.add('hidden');
+      loadAfterBoot();
+    }).catch(function(error){
+      if(bootFinished)return;
+      if(error&&error.message==='BOOT_FAILED'){
+        bootStatus('Не удалось запустить приложение. Обновите страницу, чтобы восстановить работу.',true,'BOOT_INIT_FAILED');
+        return;
+      }
+      var retry=bootAttempts<4;
+      var code=error&&error.message==='LOAD_TIMEOUT'?'ASSET_TIMEOUT':'ASSET_UNAVAILABLE';
+      bootStatus(retry
+        ?'Соединение нестабильно. Повторяем загрузку автоматически…'
+        :'Не удалось загрузить приложение. Проверьте интернет и попробуйте снова.',true,code);
+      if(retry){
+        var delay=Math.min(12000,1500*Math.pow(2,bootAttempts-1));
+        bootRetryTimer=setTimeout(function(){bootRetryTimer=0;beginBoot();},delay);
+      }
+    }).finally(function(){bootPending=false;});
+  }
+  retryButton.onclick=function(){
+    if(bootPending||bootFinished)return;
+    if(status.dataset.reason==='BOOT_INIT_FAILED'){location.reload();return;}
+    clearTimeout(bootRetryTimer);
+    bootRetryTimer=0;
+    bootAttempts=0;
+    beginBoot();
+  };
+  function resumeBoot(){
+    if(bootFinished||bootPending||status.dataset.reason==='BOOT_INIT_FAILED')return;
+    clearTimeout(bootRetryTimer);
+    bootRetryTimer=0;
+    bootAttempts=0;
+    beginBoot();
+  }
+  window.addEventListener('online',resumeBoot);
+  window.addEventListener('pageshow',function(){if(!bootFinished&&bootAttempts)resumeBoot();});
+  document.addEventListener('visibilitychange',function(){if(!document.hidden&&!bootFinished&&bootAttempts)resumeBoot();});
+  // Static recovery stays visible if external assets fail, without patient data.
+  beginBoot();
 })();
 </script>
 </body></html>

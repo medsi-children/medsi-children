@@ -274,3 +274,88 @@ test('temporary login network error is not incorrectly presented as an unregiste
   await env.elements.get('authBtn').onclick();await tick();await tick();
   assert.doesNotMatch(env.elements.get('phoneErrorAuth').textContent,/Номер телефона не найден/);
 });
+
+
+test('parent start page remains recoverable when the first JavaScript loads fail',async()=>{
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  assert.match(html,/<div id="parentBootStatus" role="status"/);
+  assert.match(html,/<button class="btn hidden" type="button"[^>]*>Повторить загрузку<\/button>/);
+  const match=html.match(/<script>\s*(\(function\(\)\{[\s\S]*\}\)\(\);)\s*<\/script>\s*<\/body>/);
+  assert.ok(match,'Parent bootstrap inline script must stay testable');
+  const scriptSource=match[1];
+  new vm.Script(scriptSource);
+  const statusClass=new Set(),retryClass=new Set(['hidden']);
+  const statusText={textContent:''},button={onclick:null,classList:{
+    toggle(name,off){if(off)retryClass.add(name);else retryClass.delete(name);}
+  }};
+  const status={dataset:{},classList:{
+    add:name=>statusClass.add(name),remove:name=>statusClass.delete(name)
+  },querySelector:selector=>selector==='p'?statusText:button};
+  const timers=new Map(),events={},calls=[];let nextTimer=0,failMain=true,reloads=0;
+  const fakeWindow={addEventListener:(type,fn)=>{events[type]=fn}};
+  const ctx={
+    window:fakeWindow,console,Promise,
+    document:{
+      hidden:false,getElementById:id=>id==='parentBootStatus'?status:null,
+      addEventListener:(type,fn)=>{events[type]=fn},
+      createElement:()=>({async:false,src:'',onload:null,onerror:null,remove(){}}),
+      head:{appendChild(script){
+        calls.push(script.src);
+        Promise.resolve().then(()=>{
+          if(script.src.includes('/parents/full-web.js')&&!failMain){
+            fakeWindow.MedsiParentApp={ready:true,helpersReady(){}};
+            script.onload?.();
+          }else script.onerror?.();
+        });
+      }}
+    },
+    setTimeout:(fn,ms)=>{const id=++nextTimer;timers.set(id,{fn,ms});return id},
+    clearTimeout:id=>timers.delete(id),
+    location:{reload:()=>{reloads++}}
+  };
+  vm.runInNewContext(scriptSource,ctx);
+  const settle=async()=>{for(let i=0;i<15;i++)await new Promise(resolve=>setImmediate(resolve));};
+  await settle();
+  assert.equal(calls.filter(src=>src.includes('/parents/full-web.js')).length,2,
+    'One failed main load is immediately retried');
+  assert.equal(status.dataset.reason,'ASSET_UNAVAILABLE');
+  assert.equal(retryClass.has('hidden'),false);
+  const backoff=[...timers.entries()].find(([,timer])=>timer.ms===1500);
+  assert.ok(backoff,'Further retries should be scheduled without page reload');
+  failMain=false;
+  timers.delete(backoff[0]);backoff[1].fn();
+  await settle();
+  assert.equal(fakeWindow.MedsiParentApp.ready,true);
+  assert.equal(statusClass.has('hidden'),true,'Recovery banner hides after successful startup');
+  events.online();
+  await settle();
+  assert.equal(calls.filter(src=>src.includes('/parents/full-web.js')).length,3);
+  assert.equal(reloads,0);
+});
+
+test('parent bootstrap provides a safe manual restart after partial script execution',async()=>{
+  const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  const source=html.match(/<script>\s*(\(function\(\)\{[\s\S]*\}\)\(\);)\s*<\/script>\s*<\/body>/)?.[1];
+  assert.ok(source);
+  let restart=0;
+  const classes=new Set(),button={onclick:null,classList:{toggle(){}}};
+  const status={dataset:{},classList:{remove(){},add(){}},
+    querySelector:selector=>selector==='p'?{set textContent(value){classes.add(value)}}:button};
+  const win={addEventListener(){},MedsiParentApp:null};
+  const context={
+    Promise,window:win,document:{getElementById:()=>status,addEventListener(){},
+      createElement:()=>({remove(){}}),
+      head:{appendChild(script){
+        Promise.resolve().then(()=>{
+          if(script.src.includes('/parents/full-web.js'))win.MedsiParentApp={ready:false};
+          script.onload?.();
+        });
+      }}},
+    setTimeout:()=>1,clearTimeout(){},location:{reload(){restart++;}}
+  };
+  vm.runInNewContext(source,context);
+  for(let i=0;i<10;i++)await new Promise(resolve=>setImmediate(resolve));
+  assert.equal(status.dataset.reason,'BOOT_INIT_FAILED');
+  button.onclick();
+  assert.equal(restart,1,'An incomplete app must restart rather than re-run its guarded script');
+});

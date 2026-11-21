@@ -254,9 +254,12 @@
   // source, its newlines, clipboard contents or PostgreSQL report ownership.
   function splitSourceChildBlocks(value){
     const lines=String(value||'').split('\n'),parts=[];
-    const header=/^([А-ЯЁ][А-ЯЁа-яё-]{1,48}(?:\s+[А-ЯЁ][а-яё-]{0,38}\.?)?)\s*[—–:]\s*(.*)$/u;
+    const header=/^([А-ЯЁ][А-ЯЁа-яё-]{1,48}(?:\s+[А-ЯЁ][а-яё-]{0,38}\.?)?)\s*[—–:：-]\s*(.*)$/u;
     for(const line of lines){
-      const match=line.match(header);
+      const candidate=line.replace(/^[^\p{L}\p{N}]+/u,'');
+      const decorated=/^([А-ЯЁа-яё-]{2,70})[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*(?:([А-ЯЁа-яё-]{1,100}\.?)[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*)?([:：—–-])([ \t]*)(.*)$/u.exec(candidate);
+      const heading=decorated?decorated[1]+(decorated[2]?' '+decorated[2]:'')+decorated[3]+decorated[4]+decorated[5]:line;
+      const match=heading.match(header);
       const ambiguous=match&&/^(?:Общий|Общие|Комментарий|Для|Сегодня|Занятие)$/iu.test(match[1].split(/\s+/)[0]);
       if(match&&!ambiguous){
         parts.push({type:'child',name:match[1],content:match[2]});

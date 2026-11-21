@@ -1,3 +1,4 @@
+import {formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {planCurrentReport,currentReportVersion} from './current-report-plan.mjs';
 import {currentStaffPublications,parseCurrentStaffBlocks,canonicalCurrentName,parseCurrentParentChildName} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
@@ -44,7 +45,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           saved.set(index,{key:row.owner_key,raw:row.record_json,record});
         }
         const plan=planCurrentReport({kind:source.kind,rawText:source.normalized_text||'',
-          profiles,children,nameVariants:variants,priorBlockOwners:owners});
+          profiles,children,nameVariants:variants,priorBlockOwners:owners,storedSource:true});
         for(const recipient of plan.recipients){
           if(phone10&&recipient.phone10!==phone10)continue;
           const child=children.find(c=>String(c.child_id)===recipient.childId);
@@ -157,7 +158,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           originals.set(index,{key:row.owner_key,raw:row.record_json});
         }
         snapshots.push({source,saved,originals,
-          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants)});
+          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants,{stored:true})});
       }
       // Only existing child-scoped deliveries and explicit block owners
       // establish continuity. A newly guessed block never anchors another.
@@ -233,7 +234,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // skipped rather than silently choosing one.
         if(eligible.length!==1)continue;
         const {block,index,owned}=eligible[0];
-        const text=(child.registered_first_name||block.name)+': '+block.body.join('\n').trim();
+        const text=formatCurrentParentChildReport((child.registered_first_name||block.name)+': '+block.body.join('\n').trim());
         // In an unowned legacy source, parent history must also reproduce
         // the selected block. Otherwise a stale orphan may belong to another
         // child despite sharing this publication and report date.

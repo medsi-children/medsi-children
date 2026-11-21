@@ -41,12 +41,23 @@ export function currentStaffPublications(rows=[],today){
   }
   return [...newest.values()];
 }
-export function parseCurrentStaffBlocks(text,nameVariants=[]){
+// Normalize decorations only in an explicit child-like heading. The body is
+// captured separately: punctuation and emoji in observations remain untouched.
+export function normalizeCurrentStaffHeaderLine(line){
+  if(HEADER.test(line))return line;
+  const candidate=String(line||'').replace(/^[^\p{L}\p{N}\r\n]+/u,'');
+  const match=/^([\p{L}-]{2,70})[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*(?:([\p{L}-]{1,100}\.?)[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*)?([:：—–-])([ \t]*)(.*)$/u.exec(candidate);
+  return match?match[1]+(match[2]?' '+match[2]:'')+match[3]+match[4]+match[5]:line;
+}
+// Stored publications retain their original numeric ownership boundaries.
+// New publications canonicalize headings before storing normalized_text.
+// Reparse legacy decorations only through an explicit source correction.
+export function parseCurrentStaffBlocks(text,nameVariants=[],{stored=false}={}){
   const blocks=[];
   let current=null;
   const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
   for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
-    const line=lines[lineIndex];
+    const line=stored?lines[lineIndex]:normalizeCurrentStaffHeaderLine(lines[lineIndex]);
     if(GENERAL.test(line)){current=null;continue}
     const m=HEADER.exec(line);
     if(m){
@@ -99,7 +110,7 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   // morning bare "Sasha" without resurrecting either old identity.
   const source=available.length?[...available].sort((a,b)=>
     Number(b.submitted_at||0)-Number(a.submitted_at||0)).slice(0,1):[];
-  const witnessed=source.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants)
+  const witnessed=source.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants,{stored:true})
     .map(b=>({...b,kind:r.kind}))).filter(b=>b.canonical===canonical);
   if(existing&&(!person.surname&&witnessed.some((b,i)=>i>0)))
     return {status:'ambiguous',reason:'new-namesake-in-source'};
@@ -108,7 +119,7 @@ export function matchCurrentSource({childName,publications=[],profiles=[],childr
   // overridden by a bare heading; a second child needs explicit staff initials.
   const selected=source;
   if(!selected.length)return {status:'pending',reason:'no-current-publication'};
-  const blocks=selected.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants)
+  const blocks=selected.flatMap(r=>parseCurrentStaffBlocks(r.normalized_text||r.raw_text,nameVariants,{stored:true})
     .map((b,index)=>({...b,index,publicationId:r.publication_id,reportDate:r.report_date,kind:r.kind,
       owner:r.blockOwners?.[index]})));
   const candidates=blocks.filter(b=>b.canonical===canonical);

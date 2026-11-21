@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
-import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
-import {canonicalCurrentName,parseCurrentStaffBlocks,registeredChildRoster} from './current-child-identity.mjs';
+import {normalizeCurrentReportPunctuation,formatCurrentParentChildReport} from './current-report-punctuation.mjs';
+import {canonicalCurrentName,parseCurrentStaffBlocks,normalizeCurrentStaffHeaderLine,registeredChildRoster} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const norm=v=>String(v||'').normalize('NFC').trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
 const hash=v=>createHash('sha256').update(v,'utf8').digest('hex');
@@ -11,11 +11,15 @@ const headerFor=b=>b.name+(b.prefix?' '+b.prefix:'')+': ';
 // registered child ID, or quarantined. A parent row never creates a child.
 // Prior source ownership is by exact publication/block, not a hospital stay.
 export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVariants=[],
-  priorBlockOwners=[],manualResolutions=[]}={}){
+  priorBlockOwners=[],manualResolutions=[],storedSource=false}={}){
   if(!KINDS.has(kind))throw new Error('Unknown report kind.');
   if(typeof rawText!=='string'||!rawText.trim()||rawText.length>240000)
     throw new Error('Invalid staff source.');
-  const normalizedText=normalizeCurrentReportPunctuation(rawText);
+  const punctuation=normalizeCurrentReportPunctuation(rawText);
+  // Raw text stays exact. Canonical headers make future persisted sources
+  // readable by the original ownership grammar without shifting old indexes.
+  const normalizedText=kind==='psychology'||storedSource?punctuation:
+    punctuation.split('\n').map(normalizeCurrentStaffHeaderLine).join('\n');
   const registered=profiles.filter(p=>PHONE.test(String(p.phone10||'')));
   const parentIds=new Set();
   for(const p of registered){
@@ -29,7 +33,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
   }
   const roster=registeredChildRoster({profiles:registered,children});
   const childById=new Map(roster.map(c=>[String(c.child_id),c]));
-  const sourceBlocks=parseCurrentStaffBlocks(normalizedText,nameVariants)
+  const sourceBlocks=parseCurrentStaffBlocks(normalizedText,nameVariants,{stored:storedSource})
     .map((b,index)=>({...b,index,bodyText:b.body.join('\n').trim()}));
   const groups=new Map();
   for(const b of sourceBlocks){
@@ -100,7 +104,7 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
       // Display the canonical child name without retroactively changing the
       // educator-authored text (and without accepting other namesakes).
       const name=child.registered_first_name||block.name;
-      return [{phone10:p.phone10,childId,text:name+': '+block.bodyText}];
+      return [{phone10:p.phone10,childId,text:formatCurrentParentChildReport(name+': '+block.bodyText)}];
     })};
 }
 export function currentReportVersion({kind,childId='',text='',publicationId=''}) {

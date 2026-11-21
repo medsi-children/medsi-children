@@ -258,3 +258,12 @@ test('manual retry reuses an uncertain submission id and preserves form text', a
   await context.sendReport();
   assert.notEqual(ids[1],ids[2]);
 });
+
+
+test('alert decorations before the separator keep namesake validation effective',()=>{
+  for(const mark of ['!','!!!','！','❗️','❕','‼️','⁉️']){
+    assert.equal(validate('evening',`Арсен: Первый.\nБорис ${mark}: Второй.`).checkedBlocks,2);
+    assert.equal(validate('evening',`Арсен: Первый.\n${mark} Арсен ${mark}: Второй.`).ok,false);
+    assert.equal(validate('evening',`Арсен Те. ${mark}: Первый.\nАрсен Пр. ${mark} — Второй.`).ok,true);
+  }
+});

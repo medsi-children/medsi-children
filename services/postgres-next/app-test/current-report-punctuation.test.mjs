@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {normalizeCurrentReportPunctuation as clean} from '../app/current-report-punctuation.mjs';
+import {normalizeCurrentReportPunctuation as clean,formatCurrentParentChildReport} from '../app/current-report-punctuation.mjs';
 import {planCurrentReport} from '../app/current-report-plan.mjs';
 import {assembleCurrentEducatorDashboard} from '../app/current-educator-dashboard.mjs';
 
@@ -53,4 +53,13 @@ test('educator preview cleans already stored report text but retains authored ra
   assert.equal(v.children[0].parentViews[0].reports.morning,'Александр: Гулял, играл.');
   assert.equal(v.raw.morning.rawText,source.raw_text);
   assert.equal(v.raw.morning.displayText,'Александр — Гулял, играл.');
+});
+
+
+test('parent copy drops warning emoji without changing ordinary punctuation or staff source',()=>{
+  const raw='Арсен: ❗️ Первый текст! ❕ Второй‼️\n\nТретий ❢ ❣️ ⁈ ⁉️ 👍';
+  const expected='Арсен: Первый текст! Второй\n\nТретий 👍';
+  assert.equal(formatCurrentParentChildReport(raw),expected);
+  assert.equal(formatCurrentParentChildReport(expected),expected);
+  assert.equal(clean(raw),raw,'staff punctuation normalization must retain warning badges');
 });

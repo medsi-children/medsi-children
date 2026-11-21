@@ -73,3 +73,37 @@ test('individual report version changes with child identity or publication',()=>
   assert.notEqual(currentReportVersion({kind:'morning',childId:'child1',text:'A',publicationId:'a'}),
     currentReportVersion({kind:'morning',childId:'child1',text:'A',publicationId:'b'}));
 });
+
+
+test('alert and emoji headers isolate registered and unregistered children without editing body punctuation',()=>{
+  const first={child_id:'kid_alert_a',registered_first_name:'Арсен',surname:'Тестов'};
+  const second={child_id:'kid_alert_b',registered_first_name:'Борис',surname:'Примеров'};
+  for(const marker of ['!','!!!','！','❗','❗️','❕','❕️','‼','‼️','⁉️','⁈','❢','❣️','﹗','📌','⚠️','👨‍👩‍👧']){
+    for(const heading of [marker+' Борис:',marker+'Борис —',
+      ...(marker.match(/^[!！﹗❗❕‼⁉⁈❢❣\uFE0E\uFE0F]+$/u)?['Борис '+marker+':','Борис '+marker+' Пр. '+marker+' -']:[])]){
+      for(const registered of [false,true]){
+        const rawText='Арсен: Первый синтетический блок! ❗\n\n'+heading+' Второй синтетический блок! ❕\nПродолжение.';
+        const result=planCurrentReport({kind:'evening',rawText,children:[first,second],
+          profiles:[parent('9000000081',first.child_id),...(registered?[parent('9000000082',second.child_id)]:[])]});
+        assert.equal(result.rawText,rawText);
+        assert.equal(result.owners.length,2,heading);
+        assert.equal(result.recipients[0].text,'Арсен: Первый синтетический блок!',heading);
+        assert.doesNotMatch(result.recipients[0].text,/Борис|Второй|Продолжение/);
+        if(registered)assert.equal(result.recipients[1].text,'Борис: Второй синтетический блок!\nПродолжение.');
+        // Canonical persisted headers remain readable with the old grammar;
+        // future recovery must preserve the exact publication/block indexes.
+        const recovered=planCurrentReport({kind:'evening',rawText:result.normalizedText,
+          children:[first,second],profiles:[parent('9000000081',first.child_id)],
+          priorBlockOwners:result.owners,storedSource:true});
+        assert.equal(recovered.owners.length,2);
+        assert.equal(recovered.recipients[0].text,result.recipients[0].text);
+      }
+    }
+  }
+});
+test('decorated namesakes still require distinctive surname prefixes',()=>{
+  assert.equal(plan('❗ Саша: Первый.\n‼️ Саша: Второй.').recipients.length,0);
+  const result=plan('❗ Саша Ив. ! — Первый.\n‼️ Саша Иг. ❕: Второй.');
+  assert.deepEqual(result.recipients.map(r=>r.phone10),['9000000001','9000000002']);
+  assert.doesNotMatch(result.recipients[0].text,/Второй/);
+});

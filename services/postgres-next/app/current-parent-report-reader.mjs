@@ -1,7 +1,7 @@
 import {createCurrentChildLinkStore} from './current-child-link-store.mjs';
 import {createCurrentReportBackfill} from './current-report-backfill.mjs';
 import {currentReportVersion} from './current-report-plan.mjs';
-import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
+import {normalizeCurrentReportPunctuation,formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 const PHONE=/^\d{10}$/;
 const CHILD_KINDS=new Set(['morning','evening']);
 const KINDS=new Set(['morning','evening','psychology']);
@@ -56,7 +56,7 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
       const headByKind=new Map(heads.map(x=>[x.kind,x.publication_id]));
       const reports=rows.filter(row=>CHILD_KINDS.has(row.kind)&&childId&&
         same(row.child_id,childId)&&same(row.publication_id,headByKind.get(row.kind)))
-        .map(row=>({kind:row.kind,text:normalizeCurrentReportPunctuation(row.text||''),version:row.version||'',
+        .map(row=>({kind:row.kind,text:formatCurrentParentChildReport(normalizeCurrentReportPunctuation(row.text||'')),version:row.version||'',
           updatedAt:stamp(row.updated_at)}));
       const therapy=await latestTherapy(tx);
       if(therapy)reports.push({kind:therapy.kind,text:therapy.text,
@@ -83,7 +83,8 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
           childId&&CHILD_KINDS.has(r.kind)&&same(r.child_id,childId))
         .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date))||
           (order[a.kind]??9)-(order[b.kind]??9)).slice(0,180)
-        .map(r=>({kind:r.kind,reportDate:r.report_date,text:normalizeCurrentReportPunctuation(r.text||''),
+        .map(r=>({kind:r.kind,reportDate:r.report_date,text:r.kind==='psychology'?normalizeCurrentReportPunctuation(r.text||''):
+            formatCurrentParentChildReport(normalizeCurrentReportPunctuation(r.text||'')),
           capturedAt:stamp(r.captured_at)}))};
     });
   }

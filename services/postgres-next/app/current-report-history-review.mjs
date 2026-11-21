@@ -1,3 +1,4 @@
+import {formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {createHash,randomUUID} from 'node:crypto';
 import {canonicalCurrentName,parseCurrentParentChildName,parseCurrentStaffBlocks} from './current-child-identity.mjs';
 
@@ -37,7 +38,7 @@ export function createCurrentReportHistoryReview(sql,{now=()=>Date.now()}={}){
       for(const row of data.owners){if(!String(row.owner_key).startsWith(prefix))continue;
         const index=Number(String(row.owner_key).slice(prefix.length));if(!Number.isSafeInteger(index)||index<0)continue;
         try{saved.set(index,JSON.parse(String(row.record_json||'')))}catch{saved.set(index,{blocked:true})}}
-      const blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants);
+      const blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants,{stored:true});
       blocks.forEach((block,index)=>{
         if(!block.body.join('\n').trim())return;
         const owner=saved.get(index);
@@ -87,7 +88,7 @@ export function createCurrentReportHistoryReview(sql,{now=()=>Date.now()}={}){
       }
       if(entry.token!==token)throw new Error('Report source or roster changed. Reload history review.');
       const selected=entry.candidates.find(c=>c.key===targetKey);if(!selected)throw new Error('Invalid child selected for report.');
-      const source=data.raw.find(r=>r.publication_id===publicationId),blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants),block=blocks[blockIndex];
+      const source=data.raw.find(r=>r.publication_id===publicationId),blocks=parseCurrentStaffBlocks(source.normalized_text||'',data.variants,{stored:true}),block=blocks[blockIndex];
       let childId='',registeredFirstName='';
       if(targetKey.startsWith('parent:')){
         const phone10=targetKey.slice(7),p=data.profiles.find(x=>String(x.phone10)===phone10);
@@ -121,7 +122,7 @@ export function createCurrentReportHistoryReview(sql,{now=()=>Date.now()}={}){
       for(const p of parents){
         const prior=data.history.find(h=>h.phone10===p.phone10&&h.kind===source.kind&&h.report_date===source.report_date);
         if(prior){if(prior.publication_id===publicationId&&String(prior.child_id)===childId)continue;throw new Error('A different report already exists for this day.');}
-        const text=`${data.children.find(c=>String(c.child_id)===childId)?.registered_first_name||registeredFirstName||block.name}: ${block.body.join('\n').trim()}`;
+        const text=formatCurrentParentChildReport(`${data.children.find(c=>String(c.child_id)===childId)?.registered_first_name||registeredFirstName||block.name}: ${block.body.join('\n').trim()}`);
         const [inserted]=await tx`INSERT INTO parent_report_history
           (phone10,kind,report_date,child_id,publication_id,revision,text,captured_at)
           VALUES (${p.phone10},${source.kind},${source.report_date},${childId},${publicationId},${BigInt(source.revision||1)},${text},${BigInt(source.submitted_at||now())})`;

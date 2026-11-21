@@ -21,7 +21,7 @@ export function displayCurrentStaffSource({rawText,children=[],profiles=[],
     try{record=JSON.parse(item.record_json)}catch{continue}
     if(record?.childId&&!record.blocked)owners.set(index,String(record.childId));
   }
-  const blocks=parseCurrentStaffBlocks(source,nameVariants);
+  const blocks=parseCurrentStaffBlocks(source,nameVariants,{stored:true});
   const indexes=new Map(blocks.map((b,i)=>[b.lineIndex,i]));
   const lines=source.replace(/\r\n?/g,'\n').split('\n');
   return lines.map((line,lineIndex)=>{

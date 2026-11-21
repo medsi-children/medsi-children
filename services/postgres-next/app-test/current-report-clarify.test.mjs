@@ -103,3 +103,19 @@ test('one block cannot be assigned to two guardians of different children',()=>{
   assert.deepEqual(plan.recipients,[]);
   assert.equal(plan.owners.every(x=>x.blocked),true);
 });
+
+
+test('correcting a legacy decorated source does not shift numeric ownership onto a new block',()=>{
+  const localChildren=[
+    {child_id:'child_alert_a',registered_first_name:'Арсен',surname:'Тестов'},
+    {child_id:'child_alert_b',registered_first_name:'Борис',surname:'Примеров'},
+    {child_id:'child_alert_c',registered_first_name:'Вера',surname:'Образцова'}
+  ];
+  const raw='Арсен: Первый.\n❗ Борис: Второй.\nВера: Третий.';
+  const remapped=remapCurrentBlockOwners({beforeText:raw,afterText:raw,
+    children:localChildren,priorOwners:[{childId:'child_alert_a'},{childId:'child_alert_c'}]});
+  assert.deepEqual(remapped,[{childId:'child_alert_a'},undefined,{childId:'child_alert_c'}]);
+  const result=planCurrentReport({kind:'evening',rawText:raw,children:localChildren,
+    profiles:localChildren.map((c,i)=>({phone10:'900000008'+i,child_id:c.child_id})),priorBlockOwners:remapped});
+  assert.deepEqual(result.recipients.map(r=>r.text),['Арсен: Первый.','Борис: Второй.','Вера: Третий.']);
+});

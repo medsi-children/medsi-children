@@ -144,3 +144,77 @@ test('alternative headings and unlabelled paragraphs remain safe and readable',(
  assert.equal(unclassified.sections.length,0,'Ambiguous prose cannot be assigned a clinical category');
  assert.equal(unclassified.tail[0].text,'Произвольный текст без явных маркеров и наблюдений.');
 });
+
+
+test('narrative participant notes follow activity, never swallow the introduction',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const node=tag=>({
+   tag,className:'',textContent:'',children:[],
+   append(...items){this.children.push(...items)},
+   appendChild(item){this.children.push(item);return item},
+   replaceChildren(...items){this.children=[...items]}
+ });
+ const document={
+   readyState:'loading',addEventListener(){},createElement:node
+ };
+ const window={};
+ vm.runInNewContext(source,{window,document});
+ const format=window.MedsiPsychologyFormatter;
+ // All names and content in this fixture are fictional.
+ const fragments=[
+  'Отчёт по групповой психотерапии с подростками',
+  'Темой занятия стали способы договариваться о правилах. Цель встречи состояла в обсуждении личных границ.',
+  'Содержательная часть занятия началась с работы в малых группах.',
+  'Далее участники нарисовали собственные схемы. В конце были сделаны общие выводы.',
+  'По участникам: наиболее активными были Участник А и Участница Б; Участник В отвечал по запросу.',
+  'Все молодцы, группа прошла продуктивно!'
+ ];
+ for(const value of [fragments.join('\n\n'),fragments.join(' ')]){
+  const parsed=format.parse(value);
+  assert.deepEqual(Array.from(parsed.sections.map(item=>item.title)),
+    ['Ход занятия','Наблюдения за участниками','Итоги']);
+  assert.ok(parsed.preface&&parsed.preface.length>0,'Intro must be preserved before numbered stages');
+  assert.equal(parsed.tail.length,0,'No leftover introductory text may be placed below conclusions');
+  const contents=[
+   ...parsed.preface.map(part=>part.text),
+   ...parsed.sections.flatMap(section=>section.parts.map(part=>part.text))
+  ].join(' ');
+  let cursor=-1;
+  for(const fragment of fragments){
+   const start=contents.toLocaleLowerCase('ru').indexOf(fragment.toLocaleLowerCase('ru'));
+   assert.ok(start>cursor,fragment+' must appear once in source order');
+   assert.equal(contents.toLocaleLowerCase('ru').split(fragment.toLocaleLowerCase('ru')).length-1,1);
+   cursor=start;
+  }
+  const container=node('main');
+  assert.equal(format.render(container,value),true);
+  const root=container.children[0];
+  assert.deepEqual(root.children.map(child=>child.className),['psych-preface','psych-flow']);
+  const flow=root.children[1];
+  assert.deepEqual(flow.children.map(step=>step.children[1].children[0].textContent),
+   ['Ход занятия','Наблюдения за участниками','Итоги']);
+  const introText=root.children[0].children.map(child=>child.textContent).join(' ');
+  assert.match(introText,/Темой занятия стали/);
+  const observer=flow.children[1].children[1];
+  assert.match(observer.children[1].textContent,/Участник А и Участница Б/);
+ }
+});
+
+test('existing explicitly headed therapy sections stay intact and do not steal participant notes',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const window={},document={readyState:'loading',addEventListener(){}};
+ vm.runInNewContext(source,{window,document});
+ const format=window.MedsiPsychologyFormatter;
+ const report=[
+  'Тема: Работа в команде',
+  'Основная часть: Участники обсуждали задание.',
+  'По участникам: Участник А объяснял свои решения; Участник Б слушал.',
+  'Все молодцы, занятие завершено.'
+ ].join('\n\n');
+ const parsed=format.parse(report);
+ assert.deepEqual(Array.from(parsed.sections.map(section=>section.title)),
+  ['Основная часть','Наблюдения за участниками','Итоги']);
+ const body=parsed.sections.flatMap(section=>section.parts.map(part=>part.text||'')).join(' ');
+ assert.match(body,/Участник А объяснял/);
+ assert.match(body,/Все молодцы/);
+});

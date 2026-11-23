@@ -134,8 +134,8 @@
   // punctuation and participant attribution without inventing observations.
   function narrativeKind(value){
     const text=String(value||'').trim();
-    if(/^(?:Занятие началось|Занятие начиналось|В начале (?:занятия|встречи)|Сначала|Структура занятия|Ход занятия|В практической части|В основной части|Затем|Далее|После этого|После возвращения)/iu.test(text))return 'Ход занятия';
-    if(/^(?:В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|Некоторые участники|Часть участников|Отмечались индивидуальные|В поведении участников)/iu.test(text))return 'Наблюдения за участниками';
+    if(/^(?:Занятие началось|Занятие начиналось|В начале (?:занятия|встречи)|Сначала|Структура занятия|Ход занятия|В практической части|В основной части|Содержательная часть|Затем|Далее|После этого|После возвращения)/iu.test(text))return 'Ход занятия';
+    if(/^(?:В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|По участникам|Наблюдения по участникам|Некоторые участники|Часть участников|Отмечались индивидуальные|В поведении участников)/iu.test(text))return 'Наблюдения за участниками';
     if(/^(?:Все молодцы(?=\s|[,.!?:;]|$)|В целом группа|По итогам занятия|Подводя итоги|Занятие прошло|В завершение занятия|В результате занятия)/iu.test(text))return 'Итоги';
     return '';
   }
@@ -143,11 +143,39 @@
     const text=String(value||'').trim();
     if(!text)return [];
     // Split only at sentence boundaries, never at semicolons between children.
-    return text.split(/(?<=[.!?])\s+(?=(?:Занятие началось|В начале (?:занятия|встречи)|Сначала|Затем|Далее|После этого|После возвращения|В соответствии с|Структура занятия|Ход занятия|В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|Некоторые участники|В целом группа|Все молодцы|По итогам занятия|Подводя итоги|Занятие прошло|В завершение занятия)(?=\s|[.,:;!?]|$))/iu)
+    return text.split(/(?<=[.!?])\s+(?=(?:Занятие началось|В начале (?:занятия|встречи)|Сначала|Содержательная часть|Затем|Далее|После этого|После возвращения|В соответствии с|Структура занятия|Ход занятия|В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|По участникам|Наблюдения по участникам|Некоторые участники|В целом группа|Все молодцы|По итогам занятия|Подводя итоги|Занятие прошло|В завершение занятия)(?=\s|[.,:;!?]|$))/iu)
       .map(chunk=>chunk.trim()).filter(Boolean);
   }
+  function splitExplicitSectionTransitions(data){
+    // A psychologist may add an unlabelled observations/conclusion paragraph
+    // after an explicitly named stage. The original parser appends it to the
+    // preceding stage, so split only at clear semantic paragraph boundaries.
+    const output=[];
+    for(const original of data.sections){
+      const section={...original,parts:[]};
+      output.push(section);
+      let current=section;
+      for(const part of original.parts||[]){
+        if(part.type!=='p'){current.parts.push(part);continue}
+        for(const sentence of narrativeSlices(part.text)){
+          const title=narrativeKind(sentence);
+          if((title==='Наблюдения за участниками'||title==='Итоги') &&
+            title!==current.title && (current!==section||section.parts.length)){
+            current={number:'',title,parts:[]};
+            output.push(current);
+          }
+          current.parts.push({type:'p',text:sentence});
+        }
+      }
+    }
+    data.sections=output;
+    return data;
+  }
   function expandNarrativeCategories(data){
-    const originalTail=data.tail||[],remaining=[],additional=[];
+    const originalTail=data.tail||[],remaining=[],preface=[],additional=[];
+    // Preserve prose that appeared before the first recognized narrative
+    // stage. It must never be rendered after the conclusion.
+    const hasExistingSections=data.sections.length>0;
     let current=null;
     const add=(title,body)=>{
       if(!current||current.title!==title){
@@ -167,14 +195,17 @@
         const title=narrativeKind(sentence);
         if(title){add(title,sentence);continue;}
         if(current){current.parts.push({type:'p',text:sentence});continue}
-        remaining.push({type:'p',text:sentence});
+        const partToKeep={type:'p',text:sentence};
+        if(!hasExistingSections&&!additional.length)preface.push(partToKeep);
+        else remaining.push(partToKeep);
       }
     }
     if(additional.length){
       data.sections.push(...additional);
+      data.preface=preface;
       data.tail=remaining;
     }
-    return data;
+    return splitExplicitSectionTransitions(data);
   }
 
   function plainParts(v){
@@ -196,7 +227,7 @@
   }
   function appendParts(parent,parts){parts.forEach(part=>{if(part.type==='heading'){const h=document.createElement('h4');h.className='psych-subheading';h.textContent=part.text;parent.appendChild(h);return}if(part.type==='list'){const ul=document.createElement('ul');ul.className='psych-list';part.items.forEach(v=>{const li=document.createElement('li');li.textContent=v;ul.appendChild(li)});parent.appendChild(ul);return}if(part.type==='sub'){const box=document.createElement('div');box.className='psych-subsection';const h=document.createElement('div');h.className='psych-subheading';h.textContent=part.title;const p=document.createElement('p');p.textContent=part.text;box.append(h,p);parent.appendChild(box);return}const p=document.createElement('p');p.className='psych-paragraph';p.textContent=part.text;parent.appendChild(p)})}
   function isRedundantDocumentTitle(part){return part&&part.type==='p'&&/^отч[её]т\s+(?:по|о)\s+групповой\s+психотерапии[.!?]?$/i.test(String(part.text||'').trim())}
-  function render(container,v){if(!container)return false;const data=parse(v);const visibleTail=data.tail.filter(part=>!isRedundantDocumentTitle(part));if(!data.meta.length&&!data.sections.length){const fallback=plainParts(v);if(fallback.length<2){container.textContent=normalize(v).replace(/\[\[ARROW\]\]/g,' ');return false}const formatted=document.createElement('div');formatted.className='psych-report psych-report-plain';appendParts(formatted,fallback);container.replaceChildren(formatted);return true}const root=document.createElement('div');root.className='psych-report';if(data.meta.length){const intro=document.createElement('section');intro.className='psych-intro';data.meta.forEach(item=>{const row=document.createElement('div');row.className='psych-intro-row';const l=document.createElement('div');l.className='psych-intro-label';l.textContent=item.title;const val=document.createElement('div');val.className='psych-intro-value';val.textContent=item.body;row.append(l,val);intro.appendChild(row)});root.appendChild(intro)}if(data.sections.length){const flow=document.createElement('div');flow.className='psych-flow';data.sections.forEach((section,i)=>{const item=document.createElement('section');item.className='psych-step';const rail=document.createElement('div');rail.className='psych-step-rail';const n=document.createElement('div');n.className='psych-step-number';n.textContent=(section.number||String(i+1))+'.';rail.appendChild(n);const body=document.createElement('div');body.className='psych-step-body';const h=document.createElement('h3');h.className='psych-step-title';h.textContent=section.title;body.appendChild(h);appendParts(body,section.parts);item.append(rail,body);flow.appendChild(item)});root.appendChild(flow)}if(visibleTail.length){const tail=document.createElement('section');tail.className='psych-tail';appendParts(tail,visibleTail);root.appendChild(tail)}container.replaceChildren(root);return true}
+  function render(container,v){if(!container)return false;const data=parse(v);const visibleTail=data.tail.filter(part=>!isRedundantDocumentTitle(part));if(!data.meta.length&&!data.sections.length){const fallback=plainParts(v);if(fallback.length<2){container.textContent=normalize(v).replace(/\[\[ARROW\]\]/g,' ');return false}const formatted=document.createElement('div');formatted.className='psych-report psych-report-plain';appendParts(formatted,fallback);container.replaceChildren(formatted);return true}const root=document.createElement('div');root.className='psych-report';if(data.meta.length){const intro=document.createElement('section');intro.className='psych-intro';data.meta.forEach(item=>{const row=document.createElement('div');row.className='psych-intro-row';const l=document.createElement('div');l.className='psych-intro-label';l.textContent=item.title;const val=document.createElement('div');val.className='psych-intro-value';val.textContent=item.body;row.append(l,val);intro.appendChild(row)});root.appendChild(intro)}if(data.preface&&data.preface.length){const before=document.createElement('section');before.className='psych-preface';appendParts(before,data.preface.filter(part=>!isRedundantDocumentTitle(part)));root.appendChild(before)}if(data.sections.length){const flow=document.createElement('div');flow.className='psych-flow';data.sections.forEach((section,i)=>{const item=document.createElement('section');item.className='psych-step';const rail=document.createElement('div');rail.className='psych-step-rail';const n=document.createElement('div');n.className='psych-step-number';n.textContent=(section.number||String(i+1))+'.';rail.appendChild(n);const body=document.createElement('div');body.className='psych-step-body';const h=document.createElement('h3');h.className='psych-step-title';h.textContent=section.title;body.appendChild(h);appendParts(body,section.parts);item.append(rail,body);flow.appendChild(item)});root.appendChild(flow)}if(visibleTail.length){const tail=document.createElement('section');tail.className='psych-tail';appendParts(tail,visibleTail);root.appendChild(tail)}container.replaceChildren(root);return true}
   function isPsych(){const title=document.getElementById('title');return document.body.dataset.screen==='screenReport'&&title&&/психотерап/i.test(title.textContent||'')}
   function tryFormat(){const box=document.getElementById('reportContent');if(!box||!isPsych()||box.querySelector('.psych-report')||box.querySelector('.report-loading'))return;const text=box.textContent||'';if(text.trim())render(box,text)}
   function start(){const box=document.getElementById('reportContent');if(!box)return;new MutationObserver(()=>setTimeout(tryFormat,0)).observe(box,{childList:true,subtree:true,characterData:true});document.getElementById('btnPsychology')?.addEventListener('click',()=>setTimeout(tryFormat,0));tryFormat()}

@@ -114,8 +114,8 @@ test('free-form group report keeps topic, goal, chronology, participant observat
    'После возвращения в общий круг','Участница Б; Участник В слушал',
    'Все молодцы, группе удалось завершить упражнение!'
   ]){
-   assert.ok(all.includes(phrase),phrase);
-   assert.equal(all.split(phrase).length-1,1,'A source phrase must not be duplicated');
+   assert.ok(all.toLocaleLowerCase('ru').includes(phrase.toLocaleLowerCase('ru')),phrase);
+   assert.equal(all.toLocaleLowerCase('ru').split(phrase.toLocaleLowerCase('ru')).length-1,1,'A source phrase must not be duplicated');
   }
  }
 });

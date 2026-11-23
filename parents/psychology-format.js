@@ -1,5 +1,5 @@
 (function(){
-  const META=[['тема групповой психотерапии','Тема групповой психотерапии'],['тема','Тема групповой психотерапии'],['цель групповой психотерапии','Цель групповой психотерапии'],['цель','Цель групповой психотерапии'],['возрастная категория','Возрастная категория'],['начало группы','Начало группы']];
+  const META=[['тема групповой психотерапии','Тема групповой психотерапии'],['тема','Тема групповой психотерапии'],['тема занятия','Тема групповой психотерапии'],['цель групповой психотерапии','Цель групповой психотерапии'],['цель','Цель групповой психотерапии'],['цель занятия','Цель групповой психотерапии'],['возрастная категория','Возрастная категория'],['начало группы','Начало группы']];
   const SECTIONS=[['начало','Начало'],['вводная часть','Вводная часть'],['разогрев','Разогрев'],['интерактивная часть','Интерактивная часть'],['основная часть','Основная часть'],['практическое упражнение','Практическое упражнение'],['заключительная часть','Заключительная часть'],['заключение','Заключение'],['выводы','Выводы'],['рефлексия','Рефлексия'],['в завершении','В завершении'],['завершение','Завершение']];
   const ARROW=' [[ARROW]] ';
   function cap(v){const s=String(v||'').replace(/\s*\[\[ARROW\]\]\s*/g,' ').replace(/[ \t]{2,}/g,' ').trim();if(!s)return'';const m=s.match(/[A-Za-zА-Яа-яЁё]/);if(!m)return s;const i=m.index;return s.slice(0,i)+s[i].toLocaleUpperCase('ru-RU')+s.slice(i+1)}
@@ -9,10 +9,10 @@
   function stripSectionMarker(v){return String(v||'').replace(/^\s*(?:[•·∙▪◦‣]+|[1-9]?[.)])\s+(?=(?:Начало|Вводная часть|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Выводы|Рефлексия|В завершении|Завершение)(?:\s|$|[:.,]))/i,'')}
   function stripBodyNoise(v){return String(v||'').replace(/^\s*[.·∙•]+\s*/,'').trim()}
   function insertBreaks(v){
-    const metaBroken=String(v||'').replace(/\s*(ТЕМА(?: групповой психотерапии)?|ЦЕЛЬ(?: групповой психотерапии)?|Возрастная категория|Начало группы)\s*:/gi,'\n\n$1:');
+    const metaBroken=String(v||'').replace(/\s*(ТЕМА(?: групповой психотерапии| занятия)?|ЦЕЛЬ(?: групповой психотерапии| занятия)?|Возрастная категория|Начало группы)\s*:/gi,'\n\n$1:');
     return metaBroken.split(/\n\s*\n+/).map(chunk=>{
       const clean=chunk.trim();
-      if(/^ТЕМА(?: групповой психотерапии)?\s*:/i.test(clean))return clean;
+      if(/^ТЕМА(?: групповой психотерапии| занятия)?\s*:/i.test(clean))return clean;
       return clean.replace(/([.!?])\s+(Заключение)\s*[.:]\s*/g,'$1\n\n$2: ').replace(/\s*(ЧАСТЬ\s+[1-9])\s*:?\s*/gi,'\n\n$1: ').replace(/\s+([1-9])[.)]\s+(?=[А-ЯЁ])/g,'\n\n$1. ').replace(/\s*((?:[1-9][.)]\s*)?)(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*:/gi,'\n\n$1$2:').trim();
     }).filter(Boolean).join('\n\n').replace(/^\s+/,'').replace(/\n{3,}/g,'\n\n')
   }
@@ -25,7 +25,7 @@
     if(text.length<=90)return{title:cap(text),body:''};
     return{title:'Этап занятия',body:text}
   }
-  function parse(v){const chunks=insertBreaks(normalize(v)).split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);const meta=[],sections=[],tail=[];let current=null;chunks.forEach(chunk=>{let m=chunk.match(/^(ТЕМА(?: групповой психотерапии)?|ЦЕЛЬ(?: групповой психотерапии)?|Возрастная категория|Начало группы)\s*:\s*([\s\S]*)$/i);if(m){meta.push({title:canonical(META,m[1]),body:cap(m[2])});current=null;return}m=chunk.match(/^Часть\s+([1-9])\s*:?\s*([\s\S]*)$/i);if(m){current={number:m[1],title:'Часть',parts:bodyParts(m[2])};sections.push(current);return}m=chunk.match(/^(?:([1-9])[.)]\s*)?(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*[:.]?\s*([\s\S]*)$/i);if(m){current={number:m[1]||'',title:canonical(SECTIONS,m[2]),parts:bodyParts(m[3])};sections.push(current);return}m=chunk.match(/^([1-9])[.)]\s*([\s\S]*)$/);if(m){const generic=splitNumberedHeading(m[2]);current={number:m[1],title:generic.title,parts:bodyParts(generic.body)};sections.push(current);return}const parts=bodyParts(chunk);if(current)current.parts.push.apply(current.parts,parts);else tail.push.apply(tail,parts)});return expandNarrativeProse(v,expandNarrativeTopic({meta,sections,tail}))}
+  function parse(v){const chunks=insertBreaks(normalize(v)).split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);const meta=[],sections=[],tail=[];let current=null;chunks.forEach(chunk=>{let m=chunk.match(/^(ТЕМА(?: групповой психотерапии| занятия)?|ЦЕЛЬ(?: групповой психотерапии| занятия)?|Возрастная категория|Начало группы)\s*:\s*([\s\S]*)$/i);if(m){meta.push({title:canonical(META,m[1]),body:cap(m[2])});current=null;return}m=chunk.match(/^Часть\s+([1-9])\s*:?\s*([\s\S]*)$/i);if(m){current={number:m[1],title:'Часть',parts:bodyParts(m[2])};sections.push(current);return}m=chunk.match(/^(?:([1-9])[.)]\s*)?(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*[:.]?\s*([\s\S]*)$/i);if(m){current={number:m[1]||'',title:canonical(SECTIONS,m[2]),parts:bodyParts(m[3])};sections.push(current);return}m=chunk.match(/^([1-9])[.)]\s*([\s\S]*)$/);if(m){const generic=splitNumberedHeading(m[2]);current={number:m[1],title:generic.title,parts:bodyParts(generic.body)};sections.push(current);return}const parts=bodyParts(chunk);if(current)current.parts.push.apply(current.parts,parts);else tail.push.apply(tail,parts)});return expandNarrativeCategories(expandNarrativeProse(v,expandNarrativeTopic({meta,sections,tail})))}
 
   // Older therapy notes can contain the entire chronology directly after "Тема:".
   // Only use explicit transitions; do not rewrite or invent clinical observations.
@@ -124,6 +124,54 @@
     // Stay on the existing generic formatter if the narrative has no
     // recognizable stages; arbitrary prose must not be assigned a category.
     return sections.length?{meta,sections,tail}:data;
+  }
+
+  // Group therapy notes may be fully narrative. Assign labels only when
+  // the source uses a recognizable explicit transition. Preserve its wording,
+  // punctuation and participant attribution without inventing observations.
+  function narrativeKind(value){
+    const text=String(value||'').trim();
+    if(/^(?:Занятие началось|Занятие начиналось|В начале (?:занятия|встречи)|Сначала|Структура занятия|Ход занятия|В практической части|В основной части|Затем|Далее|После этого|После возвращения)/iu.test(text))return 'Ход занятия';
+    if(/^(?:В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|Некоторые участники|Часть участников|Отмечались индивидуальные|В поведении участников)/iu.test(text))return 'Наблюдения за участниками';
+    if(/^(?:Все молодцы(?=\s|[,.!?:;]|$)|В целом группа|По итогам занятия|Подводя итоги|Занятие прошло|В завершение занятия|В результате занятия)/iu.test(text))return 'Итоги';
+    return '';
+  }
+  function narrativeSlices(value){
+    const text=String(value||'').trim();
+    if(!text)return [];
+    // Split only at sentence boundaries, never at semicolons between children.
+    return text.split(/(?<=[.!?])\s+(?=(?:Занятие началось|В начале (?:занятия|встречи)|Сначала|Структура занятия|Ход занятия|В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|Некоторые участники|В целом группа|Все молодцы|По итогам занятия|Подводя итоги|Занятие прошло|В завершение занятия)(?=\s|[.,:;!?]|$))/iu)
+      .map(chunk=>chunk.trim()).filter(Boolean);
+  }
+  function expandNarrativeCategories(data){
+    const originalTail=data.tail||[],remaining=[],additional=[];
+    let current=null;
+    const add=(title,body)=>{
+      if(!current||current.title!==title){
+        current={number:'',title,parts:[]};
+        additional.push(current);
+      }
+      current.parts.push({type:'p',text:body});
+    };
+    for(const part of originalTail){
+      if(part.type!=='p'){remaining.push(part);current=null;continue}
+      const text=String(part.text||'').trim();
+      if(/^отч[её]т\s+о\s+проведении\s+группов(?:ого|ой)\s+психотерапевтическ(?:ого|ой)\s+занятия(?=\s|[.,:;!?]|$)/iu.test(text)){
+        data.meta.unshift({title:'Описание занятия',body:text});
+        current=null;continue;
+      }
+      for(const sentence of narrativeSlices(text)){
+        const title=narrativeKind(sentence);
+        if(title){add(title,sentence);continue;}
+        if(current){current.parts.push({type:'p',text:sentence});continue}
+        remaining.push({type:'p',text:sentence});
+      }
+    }
+    if(additional.length){
+      data.sections.push(...additional);
+      data.tail=remaining;
+    }
+    return data;
   }
 
   function plainParts(v){

@@ -146,6 +146,31 @@
     return text.split(/(?<=[.!?])\s+(?=(?:Занятие началось|В начале (?:занятия|встречи)|Сначала|Содержательная часть|Затем|Далее|После этого|После возвращения|В соответствии с|Структура занятия|Ход занятия|В ходе занятия (?:наиболее активн|участники|часть участников)|Во время занятия (?:участники|часть участников)|Наиболее активн|Активно участвовали|Наблюдения за участниками|По участникам|Наблюдения по участникам|Некоторые участники|В целом группа|Все молодцы|По итогам занятия|Подводя итоги|Занятие прошло|В завершение занятия)(?=\s|[.,:;!?]|$))/iu)
       .map(chunk=>chunk.trim()).filter(Boolean);
   }
+  function splitExplicitSectionTransitions(data){
+    // A psychologist may add an unlabelled observations/conclusion paragraph
+    // after an explicitly named stage. The original parser appends it to the
+    // preceding stage, so split only at clear semantic paragraph boundaries.
+    const output=[];
+    for(const original of data.sections){
+      const section={...original,parts:[]};
+      output.push(section);
+      let current=section;
+      for(const part of original.parts||[]){
+        if(part.type!=='p'){current.parts.push(part);continue}
+        for(const sentence of narrativeSlices(part.text)){
+          const title=narrativeKind(sentence);
+          if((title==='Наблюдения за участниками'||title==='Итоги') &&
+            title!==current.title && (current!==section||section.parts.length)){
+            current={number:'',title,parts:[]};
+            output.push(current);
+          }
+          current.parts.push({type:'p',text:sentence});
+        }
+      }
+    }
+    data.sections=output;
+    return data;
+  }
   function expandNarrativeCategories(data){
     const originalTail=data.tail||[],remaining=[],preface=[],additional=[];
     // Preserve prose that appeared before the first recognized narrative
@@ -180,7 +205,7 @@
       data.preface=preface;
       data.tail=remaining;
     }
-    return data;
+    return splitExplicitSectionTransitions(data);
   }
 
   function plainParts(v){

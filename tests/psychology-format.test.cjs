@@ -212,6 +212,8 @@ test('existing explicitly headed therapy sections stay intact and do not steal p
   'Все молодцы, занятие завершено.'
  ].join('\n\n');
  const parsed=format.parse(report);
+ assert.deepEqual(Array.from(parsed.sections.map(section=>section.title)),
+  ['Основная часть','Наблюдения за участниками','Итоги']);
  const body=parsed.sections.flatMap(section=>section.parts.map(part=>part.text||'')).join(' ');
  assert.match(body,/Участник А объяснял/);
  assert.match(body,/Все молодцы/);

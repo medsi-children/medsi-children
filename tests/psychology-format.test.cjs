@@ -79,3 +79,68 @@ test('blank lines create real paragraphs; soft line wraps stay inside one paragr
  assert.match(css,/\.psych-paragraph\{[^}]*white-space:pre-wrap/);
  assert.match(css,/\.psych-intro-value\{[^}]*white-space:pre-wrap/);
 });
+
+
+test('free-form group report keeps topic, goal, chronology, participant observations and outcome in separate categories',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const window={},document={readyState:'loading',addEventListener(){}};
+ vm.runInNewContext(source,{window,document});
+ const f=window.MedsiPsychologyFormatter;
+ // Entirely fictional prose. Never put real patient reports or identities in Git.
+ const note=[
+  'Отчёт о проведении группового психотерапевтического занятия с подростками',
+  'Тема занятия: «Планирование учебного проекта». Цель занятия: обсудить этапы проекта и способы работы в команде.',
+  'Занятие началось с знакомства. Затем участники оценили настроение по шкале. Далее обсудили варианты решения задач. После возвращения в общий круг выбрали шаги на следующую встречу.',
+  'В ходе занятия наиболее активными были Участник А и Участница Б; Участник В слушал и отвечал на вопросы.',
+  'Все молодцы, группе удалось завершить упражнение!'
+ ].join('\n\n');
+ for(const value of [note,note.replace(/\n\n/g,'\n'),note.replace(/\n\n/g,' ')]){
+  const result=f.parse(value);
+  assert.deepEqual(Array.from(result.meta.map(x=>x.title)),[
+   'Описание занятия','Тема групповой психотерапии','Цель групповой психотерапии'
+  ]);
+  assert.deepEqual(Array.from(result.sections.map(x=>x.title)),[
+   'Ход занятия','Наблюдения за участниками','Итоги'
+  ]);
+  const all=[
+   ...result.meta.map(x=>x.body),
+   ...result.sections.flatMap(x=>x.parts.flatMap(p=>p.type==='list'?p.items:[p.text||''])),
+   ...result.tail.map(p=>p.text||'')
+  ].join(' ');
+  for(const phrase of [
+   'Отчёт о проведении группового психотерапевтического занятия с подростками',
+   '«Планирование учебного проекта»','обсудить этапы проекта',
+   'Занятие началось с знакомства.','Затем участники оценили настроение',
+   'После возвращения в общий круг','Участница Б; Участник В слушал',
+   'Все молодцы, группе удалось завершить упражнение!'
+  ]){
+   assert.ok(all.includes(phrase),phrase);
+   assert.equal(all.split(phrase).length-1,1,'A source phrase must not be duplicated');
+  }
+ }
+});
+
+test('alternative headings and unlabelled paragraphs remain safe and readable',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const window={},document={readyState:'loading',addEventListener(){}};
+ vm.runInNewContext(source,{window,document});
+ const f=window.MedsiPsychologyFormatter;
+ const text=[
+   'Тема занятия: Командное взаимодействие.',
+   'Цель занятия: Научиться обсуждать разные решения.',
+   'В начале встречи состоялось знакомство. Потом участники придумали варианты.',
+   'Некоторые участники предложили альтернативные способы.',
+   'По итогам занятия группа выбрала следующее упражнение.'
+ ].join('\n\n');
+ const result=f.parse(text);
+ assert.deepEqual(Array.from(result.meta.map(x=>x.title)),[
+  'Тема групповой психотерапии','Цель групповой психотерапии'
+ ]);
+ assert.deepEqual(Array.from(result.sections.map(x=>x.title)),[
+  'Ход занятия','Наблюдения за участниками','Итоги'
+ ]);
+ const unclassified=f.parse('Тема занятия: Любая тема.\n\nПроизвольный текст без явных маркеров и наблюдений.');
+ assert.equal(unclassified.meta.length,1);
+ assert.equal(unclassified.sections.length,0,'Ambiguous prose cannot be assigned a clinical category');
+ assert.equal(unclassified.tail[0].text,'Произвольный текст без явных маркеров и наблюдений.');
+});

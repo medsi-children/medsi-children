@@ -9,7 +9,10 @@
   function stripSectionMarker(v){return String(v||'').replace(/^\s*(?:[•·∙▪◦‣]+|[1-9]?[.)])\s+(?=(?:Начало|Вводная часть|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Выводы|Рефлексия|В завершении|Завершение)(?:\s|$|[:.,]))/i,'')}
   function stripBodyNoise(v){return String(v||'').replace(/^\s*[.·∙•]+\s*/,'').trim()}
   function insertBreaks(v){
-    const metaBroken=String(v||'').replace(/\s*(ТЕМА(?: групповой психотерапии| занятия)?|ЦЕЛЬ(?: групповой психотерапии| занятия)?|Возрастная категория|Начало группы)\s*:/gi,'\n\n$1:');
+    const metaBroken=String(v||'').replace(/\s*(ТЕМА(?: групповой психотерапии| занятия)?|ЦЕЛЬ(?: групповой психотерапии| занятия)?|Возрастная категория|Начало группы)\s*:/gi,'\n\n$1:')
+      // Some storage paths flatten every paragraph into a single line.
+      // Separate only explicit prose transitions after a complete sentence.
+      .replace(/([.!?])\s+(Занятие началось|В начале (?:занятия|встречи)|В ходе занятия (?:наиболее активн[^\s]*|участники|часть участников)|Наиболее активн[^\s]*|Некоторые участники|Все молодцы|В целом группа|По итогам занятия|Подводя итоги|Занятие прошло)(?=\s|[.,:;!?]|$)/giu,'$1\n\n$2');
     return metaBroken.split(/\n\s*\n+/).map(chunk=>{
       const clean=chunk.trim();
       if(/^ТЕМА(?: групповой психотерапии| занятия)?\s*:/i.test(clean))return clean;

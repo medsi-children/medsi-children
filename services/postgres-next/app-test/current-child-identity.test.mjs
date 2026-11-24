@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {canonicalCurrentName,currentStaffPublications,parseCurrentStaffBlocks,
   matchRegisteredChild,matchCurrentSource,shortestCurrentSurnamePrefixes
 } from '../app/current-child-identity.mjs';
-import {recentCurrentStaffSources} from '../app/current-report-backfill.mjs';
+import {currentHeadStaffSources} from '../app/current-report-backfill.mjs';
 
 const aliases=[
   {preferred_name:'Александра',variants_json:'["Саша","Шура"]'},
@@ -113,14 +113,15 @@ test('current source recovery keeps yesterday evening alongside today morning',(
     {kind:'psychology',report_date:'2026-11-23',submitted_at:Date.parse('2026-11-23T19:30:00Z'),publication_id:'therapy'},
     {kind:'morning',report_date:'2026-11-22',submitted_at:Date.parse('2026-11-22T09:00:00Z'),publication_id:'stale'}
   ];
-  assert.deepEqual(recentCurrentStaffSources(records,at).map(x=>x.publication_id),['head_m','head_e']);
+  assert.deepEqual(currentHeadStaffSources(records).map(x=>x.publication_id),['head_m','head_e']);
 });
-test('overnight late registration recovery has a strict age limit',()=>{
+test('historical current head can still be read after registration a week later',()=>{
   const at=Date.parse('2026-11-24T10:30:00Z');
-  const eligible={kind:'morning',report_date:'2026-11-23',
-    submitted_at:Date.parse('2026-11-23T08:00:00Z')};
-  assert.equal(recentCurrentStaffSources([eligible],at).length,1);
-  assert.equal(recentCurrentStaffSources([eligible],at+2*86400000).length,0);
-  assert.equal(recentCurrentStaffSources([{...eligible,submitted_at:at+86400000}],at).length,0);
-  assert.equal(recentCurrentStaffSources([{...eligible,submitted_at:0}],at).length,0);
+  const previous={kind:'morning',report_date:'2026-11-15',
+    submitted_at:Date.parse('2026-11-15T08:00:00Z'),publication_id:'historical_head'};
+  assert.deepEqual(currentHeadStaffSources([previous],at),[previous]);
+  assert.deepEqual(currentHeadStaffSources([{...previous,kind:'psychology'}]),[]);
+  assert.deepEqual(currentHeadStaffSources([previous,{
+    ...previous,publication_id:'new_head',submitted_at:previous.submitted_at+5000
+  }]).map(x=>x.publication_id),['new_head']);
 });

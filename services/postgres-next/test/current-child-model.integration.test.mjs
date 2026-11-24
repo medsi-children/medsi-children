@@ -422,17 +422,9 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.match(lateCard.parentViews[0].reports.morning,/Синтетический утренний отчёт/);
     assert.match(lateCard.parentViews[0].reports.evening,/Синтетический вечерний отчёт/);
     const recoveredHistory=await reader.history(latePhone);
-    for(const {date,daysAgo,sourceId} of veryEarlySources){
+    for(const {date,daysAgo} of veryEarlySources){
       const found=recoveredHistory.reports.find(r=>r.reportDate===date&&r.kind==='morning');
-      const [[sourceProbe]]=await sql`SELECT publication_id FROM raw_reports WHERE publication_id=${sourceId}`;
-      const [[ownershipProbe]]=await sql`SELECT record_json FROM report_ownership
-        WHERE owner_key=${'CURRENT_BLOCK_'+sourceId+'_0'}`;
-      const [historyProbe]=await sql`SELECT child_id FROM parent_report_history
-        WHERE phone10=${latePhone} AND kind=${'morning'} AND report_date=${date}`;
-      assert.ok(found,'First reports must survive signup even '+daysAgo+' days later; raw='+
-        Boolean(sourceProbe)+', owner='+String(ownershipProbe?.record_json||'missing')+
-        ', history='+JSON.stringify(historyProbe)+
-        '; recovered dates: '+recoveredHistory.reports.map(r=>String(r.reportDate)+'/'+r.kind).join(', '));
+      assert.ok(found,'Report must be safely restored even '+daysAgo+' days before signup');
       assert.match(found.text,new RegExp('за '+daysAgo+' дней до регистрации'));
     }
     assert.equal(recoveredHistory.reports.some(r=>r.text.includes('Чужое наблюдение')),false);

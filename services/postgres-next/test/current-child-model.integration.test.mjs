@@ -366,13 +366,13 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     // All identities and reports here are synthetic disposable CI data.
     clock+=2000;
     const overnightMorning=await publish('morning',
-      'Степан Ме. — Синтетический блок существующего ребёнка.\\n'+
+      'Степан Ме. — Синтетический блок существующего ребёнка.\n'+
       'Мирон Фо. — Синтетический утренний отчёт нового ребёнка.',
       'ci_overnight_morning_0001');
     assert.equal(overnightMorning.status,'published');
     clock+=2000;
     const overnightEvening=await publish('evening',
-      'Степан Ме. — Синтетическое вечернее наблюдение.\\n'+
+      'Степан Ме. — Синтетическое вечернее наблюдение.\n'+
       'Мирон Фо. — Синтетический вечерний отчёт нового ребёнка.',
       'ci_overnight_evening_0001');
     assert.equal(overnightEvening.status,'published');

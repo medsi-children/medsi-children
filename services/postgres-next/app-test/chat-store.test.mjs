@@ -82,6 +82,12 @@ test('message creation is idempotent and notification previews use child name an
   assert.equal(push.title,'Арина Халитова');
   assert.equal(push.body,'Сообщение для теста');
   assert.equal(push.type,'chat');
+  assert.match(push.threadTag,/^medsi-chat-[a-f0-9]{20}$/);
+  assert.equal(push.messageAt,first.timestamp);
+  assert.equal(push._chatMessageKey,first.messageKey);
+  assert.equal(push._chatSide,'parent');
+  assert.ok(!JSON.stringify(push).includes('9000000001'),
+    'Phone number must not appear in device-visible ordering metadata');
   const second = await store.send(payload());
   assert.equal(second.status, 'duplicate');
   assert.equal(second.messageKey, first.messageKey);
@@ -150,4 +156,21 @@ test('disabled push never builds a chat notification backlog',async()=>{
   const same=await store.send(payload({clientMessageId:'synthetic_push_off_001'}));
   assert.equal(same.status,'duplicate');
   assert.equal(state.push.size,0);
+});
+
+test('consecutive messages keep distinct exact previews but one stable conversation tag',async()=>{
+  const {state,sql}=fakeSql();
+  const chat=createChatStore(sql);
+  const first=await chat.send(payload({clientMessageId:'synthetic_push_seq_01',text:'Первое синтетическое сообщение.'}));
+  const second=await chat.send(payload({clientMessageId:'synthetic_push_seq_02',text:'Второе синтетическое сообщение.'}));
+  const p1=state.push.get('chat_'+(await import('node:crypto')).createHash('sha256')
+    .update('9000000001\u0000synthetic_push_seq_01','utf8').digest('hex'));
+  const p2=state.push.get('chat_'+(await import('node:crypto')).createHash('sha256')
+    .update('9000000001\u0000synthetic_push_seq_02','utf8').digest('hex'));
+  assert.ok(p1&&p2);
+  assert.equal(p1.body,'Первое синтетическое сообщение.');
+  assert.equal(p2.body,'Второе синтетическое сообщение.');
+  assert.equal(p1.threadTag,p2.threadTag);
+  assert.equal(p1._chatMessageKey,first.messageKey);
+  assert.equal(p2._chatMessageKey,second.messageKey);
 });

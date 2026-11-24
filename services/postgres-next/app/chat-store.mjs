@@ -120,7 +120,15 @@ export function createChatStore(sql,{queuePush=true}={}) {
         const role = isParent ? 'educator' : 'parent';
         const notification = JSON.stringify({
           title: isParent?(childName||'Сообщение от родителя'):'Детское Отделение Медси',
-          body, type: 'chat', url: isParent ? '/tutors' : '/'
+          body, type: 'chat', url: isParent ? '/tutors' : '/',
+          // Public push metadata contains no phone, identity or message key.
+          // A stable opaque thread tag allows the device to keep the newest
+          // preview when Web Push providers deliver events out of order.
+          threadTag: 'medsi-chat-'+digest(role+'\u0000'+phone10).slice(0,20),
+          messageAt: timestamp,
+          // Server-only event identity. Removed before sending to devices.
+          _chatMessageKey: messageKey,
+          _chatSide: side
         });
         await tx.upsert`INSERT INTO push_outbox
           (event_id, role, phone10, notification_json, status, attempts, next_attempt_at, created_at)

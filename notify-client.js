@@ -3,7 +3,7 @@
   const IDENTITY_KEY = 'medsi_push_identity';
   const INTENT_PREFIX = 'medsi_push_wanted_v1:';
   const VAPID_PUBLIC_KEY = 'BOP6j6f_c1Rw_Zi-vyL3c6NpjmEKYqiISsQtCl7v8F3iV-XyNUnIqUYrppQKRHi6jnhMKTuKuF4HkPKziL8-cXE';
-  const SERVICE_WORKER_URL = '/sw.js?v=20261117-push-dedup-1';
+  const SERVICE_WORKER_URL = '/sw.js?v=20261124-chat-order-1';
   const INTRO_VISIBLE_MS = 5000;
   const ENABLED_VISIBLE_MS = 5000;
   const STATUS_VISIBLE_MS = 3600;

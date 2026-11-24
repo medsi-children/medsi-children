@@ -315,7 +315,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // Only a previously pending, uniquely surname-qualified block may
         // extend continuity back another 14 days. Single-letter and legacy
         // unowned guesses never become fresh anchors for still older blocks.
-        if(!owned&&saved.get(index)?.pending&&norm(block.prefix).length>=2)
+        if(!owned&&saved.get(index)?.record?.pending&&norm(block.prefix).length>=2)
           anchors.push(Number(source.submitted_at));
         backfilled++;
       }

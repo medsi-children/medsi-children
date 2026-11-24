@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canonicalCurrentName,currentStaffPublications,parseCurrentStaffBlocks,
-  matchRegisteredChild,matchCurrentSource,shortestCurrentSurnamePrefixes
+  matchRegisteredChild,matchCurrentSource,shortestCurrentSurnamePrefixes,
+  isCurrentRoomNumberLine,stripCurrentRoomNumberLines
 } from '../app/current-child-identity.mjs';
 import {currentHeadStaffSources} from '../app/current-report-backfill.mjs';
 
@@ -124,4 +125,31 @@ test('historical current head can still be read after registration a week later'
   assert.deepEqual(currentHeadStaffSources([previous,{
     ...previous,publication_id:'new_head',submitted_at:previous.submitted_at+5000
   }]).map(x=>x.publication_id),['new_head']);
+});
+
+test('only standalone ward numbers 501–512 are excluded from parsed child blocks',()=>{
+  for(let n=501;n<=512;n++){
+    assert.equal(isCurrentRoomNumberLine(String(n)),true);
+    assert.equal(isCurrentRoomNumberLine('Палата №'+n),true);
+    assert.equal(isCurrentRoomNumberLine('пал. '+n+'.'),true);
+    assert.equal(isCurrentRoomNumberLine('  № '+n+'  '),true);
+    assert.equal(isCurrentRoomNumberLine('В палате '+n+' играл'),false);
+    assert.equal(isCurrentRoomNumberLine(n+' деталей конструктора'),false);
+  }
+  for(const notRoom of ['500','513','1503','503–504','503-504',
+    'Палата 513','Упражнение 503','503 – играл','24.11.2026']){
+    assert.equal(isCurrentRoomNumberLine(notRoom),false,notRoom);
+  }
+  const text='501\nСаша Ив. — Играла в палате 503 с игрушками.\n'+
+    '503\nСаша Иг. — Собрала 503 детали.\n512';
+  assert.equal(stripCurrentRoomNumberLines(text),
+    'Саша Ив. — Играла в палате 503 с игрушками.\nСаша Иг. — Собрала 503 детали.');
+  for(const stored of [false,true]){
+    const b=parseCurrentStaffBlocks(text,aliases,{stored});
+    assert.deepEqual(b.map(x=>x.lineIndex),[1,3],
+      'Filtering room numbers must not shift original heading indexes');
+    assert.deepEqual(b.map(x=>x.body.join('\n')),[
+      'Играла в палате 503 с игрушками.','Собрала 503 детали.'
+    ]);
+  }
 });

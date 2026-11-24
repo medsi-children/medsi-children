@@ -1,3 +1,5 @@
+import {stripCurrentRoomNumberLines} from './current-child-identity.mjs';
+
 // The same conservative punctuation rules as Apps Script's
 // normalizeReportBlockPunctuation_ (report-parser.js).
 // Only mechanical spacing changes: never rewrite words, add punctuation,
@@ -16,6 +18,6 @@ export function normalizeCurrentReportPunctuation(text){
 // Warning badges are educator annotations, not parent-facing observations.
 // Preserve ordinary punctuation, paragraph boundaries and unrelated emoji.
 export function formatCurrentParentChildReport(text){
-  return String(text??'').replace(/[‼⁈⁉❕❗❢❣][\uFE0E\uFE0F]?/gu,'')
+  return stripCurrentRoomNumberLines(String(text??'').replace(/[‼⁈⁉❕❗❢❣][\uFE0E\uFE0F]?/gu,''))
     .split('\n').map(line=>line.replace(/[ \t]{2,}/g,' ').trimEnd()).join('\n').trim();
 }

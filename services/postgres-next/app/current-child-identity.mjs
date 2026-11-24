@@ -9,6 +9,19 @@ const WORD=/^[\p{L}-]{1,100}$/u;
 const HEADER=/^\s*([\p{L}-]{2,70})(?:[ \t]+([\p{L}-]{1,100})\.?)?[ \t]*[:：—–-][ \t]*(.*)$/u;
 const GENERAL=/^\s*(?:общий\s+комментарий|сегодня\s+у\s+ребят\s+были|для\s+врачей|активности|итоги|дата|отчет\s+по\s+детям)\s*[:：]/iu;
 const ACTIVE_KINDS=new Set(['morning','evening']);
+// Room numbers in staff notes are layout markers, not a child's observation.
+// Keep this deliberately narrow: only standalone 501–512 (optionally
+// prefixed by "Палата", "пал." or №) can be removed. Phrases such as
+// "в палате 503" and all other numbers must survive untouched.
+const STANDALONE_ROOM=/^[ \t]*(?:(?:палата|пал\.)[ \t]*(?:№[ \t]*)?|№[ \t]*)?(?:50[1-9]|51[0-2])[ \t]*[.:;]?[ \t]*$/iu;
+export function isCurrentRoomNumberLine(line){
+  return STANDALONE_ROOM.test(String(line??''));
+}
+export function stripCurrentRoomNumberLines(text){
+  return String(text??'').replace(/\r\n?/g,'\n')
+    .split('\n').filter(line=>!isCurrentRoomNumberLine(line)).join('\n');
+}
+
 function preferredName(name,variants){
   const entered=norm(name);
   if(!entered)return null;
@@ -58,6 +71,7 @@ export function parseCurrentStaffBlocks(text,nameVariants=[],{stored=false}={}){
   const lines=String(text||'').replace(/\r\n?/g,'\n').split('\n');
   for(let lineIndex=0;lineIndex<lines.length;lineIndex++){
     const line=stored?lines[lineIndex]:normalizeCurrentStaffHeaderLine(lines[lineIndex]);
+    if(isCurrentRoomNumberLine(line))continue;
     if(GENERAL.test(line)){current=null;continue}
     const m=HEADER.exec(line);
     if(m){

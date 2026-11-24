@@ -163,26 +163,33 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           (Number(source.submitted_at)===Number(older.submitted_at)&&
            Number(source.revision)>Number(older.revision)))latest.set(key,source);
       }
+      // Index saved ownership once by publication. A long archive might
+      // contain thousands of blocks: scanning ALL owner rows for EACH source
+      // on every parent report request would make the page increasingly slow.
+      const ownersBySource=new Map();
+      for(const row of ownership){
+        const match=/^CURRENT_BLOCK_(.+)_(\\d+)$/.exec(String(row.owner_key||''));
+        if(!match)continue;
+        const index=Number(match[2]);
+        if(!Number.isSafeInteger(index)||index<0)continue;
+        let entry=ownersBySource.get(match[1]);
+        if(!entry){entry={saved:new Map(),originals:new Map()};ownersBySource.set(match[1],entry)}
+        let record;
+        try{record=JSON.parse(String(row.record_json||''))}catch{record={blocked:true}}
+        entry.saved.set(index,record);
+        entry.originals.set(index,{key:row.owner_key,raw:row.record_json});
+      }
       const snapshots=[];
-      // Newest first makes safely recovered recent reports available as
-      // continuity evidence for earlier unpublished-to-parents source blocks.
+      // Newest first lets safely recovered pending blocks anchor earlier ones.
       const chronological=[...latest.values()].sort((a,b)=>
         Number(b.submitted_at||0)-Number(a.submitted_at||0)||
         Number(b.revision||0)-Number(a.revision||0));
       for(const source of chronological){
-        const prefix='CURRENT_BLOCK_'+source.publication_id+'_';
-        const saved=new Map(),originals=new Map();
-        for(const row of ownership){
-          if(!String(row.owner_key).startsWith(prefix))continue;
-          const index=Number(String(row.owner_key).slice(prefix.length));
-          if(!Number.isSafeInteger(index)||index<0)continue;
-          let record;
-          try{record=JSON.parse(String(row.record_json||''))}catch{record={blocked:true}}
-          saved.set(index,record);
-          originals.set(index,{key:row.owner_key,raw:row.record_json});
-        }
-        snapshots.push({source,saved,originals,
-          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants,{stored:true})});
+        const entry=ownersBySource.get(String(source.publication_id));
+        snapshots.push({
+          source,saved:entry?.saved||new Map(),originals:entry?.originals||new Map(),
+          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants,{stored:true})
+        });
       }
       // A saved child-scoped delivery or explicit publication block owner is
       // a trusted continuity anchor. Earlier pending blocks need surname

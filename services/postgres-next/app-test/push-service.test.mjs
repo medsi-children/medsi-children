@@ -202,7 +202,8 @@ test('superseded parent chat event is not delivered when a newer message exists'
       }
       if(q.includes('FROM push_subscriptions'))return [subscriptions];
       if(q.startsWith('UPDATE push_outbox SET status=')){
-        const row=rows.get(params.at(-1));
+        const row=rows.get(params.find(value=>rows.has(value)));
+        assert.ok(row,'A scoped outbox update must name the correct event');
         // All scoped state transitions are simulated against the matching row.
         if(q.includes('attempts=?')){
           row.status=params[0];row.attempts=Number(params[1]);

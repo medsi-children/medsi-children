@@ -424,7 +424,7 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const recoveredHistory=await reader.history(latePhone);
     for(const {date,daysAgo} of veryEarlySources){
       const found=recoveredHistory.reports.find(r=>r.reportDate===date&&r.kind==='morning');
-      assert.ok(found,'First reports must survive signup even '+daysAgo+' days later');
+      assert.ok(found,'First reports must survive signup even '+daysAgo+' days later; recovered history days: '+recoveredHistory.reports.map(r=>String(r.reportDate)+'/'+r.kind).join(', '));
       assert.match(found.text,new RegExp('за '+daysAgo+' дней до регистрации'));
     }
     assert.equal(recoveredHistory.reports.some(r=>r.text.includes('Чужое наблюдение')),false);

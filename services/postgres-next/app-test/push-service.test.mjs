@@ -163,3 +163,79 @@ test('readiness counts include only enabled subscriptions, never endpoints or ac
   assert.deepEqual(counts,{parent:4,educator:2});
   assert.deepEqual(Object.keys(counts).sort(),['educator','parent']);
 });
+
+test('superseded parent chat event is not delivered when a newer message exists',async()=>{
+  const now=Date.now();
+  const tag='medsi-chat-'+'a'.repeat(20);
+  const rows=new Map([
+    ['chat_earlier_synthetic_001',{
+      event_id:'chat_earlier_synthetic_001',role:'educator',phone10:'9000000001',
+      notification_json:JSON.stringify({
+        type:'chat',title:'Имя для теста',body:'Предыдущее сообщение',
+        url:'/tutors',threadTag:tag,messageAt:now-1000,
+        _chatMessageKey:'message_earlier',_chatSide:'parent'
+      }),status:'pending',attempts:0,next_attempt_at:now-10,created_at:now+1000
+    }],
+    ['chat_newest_synthetic_001',{
+      event_id:'chat_newest_synthetic_001',role:'educator',phone10:'9000000001',
+      notification_json:JSON.stringify({
+        type:'chat',title:'Имя для теста',body:'Актуальное сообщение',
+        url:'/tutors',threadTag:tag,messageAt:now,
+        _chatMessageKey:'message_newest',_chatSide:'parent'
+      }),status:'pending',attempts:0,next_attempt_at:now-10,created_at:now+1000
+    }]
+  ]);
+  let activation=null;
+  const subscriptions=[{
+    subscription_id:'educator-device-1',role:'educator',phone10:'',
+    subscription_json:JSON.stringify({endpoint:'https://push.invalid.example/test'}),enabled:true
+  }];
+  const delivered=[];
+  const sql={async begin(_opts,fn){
+    const tx=async(strings,...params)=>{
+      const q=strings.join('?').replace(/\s+/g,' ').trim();
+      if(q.startsWith('INSERT INTO migration_state')){activation??=Number(params[1]);return [[]]}
+      if(q.startsWith('SELECT cursor_value FROM migration_state'))return [[{cursor_value:String(activation)}]];
+      if(q.includes('FROM push_outbox WHERE event_id='))return [[{...rows.get(params[0])}]];
+      if(q.includes('FROM chat_messages')&&q.includes('ORDER BY created_at DESC')){
+        return [[{message_key:'message_newest'}]];
+      }
+      if(q.includes('FROM push_subscriptions'))return [subscriptions];
+      if(q.startsWith('UPDATE push_outbox SET status=')){
+        const row=rows.get(params.at(-1));
+        // All scoped state transitions are simulated against the matching row.
+        if(q.includes('attempts=?')){
+          row.status=params[0];row.attempts=Number(params[1]);
+          row.next_attempt_at=Number(params[2]);
+        }else{
+          row.status=params[0];
+          row.next_attempt_at=Number(params[1])||row.next_attempt_at;
+        }
+        return [[]];
+      }
+      if(q.startsWith('UPDATE push_outbox SET notification_json=')){
+        rows.get(params[1]).notification_json=params[0];return [[]];
+      }
+      throw new Error('Unexpected SQL '+q);
+    };
+    return fn(tx);
+  }};
+  const sender={setVapidDetails(){},async sendNotification(_target,raw){
+    const notice=JSON.parse(raw);
+    assert.equal(notice.tag,tag);
+    assert.equal(notice.messageAt,now);
+    assert.equal(notice._chatMessageKey,undefined);
+    assert.equal(notice._chatSide,undefined);
+    assert.equal(notice.threadTag,undefined);
+    delivered.push(notice.body);
+  }};
+  const push=createPushService({sql,env,webpushClient:sender});
+  const old=await push.deliverEvent('chat_earlier_synthetic_001');
+  assert.equal(old.superseded,true);
+  assert.equal(rows.get('chat_earlier_synthetic_001').status,'expired');
+  assert.deepEqual(delivered,[]);
+  const current=await push.deliverEvent('chat_newest_synthetic_001');
+  assert.equal(current.sent,1);
+  assert.equal(rows.get('chat_newest_synthetic_001').status,'completed');
+  assert.deepEqual(delivered,['Актуальное сообщение']);
+});

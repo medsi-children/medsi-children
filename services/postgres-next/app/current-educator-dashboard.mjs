@@ -1,6 +1,7 @@
 import {displayCurrentStaffSource} from './current-educator-source-display.mjs';
 import {effectiveParentRelationship} from './current-parent-relationship.mjs';
 import {normalizeCurrentReportPunctuation} from './current-report-punctuation.mjs';
+import {stripCurrentRoomNumberLines} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const KINDS=['morning','evening','psychology'];
 export function assembleCurrentEducatorDashboard({profiles=[],children=[],current=[],
@@ -25,7 +26,7 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     const reports={morning:'',evening:'',psychology:''};
     for(const r of current)if(r.phone10===p.phone10&&r.child_id===childId&&
       ['morning','evening'].includes(r.kind)&&r.publication_id===headByKind.get(r.kind))
-      reports[r.kind]=normalizeCurrentReportPunctuation(r.text||'');
+      reports[r.kind]=stripCurrentRoomNumberLines(normalizeCurrentReportPunctuation(r.text||''));
     const therapy=headByKind.get('psychology')&&rawByPublication.get(headByKind.get('psychology'));
     if(therapy)reports.psychology=normalizeCurrentReportPunctuation(therapy.normalized_text||'');
     card.parentViews.push({phone:parent.phone,phone10:p.phone10,
@@ -37,7 +38,8 @@ export function assembleCurrentEducatorDashboard({profiles=[],children=[],curren
     const source=publicationId&&rawByPublication.get(publicationId);
     raw[kind]=source?{
       reportDate:String(source.report_date||''),
-      normalizedText:normalizeCurrentReportPunctuation(source.normalized_text||''),
+      normalizedText:kind==='psychology'?normalizeCurrentReportPunctuation(source.normalized_text||''):
+        stripCurrentRoomNumberLines(normalizeCurrentReportPunctuation(source.normalized_text||'')),
       rawText:String(source.raw_text||''),
       displayText:kind==='psychology'?normalizeCurrentReportPunctuation(source.raw_text||''):
         normalizeCurrentReportPunctuation(displayCurrentStaffSource({rawText:String(source.normalized_text||''),

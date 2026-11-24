@@ -34,3 +34,14 @@ test('no rewrite when saved owner no longer has registered parent',()=>{
   assert.equal(display({rawText:raw,children,profiles:[{child_id:'kid_two'}],
     nameVariants,ownerRecords:[owner(0,'kid_one')]}),raw);
 });
+
+test('old source preview drops isolated room numbers without shifting publication ownership',()=>{
+ const source='501\nСаша И. — Была в палате 503.\n503\n'+
+   'Саша Иг. — Создала 503 рисунка.\nПалата №512';
+ const shown=display({rawText:source,children,profiles,nameVariants,
+   ownerRecords:[owner(0,'kid_one'),owner(1,'kid_two')]});
+ assert.equal(shown,
+   'Александра Ив — Была в палате 503.\n'+
+   'Александра Иг — Создала 503 рисунка.');
+ assert.match(source,/^501\n/,'The original source stays immutable');
+});

@@ -379,6 +379,26 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const [[unclaimedMorning]]=await sql`SELECT record_json FROM report_ownership
       WHERE owner_key=${'CURRENT_BLOCK_'+overnightMorning.publicationId+'_1'}`;
     assert.equal(JSON.parse(unclaimedMorning.record_json).pending,true);
+    // Pending historical blocks can be recovered from the earliest
+    // preserved publication by walking a uniquely surname-qualified chain.
+    // No old recipient is guessed from a bare first name.
+    const veryEarlySources=[];
+    for(const daysAgo of [53,40,27,14]){
+      const at=clock-daysAgo*86400000;
+      const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
+        year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
+      const sourceId='ci_miron_historical_'+daysAgo;
+      const original='Мирон Фо. — Синтетический отчёт за '+daysAgo+' дней до регистрации.';
+      await sql.upsert`INSERT INTO raw_reports
+        (publication_id,kind,report_date,raw_text,normalized_text,author_id,submitted_at,revision)
+        VALUES (${sourceId},${'morning'},${date},${original},${original},
+          ${'educator_ci_v2_0001'},${BigInt(at)},${1n})`;
+      await sql.upsert`INSERT INTO report_ownership
+        (owner_key,record_json,updated_at)
+        VALUES (${'CURRENT_BLOCK_'+sourceId+'_0'},
+          ${JSON.stringify({childId:'',pending:true,blocked:false})},${BigInt(at)})`;
+      veryEarlySources.push({date,daysAgo,sourceId});
+    }
     const [[pushBeforeLateRegistration]]=await sql`SELECT count(*)::int AS n FROM push_outbox`;
     // The registration happens 24 hours later. It must not require the
     // educator to republish yesterday's reports.
@@ -401,6 +421,15 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     assert.ok(lateCard);
     assert.match(lateCard.parentViews[0].reports.morning,/Синтетический утренний отчёт/);
     assert.match(lateCard.parentViews[0].reports.evening,/Синтетический вечерний отчёт/);
+    const recoveredHistory=await reader.history(latePhone);
+    for(const {date,daysAgo} of veryEarlySources){
+      const found=recoveredHistory.reports.find(r=>r.reportDate===date&&r.kind==='morning');
+      assert.ok(found,'First reports must survive signup even '+daysAgo+' days later');
+      assert.match(found.text,new RegExp('за '+daysAgo+' дней до регистрации'));
+    }
+    assert.equal(recoveredHistory.reports.some(r=>r.text.includes('Чужое наблюдение')),false);
+    // Re-running the repair is idempotent and does not republish content.
+    assert.equal((await createCurrentReportBackfill(sql,{now}).recoverHistory({phone10:latePhone})).backfilled,0);
     const [[pushAfterLateRegistration]]=await sql`SELECT count(*)::int AS n FROM push_outbox`;
     assert.equal(pushAfterLateRegistration.n,pushBeforeLateRegistration.n,
       'backfill never queues historic report push notifications');

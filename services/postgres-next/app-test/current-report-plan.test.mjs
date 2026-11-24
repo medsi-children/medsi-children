@@ -107,3 +107,23 @@ test('decorated namesakes still require distinctive surname prefixes',()=>{
   assert.deepEqual(result.recipients.map(r=>r.phone10),['9000000001','9000000002']);
   assert.doesNotMatch(result.recipients[0].text,/Второй/);
 });
+
+test('published and recovered reports exclude isolated ward labels but keep meaningful room references',()=>{
+  const raw='501\nСаша Ив. — Играла, затем была в палате 503.\n'+
+    'Палата № 503\nСаша Иг. — Собрала 503 элемента.\n512';
+  const result=plan(raw);
+  assert.equal(result.rawText,raw,'The source authored by educators remains intact');
+  assert.equal(result.normalizedText,
+    'Саша Ив. — Играла, затем была в палате 503.\n'+
+    'Саша Иг. — Собрала 503 элемента.');
+  assert.deepEqual(result.owners.map(o=>o.index),[0,1]);
+  assert.deepEqual(result.recipients.map(r=>r.phone10),['9000000001','9000000002']);
+  assert.match(result.recipients[0].text,/палате 503/);
+  assert.match(result.recipients[1].text,/503 элемента/);
+  assert.ok(result.recipients.every(r=>!/(^|\n)\s*(?:501|503|512)\s*(\n|$)/.test(r.text)));
+  const restored=planCurrentReport({kind:'morning',rawText:raw,children,
+    profiles:[parent('9000000001','kid_ivanova'),parent('9000000002','kid_ignatieva')],
+    nameVariants:variants,priorBlockOwners:result.owners,storedSource:true});
+  assert.deepEqual(restored.recipients.map(r=>r.text),result.recipients.map(r=>r.text));
+  assert.equal(restored.owners.length,2,'Published owner block indexes remain stable');
+});

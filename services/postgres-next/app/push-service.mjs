@@ -139,6 +139,27 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
     });
     if(!job)return {ok:true,skipped:true};
     if(job.expired)return {ok:true,expired:true};
+    const payload=JSON.parse(job.notification_json||'{}');
+    if(!['chat','report'].includes(payload.type))throw new Error('Unexpected push payload type.');
+    // A retry from message A must not arrive alongside fresh message B with
+    // A's text. Only the most recent ACTIVE message from the same sender in
+    // the SAME conversation may create a new chat notification.
+    // Legacy outbox events without message identity still use expiry guards.
+    if(payload.type==='chat'&&
+      typeof payload._chatMessageKey==='string'&&payload._chatMessageKey&&
+      (payload._chatSide==='parent'||payload._chatSide==='educator')){
+      const [[latest]]=await read(tx=>tx`SELECT message_key FROM chat_messages
+        WHERE phone10=${job.phone10} AND side=${payload._chatSide} AND status=${'active'}
+        ORDER BY created_at DESC,message_key DESC LIMIT 1`);
+      if(!latest||latest.message_key!==payload._chatMessageKey){
+        await write(async tx=>{
+          await tx`UPDATE push_outbox SET status=${'expired'}
+            WHERE event_id=${eventId} AND status=${'processing'}
+              AND attempts=${BigInt(job.attempt)} AND next_attempt_at=${BigInt(job.leaseUntil)}`;
+        });
+        return {ok:true,superseded:true};
+      }
+    }
     const [subscriptions]=await read(tx=>tx`SELECT subscription_id,role,phone10,subscription_json,enabled
       FROM push_subscriptions`);
     const targets=subscriptions.filter(s=>s.enabled&&s.role===job.role&&
@@ -147,9 +168,7 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       ?'NO_EDUCATOR_TARGETS':'NO_PARENT_TARGETS');
     let failed=0,sent=0;
     const attempts=job.attempt;
-    const payload=JSON.parse(job.notification_json||'{}');
-    // All producers use generic notices, never message or patient text.
-    if(!['chat','report'].includes(payload.type))throw new Error('Unexpected push payload type.');
+    // Payload was validated before recipient lookup and stale-message guard.
     const delivered=new Set(Array.isArray(payload._deliveredSubscriptions)
       ?payload._deliveredSubscriptions.filter(x=>typeof x==='string'):[]);
     for(const target of targets) {
@@ -157,7 +176,13 @@ export function createPushService({sql,env=process.env,webpushClient=webpush}) {
       // triggered by another device's temporary push-provider failure.
       if(delivered.has(target.subscription_id))continue;
       try {
-        const notice={...payload,tag:'medsi-'+sha(eventId).slice(0,20)};
+        const tag=typeof payload.threadTag==='string'&&
+          /^medsi-chat-[a-f0-9]{20}$/.test(payload.threadTag)
+          ?payload.threadTag:'medsi-'+sha(eventId).slice(0,20);
+        const notice={...payload,tag};
+        delete notice.threadTag;
+        delete notice._chatMessageKey;
+        delete notice._chatSide;
         delete notice._deliveredSubscriptions;
         await webpushClient.sendNotification(JSON.parse(target.subscription_json),
           JSON.stringify(notice),{TTL:300,timeout:10000});

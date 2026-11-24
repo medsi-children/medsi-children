@@ -50,9 +50,11 @@ function fakeDb({legacy=true,blocked=false,namesake=false,anchor=true,competitor
       if(q.startsWith('SELECT child_id,registered_first_name,surname FROM children'))return [children];
       if(q.startsWith('SELECT child_id,child_name FROM parent_profiles'))return [profiles];
       if(q.startsWith('SELECT base_key,preferred_name,variants_json FROM name_variants'))return [variants];
-      if(q.startsWith('SELECT publication_id,kind,report_date,normalized_text,submitted_at,revision FROM raw_reports'))return [raw];
+      if(q.startsWith('SELECT DISTINCT ON (kind,report_date)')||
+        q.startsWith('SELECT publication_id,kind,report_date,normalized_text,submitted_at,revision FROM raw_reports'))return [raw];
       if(q.startsWith('SELECT owner_key,record_json FROM report_ownership WHERE owner_key LIKE'))return [owners];
-      if(q.startsWith('SELECT kind,report_date,child_id,publication_id,text FROM parent_report_history'))return [
+      if(q.startsWith('SELECT kind,report_date,child_id,publication_id,text,captured_at FROM parent_report_history')||
+        q.startsWith('SELECT kind,report_date,child_id,publication_id,text FROM parent_report_history'))return [
         history.filter(h=>h.phone10===values[0])
       ];
       if(q.startsWith('UPDATE parent_report_history SET child_id=')){

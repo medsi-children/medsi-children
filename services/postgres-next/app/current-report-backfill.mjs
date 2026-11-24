@@ -202,17 +202,6 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // Never overwrite a report for another child or a different source.
         if(priorHistory&&(String(priorHistory.child_id||'')||
           String(priorHistory.publication_id||'')!==String(source.publication_id)))continue;
-        // Temporary diagnostic is constrained to the entirely fictional CI fixture.
-        if(process.env.CI==='true'&&process.env.MEDSI_CURRENT_IDENTITY_TEST==='1'&&
-          String(source.publication_id)==='ci_miron_historical_53'){
-          console.log('CI_EARLIEST_SOURCE',JSON.stringify({
-            count:snapshots.length,at:Number(source.submitted_at),
-            anchors,blocks:blocks.map((block,index)=>({
-              prefix:block.prefix,canonical:block.canonical,
-              pending:saved.get(index)?.pending,owned:saved.get(index)?.childId
-            })),selectedChild:childId,surname:child.surname
-          }));
-        }
         const eligible=blocks.flatMap((b,index)=>{
           const owner=saved.get(index);
           if(owner?.blocked||!b.body.join('\n').trim()||b.canonical!==canonical)return [];
@@ -326,7 +315,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
         // Only a previously pending, uniquely surname-qualified block may
         // extend continuity back another 14 days. Single-letter and legacy
         // unowned guesses never become fresh anchors for still older blocks.
-        if(!owned&&saved.get(index)?.record?.pending&&norm(block.prefix).length>=2)
+        if(!owned&&saved.get(index)?.pending&&norm(block.prefix).length>=2)
           anchors.push(Number(source.submitted_at));
         backfilled++;
       }

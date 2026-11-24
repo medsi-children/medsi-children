@@ -1,6 +1,6 @@
 import {formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {planCurrentReport,currentReportVersion} from './current-report-plan.mjs';
-import {currentStaffPublications,parseCurrentStaffBlocks,canonicalCurrentName,parseCurrentParentChildName} from './current-child-identity.mjs';
+import {parseCurrentStaffBlocks,canonicalCurrentName,parseCurrentParentChildName} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const moscowDate=at=>{
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Moscow',
@@ -8,9 +8,32 @@ const moscowDate=at=>{
   const by=Object.fromEntries(parts.map(x=>[x.type,x.value]));
   return by.year+'-'+by.month+'-'+by.day;
 };
-// Recover only TODAY's latest staff source for a registered child.
-// Previously published blocks are authorized by publication-scoped
-// ownership; a deleted parent's old block is never reissued to a namesake.
+// Recover recent current publication heads after late registration, including
+// an overnight transition. Historical blocks remain in recoverHistory().
+// Ownership is publication-scoped; old namesakes are never reassigned.
+const RECENT_CURRENT_WINDOW_MS=48*60*60*1000;
+// A morning source from today and an evening source from yesterday can both
+// be the active publication heads. Recover only the CURRENT head per kind and
+// only during this short, bounded post-publication window. Ownership is still
+// established independently by the saved block records and child_id.
+export function recentCurrentStaffSources(rows=[],at=Date.now()){
+  const now=Number(at);
+  if(!Number.isFinite(now))return [];
+  const dates=new Set([moscowDate(now),moscowDate(now-86400000)]);
+  const newest=new Map();
+  for(const row of rows||[]){
+    const kind=String(row?.kind||'');
+    if(kind!=='morning'&&kind!=='evening')continue;
+    if(!dates.has(String(row.report_date||'')))continue;
+    const published=Number(row.submitted_at);
+    if(!Number.isFinite(published)||published<=0||now<published||
+      now-published>RECENT_CURRENT_WINDOW_MS)continue;
+    const prior=newest.get(kind);
+    if(!prior||Number(prior.submitted_at)<published)newest.set(kind,row);
+  }
+  return [...newest.values()];
+}
+
 export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
   if(!sql?.begin)throw new Error('PostgreSQL required.');
   async function recover({phone10=''}={}){
@@ -25,7 +48,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           INNER JOIN raw_reports AS r ON r.publication_id=h.publication_id
           WHERE r.kind IN (${'morning'},${'evening'})`
       ]);
-      const sources=currentStaffPublications(raw,moscowDate(now()));
+      const sources=recentCurrentStaffSources(raw,now());
       let backfilled=0;
       for(const source of sources){
         const prefix='CURRENT_BLOCK_'+source.publication_id+'_';

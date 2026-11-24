@@ -1,6 +1,6 @@
 import {createHash} from 'node:crypto';
 import {normalizeCurrentReportPunctuation,formatCurrentParentChildReport} from './current-report-punctuation.mjs';
-import {canonicalCurrentName,parseCurrentStaffBlocks,normalizeCurrentStaffHeaderLine,registeredChildRoster} from './current-child-identity.mjs';
+import {canonicalCurrentName,parseCurrentStaffBlocks,normalizeCurrentStaffHeaderLine,registeredChildRoster,stripCurrentRoomNumberLines} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const norm=v=>String(v||'').normalize('NFC').trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
 const hash=v=>createHash('sha256').update(v,'utf8').digest('hex');
@@ -19,7 +19,8 @@ export function planCurrentReport({kind,rawText,profiles=[],children=[],nameVari
   // Raw text stays exact. Canonical headers make future persisted sources
   // readable by the original ownership grammar without shifting old indexes.
   const normalizedText=kind==='psychology'||storedSource?punctuation:
-    punctuation.split('\n').map(normalizeCurrentStaffHeaderLine).join('\n');
+    stripCurrentRoomNumberLines(punctuation.split('\n')
+      .map(normalizeCurrentStaffHeaderLine).join('\n'));
   const registered=profiles.filter(p=>PHONE.test(String(p.phone10||'')));
   const parentIds=new Set();
   for(const p of registered){

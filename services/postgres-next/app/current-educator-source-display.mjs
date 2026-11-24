@@ -1,5 +1,5 @@
 import {parseCurrentStaffBlocks,shortestCurrentSurnamePrefixes,
-  canonicalCurrentName,stripCurrentRoomNumberLines} from './current-child-identity.mjs';
+  canonicalCurrentName,isCurrentRoomNumberLine} from './current-child-identity.mjs';
 const HEADER=/^(\s*)([\p{L}-]{2,70})(?:[ \t]+([\p{L}-]{1,100})\.?)?([ \t]*[:：—–-][ \t]*)(.*)$/u;
 const norm=v=>String(v||'').trim().toLocaleLowerCase('ru-RU').replace(/ё/g,'е');
 // Display-only retrospective expansion: use the owner on THIS publication,
@@ -40,7 +40,5 @@ export function displayCurrentStaffSource({rawText,children=[],profiles=[],
     return m[1]+name+' '+unique+m[4]+m[5];
   // Filter only after mapping: original line indexes are used to resolve
   // immutable block-owner positions in already-published source reports.
-  }).join('\n').split('\n').filter(line=>{
-    return stripCurrentRoomNumberLines(line)!==''||line==='';
-  }).join('\n');
+  }).filter(line=>!isCurrentRoomNumberLine(line)).join('\n');
 }

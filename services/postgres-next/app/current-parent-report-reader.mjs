@@ -82,7 +82,7 @@ export function createCurrentParentReportReader(sql,{now=()=>Date.now()}={}){
       return {ok:true,reports:rows.filter(r=>(r.kind==='psychology')||
           childId&&CHILD_KINDS.has(r.kind)&&same(r.child_id,childId))
         .sort((a,b)=>String(b.report_date).localeCompare(String(a.report_date))||
-          (order[a.kind]??9)-(order[b.kind]??9)).slice(0,180)
+          (order[a.kind]??9)-(order[b.kind]??9))
         .map(r=>({kind:r.kind,reportDate:r.report_date,text:r.kind==='psychology'?normalizeCurrentReportPunctuation(r.text||''):
             formatCurrentParentChildReport(normalizeCurrentReportPunctuation(r.text||'')),
           capturedAt:stamp(r.captured_at)}))};

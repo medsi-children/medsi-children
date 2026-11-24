@@ -363,3 +363,20 @@ test('parent bootstrap provides a safe manual restart after partial script execu
   button.onclick();
   assert.equal(restart,1,'An incomplete app must restart rather than re-run its guarded script');
 });
+
+test('photo viewer close crosses stay centered regardless of iOS glyph baseline',()=>{
+  const parent=fs.readFileSync(path.join(root,'parents/chat-screen.css'),'utf8');
+  const gallery=fs.readFileSync(path.join(root,'chat-overlay/gallery-ui.css'),'utf8');
+  const parentHtml=fs.readFileSync(path.join(root,'index.html'),'utf8');
+  const educatorHtml=fs.readFileSync(path.join(root,'tutors.html'),'utf8');
+  for(const [css,selector] of [[parent,'.parent-chat-lightbox-close'],[gallery,'.medsi-gallery-lightbox-close']]){
+    assert.match(css,new RegExp(selector.replace(/\./g,'\\.')+'\\{appearance:none;box-sizing:border-box;padding:0!important;font-size:0!important;line-height:0!important\\}'));
+    for(const pseudo of ['before','after']){
+      assert.match(css,new RegExp(selector.replace(/\./g,'\\.')+'::'+pseudo+'\\{transform:translate\\(-50%,-50%\\) rotate\\('));
+    }
+    assert.match(css,/left:50%;top:50%/);
+  }
+  assert.match(parentHtml,/parents\/chat-screen\.css\?v=20261124-close-center-1/);
+  assert.match(parentHtml,/chat-overlay\/gallery-ui\.css\?v=20261124-close-center-1/);
+  assert.match(educatorHtml,/chat-overlay\/gallery-ui\.css\?v=20261124-close-center-1/);
+});

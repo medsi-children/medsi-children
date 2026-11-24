@@ -34,3 +34,9 @@ body[data-screen="screenChat"] #chips{display:none!important}
 @media(max-width:560px){#screenChat{height:calc(100dvh - 56px);min-height:0}.parent-chat-note{padding:13px 14px;font-size:.82rem}.parent-chat-note strong{font-size:.88rem}.parent-chat-chip{font-size:.82rem;padding:6px 10px}.parent-chat-msg{max-width:88%;min-width:130px}.parent-chat-media-frame{width:min(310px,72vw);aspect-ratio:4/5}}
 
 .parent-chat-error.is-reconnecting{background:#f1fbfc;border-color:#c4edf0;color:#65858d}
+
+/* Stable X position on iOS: two centered strokes, independent of font glyph baseline. */
+.parent-chat-lightbox-close{appearance:none;box-sizing:border-box;padding:0!important;font-size:0!important;line-height:0!important}
+.parent-chat-lightbox-close::before,.parent-chat-lightbox-close::after{content:'';position:absolute;left:50%;top:50%;width:20px;height:2.5px;border-radius:2px;background:currentColor;pointer-events:none}
+.parent-chat-lightbox-close::before{transform:translate(-50%,-50%) rotate(45deg)}
+.parent-chat-lightbox-close::after{transform:translate(-50%,-50%) rotate(-45deg)}

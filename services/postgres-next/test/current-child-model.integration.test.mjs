@@ -6,6 +6,7 @@ import {probePostgresNext} from '../src/probe-cli.mjs';
 import {createCurrentParentRegistrationService} from '../app/current-parent-registration.mjs';
 import {createCurrentReportPublisher} from '../app/current-report-publications.mjs';
 import {createCurrentParentReportReader} from '../app/current-parent-report-reader.mjs';
+import {createCurrentEducatorDashboardStore} from '../app/current-educator-dashboard.mjs';
 import {createCurrentReportBackfill} from '../app/current-report-backfill.mjs';
 import {currentStaffPublications} from '../app/current-child-identity.mjs';
 import {planCurrentReport} from '../app/current-report-plan.mjs';
@@ -359,6 +360,79 @@ test('admission-free end-to-end: parent timing, two parents, namesakes, therapy 
     const [[restoredIndex]]=await sql`SELECT indexdef FROM pg_indexes
       WHERE indexname=${'parent_directory_phone_idx'}`;
     assert.match(restoredIndex.indexdef,/CREATE UNIQUE INDEX/i);
+    // A parent can register the NEXT Moscow day, when the last published
+    // morning and evening heads are yesterday. A source-only child stays
+    // unclaimed until the qualified first name/surname-prefix registration.
+    // All identities and reports here are synthetic disposable CI data.
+    clock+=2000;
+    const overnightMorning=await publish('morning',
+      'Степан Ме. — Синтетический блок существующего ребёнка.\n'+
+      'Мирон Фо. — Синтетический утренний отчёт нового ребёнка.',
+      'ci_overnight_morning_0001');
+    assert.equal(overnightMorning.status,'published');
+    clock+=2000;
+    const overnightEvening=await publish('evening',
+      'Степан Ме. — Синтетическое вечернее наблюдение.\n'+
+      'Мирон Фо. — Синтетический вечерний отчёт нового ребёнка.',
+      'ci_overnight_evening_0001');
+    assert.equal(overnightEvening.status,'published');
+    const [[unclaimedMorning]]=await sql`SELECT record_json FROM report_ownership
+      WHERE owner_key=${'CURRENT_BLOCK_'+overnightMorning.publicationId+'_1'}`;
+    assert.equal(JSON.parse(unclaimedMorning.record_json).pending,true);
+    // Pending historical blocks can be recovered from the earliest
+    // preserved publication by walking a uniquely surname-qualified chain.
+    // No old recipient is guessed from a bare first name.
+    const veryEarlySources=[];
+    for(const daysAgo of [53,40,27,14]){
+      const at=clock-daysAgo*86400000;
+      const date=new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
+        year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(at));
+      const sourceId='ci_miron_historical_'+daysAgo;
+      const original='Мирон Фо. — Синтетический отчёт за '+daysAgo+' дней до регистрации.';
+      await sql.upsert`INSERT INTO raw_reports
+        (publication_id,kind,report_date,raw_text,normalized_text,author_id,submitted_at,revision)
+        VALUES (${sourceId},${'morning'},${date},${original},${original},
+          ${'educator_ci_v2_0001'},${BigInt(at)},${1n})`;
+      await sql.upsert`INSERT INTO report_ownership
+        (owner_key,record_json,updated_at)
+        VALUES (${'CURRENT_BLOCK_'+sourceId+'_0'},
+          ${JSON.stringify({childId:'',pending:true,blocked:false})},${BigInt(at)})`;
+      veryEarlySources.push({date,daysAgo,sourceId});
+    }
+    const [[pushBeforeLateRegistration]]=await sql`SELECT count(*)::int AS n FROM push_outbox`;
+    // The registration happens 24 hours later. It must not require the
+    // educator to republish yesterday's reports.
+    clock+=86400000;
+    const latePhone='9991000044';
+    const late=await signup('8'+latePhone,'Мирон Фомин','reg_current_overnight_0001');
+    assert.equal(late.ok,true);
+    const [[lateProfile]]=await sql`SELECT child_id FROM parent_profiles WHERE phone10=${latePhone}`;
+    assert.ok(lateProfile?.child_id);
+    const lateCurrent=await reader.current(latePhone);
+    assert.equal(lateCurrent.unlinked,false);
+    assert.deepEqual(lateCurrent.reports.filter(r=>['morning','evening'].includes(r.kind))
+      .map(r=>r.kind).sort(),['evening','morning']);
+    assert.match(lateCurrent.reports.find(r=>r.kind==='morning').text,
+      /Синтетический утренний отчёт нового ребёнка/);
+    assert.match(lateCurrent.reports.find(r=>r.kind==='evening').text,
+      /Синтетический вечерний отчёт нового ребёнка/);
+    const educatorDashboard=await createCurrentEducatorDashboardStore(sql).readForEducator();
+    const lateCard=educatorDashboard.children.find(c=>c.childId===lateProfile.child_id);
+    assert.ok(lateCard);
+    assert.match(lateCard.parentViews[0].reports.morning,/Синтетический утренний отчёт/);
+    assert.match(lateCard.parentViews[0].reports.evening,/Синтетический вечерний отчёт/);
+    const recoveredHistory=await reader.history(latePhone);
+    for(const {date,daysAgo} of veryEarlySources){
+      const found=recoveredHistory.reports.find(r=>r.reportDate===date&&r.kind==='morning');
+      assert.ok(found,'Report must be safely restored even '+daysAgo+' days before signup');
+      assert.match(found.text,new RegExp('за '+daysAgo+' дней до регистрации'));
+    }
+    assert.equal(recoveredHistory.reports.some(r=>r.text.includes('Чужое наблюдение')),false);
+    // Re-running the repair is idempotent and does not republish content.
+    assert.equal((await createCurrentReportBackfill(sql,{now}).recoverHistory({phone10:latePhone})).backfilled,0);
+    const [[pushAfterLateRegistration]]=await sql`SELECT count(*)::int AS n FROM push_outbox`;
+    assert.equal(pushAfterLateRegistration.n,pushBeforeLateRegistration.n,
+      'backfill never queues historic report push notifications');
     assert.equal((await probePostgresNext(env)).schemaReady,true);
     assert.deepEqual(await checkCurrentChildSchema(sql),{ok:true});
   }finally{await conn.driver.close()}

@@ -1,6 +1,6 @@
 import {formatCurrentParentChildReport} from './current-report-punctuation.mjs';
 import {planCurrentReport,currentReportVersion} from './current-report-plan.mjs';
-import {currentStaffPublications,parseCurrentStaffBlocks,canonicalCurrentName,parseCurrentParentChildName} from './current-child-identity.mjs';
+import {parseCurrentStaffBlocks,canonicalCurrentName,parseCurrentParentChildName} from './current-child-identity.mjs';
 const PHONE=/^\d{10}$/;
 const moscowDate=at=>{
   const parts=new Intl.DateTimeFormat('en-GB',{timeZone:'Europe/Moscow',
@@ -8,9 +8,24 @@ const moscowDate=at=>{
   const by=Object.fromEntries(parts.map(x=>[x.type,x.value]));
   return by.year+'-'+by.month+'-'+by.day;
 };
-// Recover only TODAY's latest staff source for a registered child.
-// Previously published blocks are authorized by publication-scoped
-// ownership; a deleted parent's old block is never reissued to a namesake.
+// Recover recent current publication heads after late registration, including
+// an overnight transition. Historical blocks remain in recoverHistory().
+// Ownership is publication-scoped; old namesakes are never reassigned.
+// The publication-head query already returns the authoritative latest source
+// for each kind. Report age must not hide the last published report from a
+// newly linked parent. Identity and immutable block ownership still gate each
+// delivery, with no repost or push event.
+export function currentHeadStaffSources(rows=[]){
+  const newest=new Map();
+  for(const row of rows||[]){
+    const kind=String(row?.kind||'');
+    if(kind!=='morning'&&kind!=='evening')continue;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(String(row.report_date||'')))continue;
+    const prior=newest.get(kind);
+    if(!prior||Number(row.submitted_at)>Number(prior.submitted_at))newest.set(kind,row);
+  }
+  return [...newest.values()];
+}
 export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
   if(!sql?.begin)throw new Error('PostgreSQL required.');
   async function recover({phone10=''}={}){
@@ -25,7 +40,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           INNER JOIN raw_reports AS r ON r.publication_id=h.publication_id
           WHERE r.kind IN (${'morning'},${'evening'})`
       ]);
-      const sources=currentStaffPublications(raw,moscowDate(now()));
+      const sources=currentHeadStaffSources(raw);
       let backfilled=0;
       for(const source of sources){
         const prefix='CURRENT_BLOCK_'+source.publication_id+'_';
@@ -109,20 +124,24 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
   async function recoverHistory({phone10}={}){
     if(!PHONE.test(String(phone10||'')))throw new Error('Invalid phone.');
     const today=moscowDate(now());
-    const cutoff=moscowDate(now()-45*86400000);
     return sql.begin({isolation:'serializableReadWrite',idempotent:true},async tx=>{
       const [[[profile]],[children],[allProfiles],[variants],[raw],[ownership],[existing]]=await Promise.all([
         tx`SELECT child_id FROM parent_profiles WHERE phone10=${phone10}`,
         tx`SELECT child_id,registered_first_name,surname FROM children`,
         tx`SELECT child_id,child_name FROM parent_profiles`,
         tx`SELECT base_key,preferred_name,variants_json FROM name_variants`,
-        tx`SELECT publication_id,kind,report_date,normalized_text,submitted_at,revision
+        // A child can register days or weeks after the first report.
+        // Keep the last publication of each kind/day without an artificial
+        // 45-day or 240-row truncation. Historical attribution is decided
+        // per block, never from a filename or first-name match alone.
+        tx`SELECT DISTINCT ON (kind,report_date)
+          publication_id,kind,report_date,normalized_text,submitted_at,revision
           FROM raw_reports WHERE kind IN (${'morning'},${'evening'})
-            AND report_date>=${cutoff} AND report_date<=${today}
-          ORDER BY submitted_at DESC LIMIT 240`,
+            AND report_date<=${today}
+          ORDER BY kind,report_date,submitted_at DESC,revision DESC`,
         tx`SELECT owner_key,record_json FROM report_ownership
           WHERE owner_key LIKE ${'CURRENT\\_BLOCK\\_%'}`,
-        tx`SELECT kind,report_date,child_id,publication_id,text FROM parent_report_history WHERE phone10=${phone10}`
+        tx`SELECT kind,report_date,child_id,publication_id,text,captured_at FROM parent_report_history WHERE phone10=${phone10}`
       ]);
       const childId=String(profile?.child_id||'');
       const child=children.find(c=>String(c.child_id)===childId);
@@ -144,31 +163,44 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           (Number(source.submitted_at)===Number(older.submitted_at)&&
            Number(source.revision)>Number(older.revision)))latest.set(key,source);
       }
-      const snapshots=[];
-      for(const source of latest.values()){
-        const prefix='CURRENT_BLOCK_'+source.publication_id+'_';
-        const saved=new Map(),originals=new Map();
-        for(const row of ownership){
-          if(!String(row.owner_key).startsWith(prefix))continue;
-          const index=Number(String(row.owner_key).slice(prefix.length));
-          if(!Number.isSafeInteger(index)||index<0)continue;
-          let record;
-          try{record=JSON.parse(String(row.record_json||''))}catch{record={blocked:true}}
-          saved.set(index,record);
-          originals.set(index,{key:row.owner_key,raw:row.record_json});
-        }
-        snapshots.push({source,saved,originals,
-          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants,{stored:true})});
+      // Index saved ownership once by publication. A long archive might
+      // contain thousands of blocks: scanning ALL owner rows for EACH source
+      // on every parent report request would make the page increasingly slow.
+      const ownersBySource=new Map();
+      for(const row of ownership){
+        const match=/^CURRENT_BLOCK_(.+)_(\d+)$/.exec(String(row.owner_key||''));
+        if(!match)continue;
+        const index=Number(match[2]);
+        if(!Number.isSafeInteger(index)||index<0)continue;
+        let entry=ownersBySource.get(match[1]);
+        if(!entry){entry={saved:new Map(),originals:new Map()};ownersBySource.set(match[1],entry)}
+        let record;
+        try{record=JSON.parse(String(row.record_json||''))}catch{record={blocked:true}}
+        entry.saved.set(index,record);
+        entry.originals.set(index,{key:row.owner_key,raw:row.record_json});
       }
-      // Only existing child-scoped deliveries and explicit block owners
-      // establish continuity. A newly guessed block never anchors another.
+      const snapshots=[];
+      // Newest first lets safely recovered pending blocks anchor earlier ones.
+      const chronological=[...latest.values()].sort((a,b)=>
+        Number(b.submitted_at||0)-Number(a.submitted_at||0)||
+        Number(b.revision||0)-Number(a.revision||0));
+      for(const source of chronological){
+        const entry=ownersBySource.get(String(source.publication_id));
+        snapshots.push({
+          source,saved:entry?.saved||new Map(),originals:entry?.originals||new Map(),
+          blocks:parseCurrentStaffBlocks(source.normalized_text||'',variants,{stored:true})
+        });
+      }
+      // A saved child-scoped delivery or explicit publication block owner is
+      // a trusted continuity anchor. Earlier pending blocks need surname
+      // evidence AND a nearby anchor, never an unrelated first-name match.
       const anchors=[...new Set([
         ...snapshots.filter(({saved})=>[...saved.values()].some(r=>
           r&&!r.blocked&&String(r.childId||'')===childId))
-          .map(({source})=>Date.parse(source.report_date+'T00:00:00Z')),
+          .map(({source})=>Number(source.submitted_at)),
         ...existing.filter(r=>String(r.child_id||'')===childId)
-          .map(r=>Date.parse(String(r.report_date)+'T00:00:00Z'))
-      ].filter(Number.isFinite))];
+          .map(r=>Number(r.captured_at)||Date.parse(String(r.report_date)+'T00:00:00Z'))
+      ].filter(t=>Number.isFinite(t)&&t>0))];
       let backfilled=0;
       for(const {source,saved,originals,blocks} of snapshots){
         const kind=String(source.kind),date=String(source.report_date);
@@ -192,15 +224,15 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           // Bare first names and conflicting namesakes remain unclaimed.
           const surnamePrefix=norm(b.prefix);
           if(!surnamePrefix||!norm(child.surname).startsWith(surnamePrefix))return [];
-          const day=Date.parse(date+'T00:00:00Z'),horizon=14*86400000;
-          const future=anchors.filter(at=>at>day&&at-day<=horizon);
+          const publishedAt=Number(source.submitted_at),horizon=14*86400000;
+          const future=anchors.filter(at=>at>publishedAt&&at-publishedAt<=horizon);
           if(!future.length)return [];
           // An unowned legacy source has no historical claim snapshot. For
           // a single initial require two distinct already verified report
           // dates, rather than trusting one later occurrence of the name.
           if(!owner&&surnamePrefix.length===1&&future.length<2)return [];
           if(surnamePrefix.length===1&&
-            !future.some(at=>at-day<=7*86400000)&&future.length<2)return [];
+            !future.some(at=>at-publishedAt<=7*86400000)&&future.length<2)return [];
           const peers=blocks.filter(x=>x.canonical===canonical);
           if(peers.some(x=>!x.prefix)||peers.some(x=>x!==b&&
             (x.prefix===b.prefix||norm(x.prefix).startsWith(surnamePrefix)||
@@ -221,8 +253,8 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
           // Historical ownership of this initial by another child nearby
           // is stronger evidence than the currently linked family's name.
           if(snapshots.some(({source:other,saved:otherOwners,blocks:otherBlocks})=>{
-            const at=Date.parse(String(other.report_date)+'T00:00:00Z');
-            return Math.abs(at-day)<=horizon&&otherBlocks.some((otherBlock,i)=>
+            const at=Number(other.submitted_at);
+            return Number.isFinite(at)&&Math.abs(at-publishedAt)<=horizon&&otherBlocks.some((otherBlock,i)=>
               otherBlock.canonical===canonical&&
               norm(otherBlock.prefix).startsWith(surnamePrefix)&&
               otherOwners.get(i)?.childId&&
@@ -287,6 +319,11 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
               ${BigInt(source.revision||1)},${text},${at})`;
         }
         existingByDay.set(kind+'/'+date,{child_id:childId,publication_id:source.publication_id});
+        // Only a previously pending, uniquely surname-qualified block may
+        // extend continuity back another 14 days. Single-letter and legacy
+        // unowned guesses never become fresh anchors for still older blocks.
+        if(!owned&&saved.get(index)?.pending&&norm(block.prefix).length>=2)
+          anchors.push(Number(source.submitted_at));
         backfilled++;
       }
       return {ok:true,backfilled};

@@ -62,7 +62,7 @@ test('open thread shows the same three-line child-first identity',()=>{
     'Аня Иванова','Мама Тамара','Телефон: +79000000001']);
   assert.equal(wrapper.children.length,1);
   assert.equal(wrapper.children[0].className,'chat-identity-details');
-  assert.match(main,/author\.textContent=m\.side==='parent'[\s\S]*?shortName\(activeChat\.parentName\)/);
+  assert.match(main,/author\.textContent=m\.side==='parent'[\s\S]*?activeChat\?\.relationship[\s\S]*?shortName\(activeChat\?\.parentName\)/);
 });
 
 test('new chat picker uses the same parent/child detail labels',()=>{
@@ -85,7 +85,7 @@ test('new chat picker uses the same parent/child detail labels',()=>{
 });
 
 test('educator chat scripts have fresh cache keys, unrelated identity API remains intact',()=>{
-  assert.match(html,/educator-chat\.js\?v=20261117-reply-excerpt-1/);
+  assert.match(html,/educator-chat\.js\?v=20261124-role-label-1/);
   assert.match(html,/educator-new-chat\.js\?v=20261111-short-labels-1/);
   const backend=read('services/postgres-next/app/chat-operations.mjs');
   assert.match(backend,/childName:\[child\.registered_first_name,child\.surname\]/);
@@ -127,6 +127,34 @@ test('quoted replies finish on complete words and show ellipsis, including long 
   assert.match(css,/-webkit-line-clamp:4/);
   assert.match(css,/font-size:\.85rem/);
   assert.match(css,/word-break:normal/);
-  assert.match(html,/educator-chat\.js\?v=20261117-reply-excerpt-1/);
+  assert.match(html,/educator-chat\.js\?v=20261124-role-label-1/);
   assert.match(html,/educator-exact\.css\?v=20261117-reply-excerpt-1/);
+});
+
+test('author of every parent message uses exactly the same role and first name as chat header',()=>{
+  const shortName=getShortName(main);
+  const from=main.indexOf('    function renderThreadHeader(chat){');
+  const to=main.indexOf('    function threadWithTimeout(',from);
+  assert.ok(from>=0&&to>from);
+  const makeHeader=new Function('chatThreadHeader','document','shortName','displayPhone',
+    main.slice(from,to)+'\nreturn renderThreadHeader;');
+  const start=main.indexOf("      author.textContent=m.side==='parent'",main.indexOf('    function messageNode('));
+  const end=main.indexOf('      el.appendChild(author);',start);
+  assert.ok(start>=0&&end>start,'Message author expression remains available');
+  const renderAuthor=new Function('m','activeChat','shortName',
+    'const author={textContent:""};\n'+main.slice(start,end)+'\nreturn author.textContent;');
+  for(const [chat,expected] of [
+    [{childName:'Синтетический ребёнок',parentName:'Ирина Тестовая',relationship:'Мама',phone:'9000000001'},'Мама Ирина'],
+    [{childName:'Синтетический ребёнок',parentName:'Алексей Тестовый',relationship:'Папа',phone:'9000000002'},'Папа Алексей'],
+    [{childName:'Синтетический ребёнок',parentName:'Александр Тестовый',relationship:'Родитель',phone:'9000000003'},'Родитель Александр'],
+    [{childName:'Синтетический ребёнок',parentName:'Мария Тестовая',phone:'9000000004'},'Родитель Мария']
+  ]){
+    const container=makeElement('div');
+    makeHeader(container,{createElement:makeElement},shortName,displayPhone)(chat);
+    const label=container.children[0].children[1].textContent;
+    assert.equal(label,expected);
+    assert.equal(renderAuthor({side:'parent'},chat,shortName),label,
+      'Existing and new parent messages must match the header role exactly');
+    assert.equal(renderAuthor({side:'educator'},chat,shortName),'Детское Отделение Медси');
+  }
 });

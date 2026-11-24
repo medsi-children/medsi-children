@@ -168,7 +168,7 @@ export function createCurrentReportBackfill(sql,{now=()=>Date.now()}={}){
       // on every parent report request would make the page increasingly slow.
       const ownersBySource=new Map();
       for(const row of ownership){
-        const match=/^CURRENT_BLOCK_(.+)_(\\d+)$/.exec(String(row.owner_key||''));
+        const match=/^CURRENT_BLOCK_(.+)_(\d+)$/.exec(String(row.owner_key||''));
         if(!match)continue;
         const index=Number(match[2]);
         if(!Number.isSafeInteger(index)||index<0)continue;

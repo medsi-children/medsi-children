@@ -62,7 +62,7 @@ var MedsiReportValidation = (function() {
       .replace(/^[^\p{L}\p{N}]+/u, '').trimStart();
     // Only an explicit colon or dash starts a block. Bare name mentions are prose.
     const match = /^([А-ЯЁ][а-яё]+)(?:[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]+([А-ЯЁ](?:[а-яё]+)?\.?))?[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*[:：\-–—]/iu.exec(withoutRoom);
-    const actual = match || /^([А-ЯЁ][а-яё]+)[ \t]+([А-ЯЁ])\.[ \t]*,[ \t]*(?:[1-9]|1[0-7])[ \t]+(?:лет|года|год)\.[ \t]+\S/iu.exec(withoutRoom);
+    const actual = match || /^([А-ЯЁ][а-яё]+)[ \t]+([А-ЯЁ][а-яё]{0,5})\.[ \t]*,[ \t]*(?:[1-9]|1[0-7])[ \t]+(?:лет|года|год)\.[ \t]+\S/iu.exec(withoutRoom);
     if (!actual || serviceNames.has(key(actual[1]))) return null;
     const base = key(actual[1]);
     return {

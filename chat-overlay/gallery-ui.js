@@ -41,7 +41,19 @@
       if(item.type==='video'){medium.controls=true;medium.preload='metadata';medium.playsInline=true}
       else medium.alt='Фотография '+(index+1)+' из '+items.length;
       const status=document.createElement('button');status.type='button';
-      status.className='medsi-gallery-load-status';status.textContent='Загрузка…';status.disabled=true;
+      status.className='medsi-gallery-load-status';
+      const setLoading=()=>{
+        status.disabled=true;status.classList.remove('is-error');status.replaceChildren();
+        const spinner=document.createElement('span');spinner.className='medsi-gallery-spinner';
+        spinner.setAttribute('aria-hidden','true');status.append(spinner);
+        status.setAttribute('aria-label','Загрузка вложения');
+      };
+      const setError=()=>{
+        status.disabled=false;status.classList.add('is-error');
+        status.textContent='Не удалось загрузить. Повторить';
+        status.setAttribute('aria-label','Не удалось загрузить вложение. Повторить');
+      };
+      setLoading();
       let thumbnail=null;
       if(item.type==='image'&&typeof transport.mediaPreviewUrl==='function'){
         thumbnail=document.createElement('img');thumbnail.alt=medium.alt;
@@ -52,8 +64,8 @@
       picture.append(medium,status);
       const loaded=()=>{thumbnail?.remove();medium.style.display='';status.remove();};
       medium.onload=loaded;medium.onloadeddata=loaded;
-      medium.onerror=()=>{status.disabled=false;status.textContent='Не удалось загрузить. Повторить';};
-      status.onclick=()=>{status.disabled=true;status.textContent='Загрузка…';medium.src=url;};
+      medium.onerror=setError;
+      status.onclick=()=>{setLoading();medium.src=url;};
       medium.src=url;
       counter.textContent=(index+1)+' / '+items.length;
       before.disabled=index===0;after.disabled=index===items.length-1;
@@ -92,17 +104,31 @@
       if(item.type==='video'){media.preload='none';media.muted=true;media.playsInline=true}
       else {media.alt='';media.loading='lazy';media.decoding='async';}
       let attempts=0;
-      const note=document.createElement('span');note.className='medsi-gallery-tile-status';note.textContent='Загрузка…';
-      btn.append(note);
-      media.onload=()=>note.remove();
+      const note=document.createElement('span');note.className='medsi-gallery-tile-status';
+      note.setAttribute('role','status');
+      const tileLoading=()=>{
+        note.classList.remove('is-error','is-video');note.replaceChildren();
+        const spinner=document.createElement('span');spinner.className='medsi-gallery-spinner';
+        spinner.setAttribute('aria-hidden','true');note.append(spinner);
+        note.setAttribute('aria-label','Загрузка вложения');
+      };
+      const tileError=()=>{
+        note.classList.add('is-error');note.textContent='Открыть фото';
+        note.setAttribute('aria-label','Не удалось загрузить. Откройте фото для повтора');
+      };
+      if(item.type==='image'){tileLoading();btn.append(note);}
+      media.onload=()=>{if(item.type==='image')note.remove();};
       media.onerror=()=>{
         if(attempts++<1){setTimeout(()=>{media.src=previewUrl;},700);return;}
-        note.textContent='Открыть фото';
+        tileError();
       };
       const previewUrl=item.type==='image'&&typeof transport.mediaPreviewUrl==='function'
         ?transport.mediaPreviewUrl(item.fileId):transport.mediaUrl(item.fileId);
       media.src=previewUrl;
-      if(item.type==='video')note.textContent='Видео';
+      if(item.type==='video'){
+        note.classList.add('is-video');note.textContent='Видео';
+        note.setAttribute('aria-label','Видео');btn.append(note);
+      }
       btn.append(media);
       if(item.type==='video'){const symbol=document.createElement('span');symbol.className='medsi-gallery-play';symbol.textContent='▶';btn.append(symbol)}
       btn.addEventListener('click',event=>{event.stopPropagation();event.preventDefault();open(items,index,transport)});

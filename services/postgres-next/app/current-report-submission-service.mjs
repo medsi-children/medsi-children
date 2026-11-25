@@ -15,6 +15,8 @@ export function createCurrentReportSubmissionService(sql,{queuePush=true}={}){
     }
     const result=await publisher.publish({kind,rawText,submissionId,authorId,submittedAt,
       correctionOf,clarification});
+    // A superseded attempt wrote no source or receipt; never report success.
+    if(result.status==='superseded')throw new Error('Report source changed. Reload before sending.');
     return {ok:true,...result,validation:{ok:true,
       ambiguousNames:[],skippedBlocks:Number(result.unresolvedBlocks||0)}};
   }

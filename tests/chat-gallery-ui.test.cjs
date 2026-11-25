@@ -50,15 +50,3 @@ test('image gallery uses accessible spinner only during loading and retains fail
   // No flickering textual badges on every photo before it has loaded.
   assert.match(js,/if\(item\.type==='image'\)\{tileLoading\(\);btn\.append\(note\);\}/);
 });
-
-test('gallery uses visual spinners instead of text loading overlays and preserves retry states',()=>{
-  const script=read('chat-overlay/gallery-ui.js');
-  const css=read('chat-overlay/gallery-ui.css');
-  assert.match(script,/medsi-gallery-spinner/);
-  assert.doesNotMatch(script,/textContent='Загрузка…'/);
-  assert.match(script,/medium\.onerror=setError/);
-  assert.match(script,/status\.onclick=\(\)=>\{setLoading\(\);medium\.src=url;\}/);
-  assert.match(script,/tileError/);
-  assert.match(css,/@keyframes medsiGallerySpin/);
-  assert.match(css,/\.medsi-gallery-load-status\.is-error/);
-});

@@ -127,3 +127,25 @@ test('published and recovered reports exclude isolated ward labels but keep mean
   assert.deepEqual(restored.recipients.map(r=>r.text),result.recipients.map(r=>r.text));
   assert.equal(restored.owners.length,2,'Published owner block indexes remain stable');
 });
+
+
+test('age-style child header distributes only to a unique matching child',()=>{
+  const raw='Степан: Синтетическая запись первого ребёнка.\n'+
+    '❗️Саша Иг., 12 лет. Синтетическая запись второго ребёнка.';
+  const result=plan(raw);
+  assert.equal(result.rawText,raw);
+  assert.match(result.normalizedText,/Саша Иг\.: 12 лет\. Синтетическая запись/);
+  assert.deepEqual(result.recipients.map(r=>r.phone10),['9000000003','9000000002']);
+  assert.match(result.recipients[1].text,/12 лет\. Синтетическая запись второго ребёнка/);
+  assert.doesNotMatch(result.recipients[0].text,/второго ребёнка/);
+});
+
+test('ambiguous and absent age headings are separated and never auto-assigned',()=>{
+  const uncertain=plan('Саша И., 12 лет. Синтетическое наблюдение.');
+  assert.equal(uncertain.recipients.length,0);
+  const other=plan('Степан: Синтетическая запись.\n'+
+    'Мария Г., 12 лет. Отдельное синтетическое наблюдение.');
+  assert.deepEqual(other.recipients.map(r=>r.phone10),['9000000003']);
+  assert.doesNotMatch(other.recipients[0].text,/Мария|Отдельное/);
+  assert.equal(other.owners.length,2);
+});

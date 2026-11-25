@@ -62,11 +62,12 @@ var MedsiReportValidation = (function() {
       .replace(/^[^\p{L}\p{N}]+/u, '').trimStart();
     // Only an explicit colon or dash starts a block. Bare name mentions are prose.
     const match = /^([А-ЯЁ][а-яё]+)(?:[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]+([А-ЯЁ](?:[а-яё]+)?\.?))?[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*[:：\-–—]/iu.exec(withoutRoom);
-    if (!match || serviceNames.has(key(match[1]))) return null;
-    const base = key(match[1]);
+    const actual = match || /^([А-ЯЁ][а-яё]+)[ \t]+([А-ЯЁ])\.[ \t]*,[ \t]*(?:[1-9]|1[0-7])[ \t]+(?:лет|года|год)\.[ \t]+\S/iu.exec(withoutRoom);
+    if (!actual || serviceNames.has(key(actual[1]))) return null;
+    const base = key(actual[1]);
     return {
-      name:match[1], base, group:groupByName.get(base) || base,
-      suffix:key(match[2]), label:match[1] + (match[2] ? ' ' + match[2] : ''),
+      name:actual[1], base, group:groupByName.get(base) || base,
+      suffix:key(actual[2]), label:actual[1] + (actual[2] ? ' ' + actual[2] : ''),
       line:lineNumber
     };
   }

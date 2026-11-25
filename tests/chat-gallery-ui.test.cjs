@@ -20,14 +20,33 @@ test('browser and server use one compact ten-media gallery payload',()=>{
 test('both chat clients load shared gallery and can upload ten files',()=>{
   const tutor=read('tutors.html'),parent=read('index.html');
   const educator=read('chat-overlay/educator-chat.js'),chat=read('parents/chat-screen.js');
-  assert.match(tutor,/gallery-ui\.js\?v=20261119-media-10-1/);
-  assert.match(tutor,/gallery-ui\.css\?v=20261119-media-10-1/);
-  assert.match(parent,/gallery-ui\.js\?v=20261119-media-10-1/);
-  assert.match(parent,/gallery-ui\.css\?v=20261119-media-10-1/);
+  assert.match(tutor,/gallery-ui\.js\?v=20261125-spinner-1/);
+  assert.match(tutor,/gallery-ui\.css\?v=20261125-spinner-1/);
+  assert.match(parent,/gallery-ui\.js\?v=20261125-spinner-1/);
+  assert.match(parent,/gallery-ui\.css\?v=20261125-spinner-1/);
   assert.match(parent,/id="parentChatFile"[^>]*multiple/);
   assert.match(educator,/fileInput\.multiple=true/);
   assert.match(educator,/MedsiChatGallery\.pack\(uploaded\)/);
   assert.match(chat,/MedsiChatGallery\.pack\(uploaded\)/);
   assert.match(chat,/MedsiChatGallery\.render\(m\.fileId,t\)/);
   assert.match(educator,/MedsiChatGallery\.render\(m\.fileId,window\.MedsiOverlayTransport\)/);
+});
+
+
+test('image gallery uses accessible spinner only during loading and retains failure retry',()=>{
+  const js=read('chat-overlay/gallery-ui.js');
+  const css=read('chat-overlay/gallery-ui.css');
+  assert.doesNotMatch(js,/textContent='Загрузка…'/);
+  assert.match(js,/const setLoading=\(\)=>/);
+  assert.match(js,/const tileLoading=\(\)=>/);
+  assert.match(js,/className='medsi-gallery-spinner'/);
+  assert.match(js,/setAttribute\('aria-label','Загрузка вложения'\)/);
+  assert.match(js,/status\.onclick=\(\)=>\{setLoading\(\);medium\.src=url;\}/);
+  assert.match(js,/Не удалось загрузить\. Повторить/);
+  assert.match(js,/Открыть фото/);
+  assert.match(css,/\.medsi-gallery-spinner\{[^}]*animation:medsiGallerySpin/);
+  assert.match(css,/@media\(prefers-reduced-motion:reduce\)/);
+  assert.match(css,/\.medsi-gallery-load-status\.is-error/);
+  // No flickering textual badges on every photo before it has loaded.
+  assert.match(js,/if\(item\.type==='image'\)\{tileLoading\(\);btn\.append\(note\);\}/);
 });

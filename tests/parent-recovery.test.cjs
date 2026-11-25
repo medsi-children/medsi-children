@@ -377,6 +377,6 @@ test('photo viewer close crosses stay centered regardless of iOS glyph baseline'
     assert.match(css,/left:50%;top:50%/);
   }
   assert.match(parentHtml,/parents\/chat-screen\.css\?v=20261124-close-center-1/);
-  assert.match(parentHtml,/chat-overlay\/gallery-ui\.css\?v=20261124-close-center-1/);
-  assert.match(educatorHtml,/chat-overlay\/gallery-ui\.css\?v=20261124-close-center-1/);
+  assert.match(parentHtml,/chat-overlay\/gallery-ui\.css\?v=20261125-spinner-1/);
+  assert.match(educatorHtml,/chat-overlay\/gallery-ui\.css\?v=20261125-spinner-1/);
 });

@@ -59,6 +59,12 @@ export function currentStaffPublications(rows=[],today){
 export function normalizeCurrentStaffHeaderLine(line){
   if(HEADER.test(line))return line;
   const candidate=String(line||'').replace(/^[^\p{L}\p{N}\r\n]+/u,'');
+  // An occasional staff heading contains the child's age instead of a
+  // separator: "Имя Ф., 12 лет. Наблюдение." Accept only this precise
+  // first-name + surname-initial form. The age remains in the observation.
+  // Assignment still requires the unique current child and surname match.
+  const aged=/^([А-ЯЁ][а-яё-]{1,69})[ \t]+([А-ЯЁ])\.[ \t]*,[ \t]*([1-9]|1[0-7])[ \t]+(лет|года|год)\.[ \t]+(\S.*)$/u.exec(candidate);
+  if(aged)return aged[1]+' '+aged[2]+'.: '+aged[3]+' '+aged[4]+'. '+aged[5];
   const match=/^([\p{L}-]{2,70})[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*(?:([\p{L}-]{1,100}\.?)[ \t!！﹗‼⁈⁉❗❕❢❣\uFE0E\uFE0F]*)?([:：—–-])([ \t]*)(.*)$/u.exec(candidate);
   return match?match[1]+(match[2]?' '+match[2]:'')+match[3]+match[4]+match[5]:line;
 }

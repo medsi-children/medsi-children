@@ -14,7 +14,7 @@
   <link rel="stylesheet" href="/parents/chat-ui.css?v=20261015-assistant-layout-3">
   <link rel="stylesheet" href="/chat-overlay/composer-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/media-ui.css?v=20260907-1">
-  <link rel="stylesheet" href="/chat-overlay/gallery-ui.css?v=20261124-close-center-1">
+  <link rel="stylesheet" href="/chat-overlay/gallery-ui.css?v=20261125-spinner-1">
   <link rel="stylesheet" href="/chat-overlay/chat-motion-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/chat-overlay/chat-surface-ui.css?v=20260907-1">
   <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
@@ -156,7 +156,7 @@
   window.MedsiLoadParentChat=function(){
     if(window.MedsiParentChatScreen)return Promise.resolve();
     if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/chat-overlay/gallery-ui.js?v=20261119-media-10-1','/parents/smart-bot.js?v=20261119-contacts-1','/parents/prewarm.js?v=20261022-preview-isolation','/parents/chat-screen.js?v=20261119-media-10-1']).finally(function(){chatPending=null;});
+    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/chat-overlay/gallery-ui.js?v=20261125-spinner-1','/parents/smart-bot.js?v=20261119-contacts-1','/parents/prewarm.js?v=20261022-preview-isolation','/parents/chat-screen.js?v=20261119-media-10-1']).finally(function(){chatPending=null;});
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');

@@ -135,9 +135,9 @@ test('age-style child header distributes only to a unique matching child',()=>{
   const result=plan(raw);
   assert.equal(result.rawText,raw);
   assert.match(result.normalizedText,/Саша Иг\.: 12 лет\. Синтетическая запись/);
-  assert.deepEqual(result.recipients.map(r=>r.phone10),['9000000003','9000000002']);
-  assert.match(result.recipients[1].text,/12 лет\. Синтетическая запись второго ребёнка/);
-  assert.doesNotMatch(result.recipients[0].text,/второго ребёнка/);
+  assert.deepEqual(result.recipients.map(r=>r.phone10),['9000000002','9000000003']);
+  assert.match(result.recipients[0].text,/12 лет\. Синтетическая запись второго ребёнка/);
+  assert.doesNotMatch(result.recipients[1].text,/второго ребёнка/);
 });
 
 test('ambiguous and absent age headings are separated and never auto-assigned',()=>{

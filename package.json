@@ -8,7 +8,7 @@
     "start": "node server.js",
     "verify:server": "node --check server.js && node --check services/postgres-next/app/stand-server.mjs",
     "verify:source-control": "node scripts/verify-source-control.mjs",
-    "verify:chat": "node --test tests/chat-send-retry.test.cjs tests/parent-chat-send-retry.test.cjs tests/parent-assistant-offer.test.cjs",
+    "verify:chat": "node --test tests/chat-send-retry.test.cjs tests/parent-chat-send-retry.test.cjs tests/parent-assistant-offer.test.cjs tests/chat-gallery-ui.test.cjs",
     "verify:bot": "node --test tests/push-empty-payload.test.cjs && node scripts/verify-smart-bot.mjs && node --check parents/bot-chat-runtime.js",
     "verify": "npm run verify:syntax && npm run verify:server && npm run verify:source-control && npm run verify:chat && npm run verify:bot && npm run verify:reports && npm run verify:identity && npm run verify:reliability && npm run verify:recovery && npm run verify:auth",
     "verify:identity": "node --test services/postgres-next/app-test/identity-continuity.test.mjs services/postgres-next/app-test/parent-access.test.mjs",

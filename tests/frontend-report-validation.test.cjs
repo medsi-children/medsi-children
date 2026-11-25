@@ -267,3 +267,98 @@ test('alert decorations before the separator keep namesake validation effective'
     assert.equal(validate('evening',`Арсен Те. ${mark}: Первый.\nАрсен Пр. ${mark} — Второй.`).ok,true);
   }
 });
+
+
+test('strict age headings are counted without treating nearby prose as child headers',()=>{
+  const valid='❗️Мария Г., 12 лет. Синтетическое наблюдение.\nСтепан: Играет.';
+  const result=validate('morning',valid);
+  assert.equal(result.ok,true);
+  assert.equal(result.checkedBlocks,2);
+  const prose=validate('morning','Степан: Участвовал в занятии.\n'+
+    'Мария Г., 12 лет, сказала о своём самочувствии.');
+  assert.equal(prose.ok,true);
+  assert.equal(prose.checkedBlocks,1);
+  const duplicate=validate('evening','Мария Г., 12 лет. Синтетическая запись.\n'+
+    'Мария Г.: Другой блок.');
+  assert.equal(duplicate.ok,false,'Unique age headers take part in existing duplicate protection');
+});
+
+test('uncertain Timeweb report save quietly verifies receipt with one write',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../tutors/full-web.js'),'utf8');
+  const snippet=source.slice(source.indexOf('  async function submitReportPayload('),
+    source.indexOf('  async function sendReport('));
+  const submissionId='report_synthetic_uncertain_001';
+  let writes=0,reads=0;
+  const transport={
+    async reportSubmit(_session,payload,options){
+      writes++;
+      assert.equal(payload.submissionId,submissionId);
+      assert.equal(options.retryTransientWrite,false,'There must be one and only one POST');
+      throw Object.assign(new Error('Synthetic wireless disconnect'),{code:'NETWORK'});
+    },
+    async reportStatus(_session,id){
+      reads++;assert.equal(id,submissionId);
+      return {ok:true,submissionId:id,status:'completed',result:{publicationId:'synthetic_saved'}};
+    }
+  };
+  const context={
+    tutorToken:'synthetic',MedsiOverlayTransport:transport,
+    window:{MedsiReportValidation:{validate},MedsiOverlayTransport:transport,
+      MedsiReportClarifier:{prepare:async()=>({clarification:null})}},
+    ensureD1Fresh:async()=>({token:'synthetic'}),setTimeout
+  };
+  vm.createContext(context);vm.runInContext(snippet,context);
+  const result=await context.submitReportPayload('morning','Степан: Синтетическое наблюдение.',submissionId);
+  assert.equal(result.accepted,true);
+  assert.equal(writes,1);assert.equal(reads,1);
+});
+
+test('missing receipt retains the same report id for manual retry, without automatic repeat',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../tutors/full-web.js'),'utf8');
+  const snippet=source.slice(source.indexOf('  async function submitReportPayload('),
+    source.indexOf('  async function sendReport('));
+  const submissionId='report_synthetic_unconfirmed_001';
+  let writes=0,reads=0;
+  const transport={
+    async reportSubmit(_session,payload,options){
+      writes++;
+      assert.equal(payload.submissionId,submissionId);
+      assert.equal(options.retryTransientWrite,false);
+      if(writes===1)throw Object.assign(new Error('Synthetic timeout'),{code:'TIMEOUT'});
+      return {ok:true,accepted:true,submissionId};
+    },
+    async reportStatus(){reads++;return {ok:true,submissionId,status:'not_found'};}
+  };
+  const context={
+    tutorToken:'synthetic',MedsiOverlayTransport:transport,
+    window:{MedsiReportValidation:{validate},MedsiOverlayTransport:transport,
+      MedsiReportClarifier:{prepare:async()=>({clarification:null})}},
+    ensureD1Fresh:async()=>({token:'synthetic'}),setTimeout
+  };
+  vm.createContext(context);vm.runInContext(snippet,context);
+  await assert.rejects(context.submitReportPayload('evening','Степан: Синтетический текст.',submissionId),/Synthetic timeout/);
+  assert.equal(writes,1);assert.equal(reads,1);
+  const result=await context.submitReportPayload('evening','Степан: Синтетический текст.',submissionId);
+  assert.equal(result.accepted,true);
+  assert.equal(writes,2);assert.equal(reads,1);
+});
+
+test('explicit report business error never causes receipt probing or hidden second POST',async()=>{
+  const source=fs.readFileSync(path.join(__dirname,'../tutors/full-web.js'),'utf8');
+  const snippet=source.slice(source.indexOf('  async function submitReportPayload('),
+    source.indexOf('  async function sendReport('));
+  let writes=0,reads=0;
+  const transport={
+    async reportSubmit(){writes++;throw Object.assign(new Error('Forbidden'),{code:'HTTP-403',status:403})},
+    async reportStatus(){reads++;return {ok:true,status:'completed'};}
+  };
+  const context={
+    tutorToken:'synthetic',MedsiOverlayTransport:transport,
+    window:{MedsiReportValidation:{validate},MedsiOverlayTransport:transport,
+      MedsiReportClarifier:{prepare:async()=>({clarification:null})}},
+    ensureD1Fresh:async()=>({token:'synthetic'}),setTimeout
+  };
+  vm.createContext(context);vm.runInContext(snippet,context);
+  await assert.rejects(context.submitReportPayload('morning','Степан: Синтетический текст.','report_forbidden_001'),/Forbidden/);
+  assert.equal(writes,1);assert.equal(reads,0);
+});

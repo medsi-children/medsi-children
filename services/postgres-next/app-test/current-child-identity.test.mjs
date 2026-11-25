@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {canonicalCurrentName,currentStaffPublications,parseCurrentStaffBlocks,
   matchRegisteredChild,matchCurrentSource,shortestCurrentSurnamePrefixes,
-  isCurrentRoomNumberLine,stripCurrentRoomNumberLines
+  isCurrentRoomNumberLine,stripCurrentRoomNumberLines,normalizeCurrentStaffHeaderLine
 } from '../app/current-child-identity.mjs';
 import {currentHeadStaffSources} from '../app/current-report-backfill.mjs';
 
@@ -151,5 +151,26 @@ test('only standalone ward numbers 501–512 are excluded from parsed child bloc
     assert.deepEqual(b.map(x=>x.body.join('\n')),[
       'Играла в палате 503 с игрушками.','Собрала 503 детали.'
     ]);
+  }
+});
+
+
+test('strict age-style headings become safe block boundaries without altering source facts',()=>{
+  const source='Степан С.: Вчера отдыхал.\n'+
+    '❗️Мария Г., 12 лет. Синтетический комментарий о настроении.\n'+
+    'Александра Иг.: Рисовала.';
+  const parsed=parseCurrentStaffBlocks(source);
+  assert.deepEqual(parsed.map(b=>b.name),['Степан','Мария','Александра']);
+  assert.equal(parsed[1].prefix,'г');
+  assert.deepEqual(parsed[1].body,['12 лет. Синтетический комментарий о настроении.']);
+  assert.deepEqual(parsed[0].body,['Вчера отдыхал.']);
+  assert.equal(normalizeCurrentStaffHeaderLine('❗️Мария Г., 12 лет. Наблюдение.'),
+    'Мария Г.: 12 лет. Наблюдение.');
+  for(const arbitrary of ['Мария сказала, что ей 12 лет.','Мария Г., 12 лет',
+    'Мария Г., 12 лет, сказала о самочувствии.','Мария Г., 20 лет. Пример.',
+    'Мария Г.: 12 лет. Текст.']){
+    const normalized=normalizeCurrentStaffHeaderLine(arbitrary);
+    if(arbitrary.includes('20 лет')||arbitrary.includes('сказала')||arbitrary.endsWith('12 лет'))
+      assert.equal(normalized,arbitrary,'Uncertain age prose cannot become a header');
   }
 });

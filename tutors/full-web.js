@@ -176,11 +176,36 @@
     const decision=await clarifier.prepare({kind:type,text});
     // PostgreSQL validates selected child IDs against the current roster
     // again, in the same transaction as publishing this source.
-    const queued=await MedsiOverlayTransport.reportSubmit(session,{
-      reportType:type,text,submissionId,clarification:decision.clarification
-    });
-    if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId)
+    const saved=async()=>{
+      if(typeof MedsiOverlayTransport.reportStatus!=='function')return false;
+      try{
+        // A single read-only receipt check after an uncertain response.
+        // Never repeat the POST automatically or add UI steps for educators.
+        const receipt=await Promise.race([
+          MedsiOverlayTransport.reportStatus(session,submissionId),
+          new Promise(resolve=>setTimeout(()=>resolve(null),6500))
+        ]);
+        return receipt?.ok===true&&receipt.submissionId===submissionId&&
+          receipt.status==='completed';
+      }catch(_){return false}
+    };
+    let queued;
+    try{
+      queued=await MedsiOverlayTransport.reportSubmit(session,{
+        reportType:type,text,submissionId,clarification:decision.clarification
+      },{retryTransientWrite:false});
+    }catch(error){
+      const status=Number(error?.status||0);
+      if(['NETWORK','TIMEOUT','BAD_RESPONSE'].includes(String(error?.code||''))||
+        [408,425,429,500,502,503,504].includes(status)){
+        if(await saved())return {accepted:true,submissionId};
+      }
+      throw error;
+    }
+    if(!queued||queued.ok!==true||queued.accepted!==true||queued.submissionId!==submissionId){
+      if(await saved())return {accepted:true,submissionId};
       throw new Error('Не удалось подтвердить сохранение отчёта. Попробуйте отправить ещё раз.');
+    }
     return {accepted:true,submissionId};
   }
   async function sendReport(){

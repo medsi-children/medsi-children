@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {reviewCurrentReport,remapCurrentBlockOwners,checkedCurrentResolutions}
   from '../app/current-report-clarify.mjs';
 import {planCurrentReport} from '../app/current-report-plan.mjs';
+import {createCurrentReportSubmissionService} from '../app/current-report-submission-service.mjs';
 
 const children=[
   {child_id:'child_amina',registered_first_name:'Арина',surname:'Амелина'},
@@ -118,4 +119,34 @@ test('correcting a legacy decorated source does not shift numeric ownership onto
   const result=planCurrentReport({kind:'evening',rawText:raw,children:localChildren,
     profiles:localChildren.map((c,i)=>({phone10:'900000008'+i,child_id:c.child_id})),priorBlockOwners:remapped});
   assert.deepEqual(result.recipients.map(r=>r.text),['Арсен: Первый.','Борис: Второй.','Вера: Третий.']);
+});
+
+
+test('a superseded report submission never produces a success receipt',async()=>{
+  const now=Date.now();
+  const queries=[],writes=[];
+  const sql={async begin(options,cb){
+    const tx=async(strings,...values)=>{
+      const q=strings.join('?').replace(/\s+/g,' ').trim();
+      queries.push(q);
+      if(q.includes('FROM background_jobs'))return [[]];
+      if(q.includes('FROM report_submissions'))return [[]];
+      if(q.includes('FROM parent_profiles'))return [[]];
+      if(q.includes('FROM children'))return [[]];
+      if(q.includes('FROM name_variants'))return [[]];
+      if(q.includes('FROM report_publication_head'))return [[{
+        publication_id:'synthetic_latest',revision:2,submitted_at:now
+      }]];
+      writes.push(q);throw new Error('Unexpected write: '+q);
+    };
+    return cb(tx);
+  }};
+  const reports=createCurrentReportSubmissionService(sql,{queuePush:false});
+  await assert.rejects(reports.submit({
+    kind:'morning',rawText:'Степан: Синтетический текст.',
+    submissionId:'report_synthetic_superseded_001',
+    authorId:'educator_synthetic',submittedAt:now-120000
+  }),/Report source changed/);
+  assert.deepEqual(writes,[],'A superseded source never writes into PostgreSQL');
+  assert.ok(queries.some(q=>q.includes('FROM report_publication_head')));
 });

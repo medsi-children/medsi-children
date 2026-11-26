@@ -24,7 +24,7 @@
 
 ## Проверка
 
-`npm run verify` и `npm run verify:postgres-next` проверяют приложение. Для дополнительной проверки очереди на локальном чистом PostgreSQL передайте его порт в `MEDSI_DOCTORS_TEST_PG_PORT` и запустите `node --test services/postgres-next/app-test/doctors-panel.test.mjs`. Тест пользуется синтетическими документами и имитирует Яндекс.Диск и S3.
+`npm run verify` и `npm run verify:postgres-next` проверяют приложение. Для дополнительной проверки очереди на локальном чистом PostgreSQL передайте его порт в `MEDSI_DOCTORS_TEST_PG_PORT` и запустите `node --test services/postgres-next/app-test/doctors-panel.test.mjs`. Тест пользуется синтетическими документами и имитирует Яндекс.Диск и S3. CI отдельно запускает этот тест на одноразовой базе PostgreSQL 18, чтобы интеграционный сценарий не был пропущен.
 
 ## Порядок безопасного выпуска
 

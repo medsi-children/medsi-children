@@ -129,7 +129,7 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
 },async t=>{
   const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
-    database:'postgres',max:2});
+    database:process.env.PGDATABASE||'postgres',max:2});
   t.after(()=>pool.end());
   const sql=createPostgresSql(pool);
   const patientId='synthetic-'+randomUUID();

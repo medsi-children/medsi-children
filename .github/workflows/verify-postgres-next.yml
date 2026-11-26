@@ -91,6 +91,15 @@ jobs:
           npm test --prefix services/postgres-next
           npm run verify
 
+      - name: Rehearse doctors plan writes, conflicts and restart on disposable PostgreSQL 18
+        env:
+          PG_CONTAINER: ${{ job.services.postgres.id }}
+          MEDSI_DOCTORS_TEST_PG_PORT: '5432'
+        run: |
+          set -euo pipefail
+          docker exec "$PG_CONTAINER" createdb -U medsi_ci medsi_doctors
+          PGDATABASE=medsi_doctors node --test services/postgres-next/app-test/doctors-panel.test.mjs
+
       - name: Verify admission-free pipeline and SQL retirement on disposable PostgreSQL 18
         env:
           PG_CONTAINER: ${{ job.services.postgres.id }}

@@ -1,5 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {createDoctorsDisk,diskVersion,isPlan,validDiskRoot,directDiskChild,verifyDiskBytes,testDiskWriteEnabled} from './doctors-disk.mjs';
+import {createDoctorsDisk,diskVersion,isPlan,validDiskRoot,directDiskChild,verifyDiskBytes,diskWritePolicy,allowedPlanWritePath} from './doctors-disk.mjs';
 import {readPlanDates,updatePlanDischarge,validIsoDate} from './doctors-xlsx.mjs';
 import {fullName} from './doctors-roster.mjs';
 
@@ -32,9 +32,13 @@ export function selectCurrentPlans(documents, today){
 
 export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
   const root=env.DOCTORS_DISK_ROOT;
-  const source=validDiskRoot(root) ? (disk || (env.DOCTORS_DISK_TOKEN ? createDoctorsDisk(env.DOCTORS_DISK_TOKEN) : null)) : null;
-  const write=Boolean(source && testDiskWriteEnabled(env,storage));
-  if(env.DOCTORS_DISK_TEST_WRITE==='1' && !write)console.warn('MEDSI_DOCTORS_TEST_WRITE_DISABLED');
+  const policy=diskWritePolicy(env,storage);
+  const source=validDiskRoot(root) ? (disk || (env.DOCTORS_DISK_TOKEN ?
+    createDoctorsDisk(env.DOCTORS_DISK_TOKEN,fetch,{writeRoot:policy?.root}) : null)) : null;
+  const write=Boolean(source && policy);
+  const scope=write?policy.scope:null;
+  if((env.DOCTORS_DISK_TEST_WRITE==='1' || env.DOCTORS_DISK_WRITE_ENABLED==='1') && !write)
+    console.warn('MEDSI_DOCTORS_DISK_WRITE_DISABLED');
   let prepared;
   const prepare=()=>prepared ||= (async()=>{
     await sql`CREATE TABLE IF NOT EXISTS doctor_plan_snapshots (
@@ -43,6 +47,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       id uuid PRIMARY KEY, patient_id text NOT NULL, version text NOT NULL,
       admission text, desired text NOT NULL, expected jsonb NOT NULL,
       status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now())`;
+    await sql`ALTER TABLE doctor_discharge_changes ADD COLUMN IF NOT EXISTS write_scope text`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS doctor_discharge_single_pending
       ON doctor_discharge_changes (patient_id) WHERE status='pending'`;
   })().catch(error=>{prepared=null;throw error;});
@@ -51,7 +56,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     await prepare();
     const [[row]]=await sql`SELECT snapshot, (
       SELECT row_to_json(change) FROM (
-        SELECT id,desired,status,admission FROM doctor_discharge_changes
+        SELECT id,desired,status,admission,write_scope FROM doctor_discharge_changes
         WHERE patient_id=${id} ORDER BY created_at DESC,id DESC LIMIT 1
       ) change
     ) AS pending FROM (SELECT ${id}::text AS id) needed
@@ -63,7 +68,8 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       admission:snapshot.admission || null,
       discharge:(sameEpisode && ['pending','conflict'].includes(pending.status) ? pending.desired : snapshot.discharge)||null,
       revision:(snapshot.version || '')+':'+(pending?.id||''),
-      syncConflict:Boolean(sameEpisode && pending.status==='conflict'),
+      syncConflict:Boolean(sameEpisode && (pending.status==='conflict' ||
+        (pending.status==='pending' && write && pending.write_scope!==scope))),
       editable:true
     };
   }
@@ -78,20 +84,20 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       await tx`SELECT pg_advisory_xact_lock(hashtext(${patientId}))`;
       const [[row]]=await tx`SELECT snapshot FROM doctor_plan_snapshots WHERE patient_id=${patientId}`;
       const snapshot=row?.snapshot || {};
-      const [[latest]]=await tx`SELECT id,desired,status FROM doctor_discharge_changes
+      const [[latest]]=await tx`SELECT id,desired,status,write_scope FROM doctor_discharge_changes
         WHERE patient_id=${patientId} ORDER BY created_at DESC,id DESC LIMIT 1`;
       if((snapshot.version||'')+':'+(latest?.id||'')!==revision)
         return {ok:false,status:409,message:'Планы изменились. Обновите карточку пациента.'};
-      if(latest?.status==='conflict' && confirmConflict!==true)
+      if((latest?.status==='conflict' || (latest?.status==='pending' && write && latest.write_scope!==scope)) && confirmConflict!==true)
         return {ok:false,status:409,message:'Подтвердите дату после проверки плана.'};
       const start=snapshot.admission || registered.episode;
       if(start && date<start)
         return {ok:false,status:400,message:'Дата выписки раньше даты госпитализации.'};
-      if(latest?.status==='pending' && latest.desired===date)return {ok:true};
+      if(latest?.status==='pending' && latest.desired===date && latest.write_scope===scope)return {ok:true};
       if(latest?.status==='pending')await tx`UPDATE doctor_discharge_changes SET status='superseded' WHERE id=${latest.id}`;
       const expected=Object.fromEntries((snapshot.current||[]).map(plan=>[plan.path,plan.discharge]));
-      await tx`INSERT INTO doctor_discharge_changes(id,patient_id,version,admission,desired,expected)
-        VALUES(${randomUUID()},${patientId},${revision},${snapshot.admission||null},${date},${JSON.stringify(expected)}::jsonb)`;
+      await tx`INSERT INTO doctor_discharge_changes(id,patient_id,version,admission,desired,expected,write_scope)
+        VALUES(${randomUUID()},${patientId},${revision},${snapshot.admission||registered.episode||null},${date},${JSON.stringify(expected)}::jsonb,${scope})`;
       return {ok:true};
     });
   }
@@ -136,10 +142,11 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     if(operation.desired<snapshot.admission ||
       (operation.admission && operation.admission!==snapshot.admission))return 'conflict';
     const expected=operation.expected || {};
+    if(Object.keys(expected).some(path=>!snapshot.current.some(plan=>plan.path===path)))return 'conflict';
     const staged=[];
     // Preflight all candidates before changing the first one.
     for(const plan of snapshot.current){
-      if(plan.path.slice(0,plan.path.lastIndexOf('/'))!==snapshot.folder ||
+      if(!allowedPlanWritePath(root,plan.path) || plan.path.slice(0,plan.path.lastIndexOf('/'))!==snapshot.folder ||
         !snapshot.folder.startsWith(root.replace(/\/$/,'')+'/'))return 'conflict';
       const bytes=await source.download(plan.path);
       const version=diskVersion(await source.stat(plan.path));
@@ -159,6 +166,15 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
         await storage.putBuffer(key,entry.bytes,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',{ifAbsent:true});
       }
       if(await storage.sha256Object(key)!==digest(entry.bytes))throw new Error('Plan backup verification failed');
+      if(policy.mode==='production'){
+        // Durable recovery metadata is written before the upload, outside the SQL transaction.
+        // It remains available even after a crash or rollback. Never log the manifest.
+        const manifest=Buffer.from(JSON.stringify({operationId:operation.id,path:entry.plan.path,
+          backupKey:key,originalSha256:digest(entry.bytes),replacementSha256:digest(entry.next)}));
+        const manifestKey=key+'.json';
+        if(!await storage.hasObject(manifestKey))await storage.putBuffer(manifestKey,manifest,'application/json',{ifAbsent:true});
+        if(await storage.sha256Object(manifestKey)!==digest(manifest))throw new Error('Plan recovery manifest verification failed');
+      }
     }
     for(const entry of staged){
       if(stopped || !await stillCurrent())return 'pending';
@@ -202,10 +218,10 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
             await tx`UPDATE doctor_discharge_changes SET admission=${snapshot.admission}
               WHERE patient_id=${patient.id} AND status IN ('pending','conflict') AND admission IS NULL`;
           }
-          if(write && folder && patient.episode){
-            const [[operation]]=await tx`SELECT id,admission,desired,status,expected FROM doctor_discharge_changes
+          if(write && folder && patient.episode && (policy.mode==='test' || patient.registry===true)){
+            const [[operation]]=await tx`SELECT id,admission,desired,status,expected,write_scope FROM doctor_discharge_changes
               WHERE patient_id=${patient.id} ORDER BY created_at DESC,id DESC LIMIT 1`;
-            if(operation?.status==='pending'){
+            if(operation?.status==='pending' && operation.write_scope===scope){
               // Recheck membership just before writing. A patient may have
               // left the roster during a long cycle.
               const stillCurrent=async()=>{

@@ -28,6 +28,32 @@ export function testDiskWriteEnabled(env,storage){
     env.DOCTORS_DISK_WRITE_TEST_ROOT===DOCTORS_TEST_ROOT && storage?.configured===true;
 }
 
+// Production writes are opt-in and tied to an explicit rollout generation.
+// A new generation/account/root cannot silently replay old pending changes.
+export function diskWritePolicy(env,storage){
+  const root=env.DOCTORS_DISK_ROOT;
+  if(env.DOCTORS_DISK_WRITE_ENABLED==='1'){
+    if(env.DOCTORS_DISK_TEST_WRITE==='1' || !validDiskRoot(root) || root===DOCTORS_TEST_ROOT ||
+      !env.DOCTORS_GREENWOOD_SHEET_ID || !env.DOCTORS_DISK_TOKEN ||
+      env.DOCTORS_DISK_CONCURRENT_EDIT_ACK!=='1' ||
+      !/^[A-Za-z0-9_-]{12,128}$/.test(env.DOCTORS_DISK_WRITE_EPOCH||'') ||
+      storage?.configured!==true)return null;
+    const scope=createHash('sha256').update(JSON.stringify(['production',root,env.DOCTORS_DISK_TOKEN,
+      env.DOCTORS_GREENWOOD_SHEET_ID,env.DOCTORS_DISK_WRITE_EPOCH])).digest('hex');
+    return {mode:'production',root,scope};
+  }
+  if(testDiskWriteEnabled(env,storage))return {mode:'test',root,scope:'test:'+root};
+  return null;
+}
+export function allowedPlanWritePath(root,path){
+  if(!validDiskRoot(root) || !validDiskRoot(path))return false;
+  const prefix=root==='disk:/'?root:root+'/';
+  if(!path.startsWith(prefix))return false;
+  const segments=path.slice(prefix.length).split('/');
+  return segments.length===2 && segments[0]!=='medsi-doctors-test' &&
+    isPlan({type:'file',name:segments[1]});
+}
+
 async function bodyBytes(response) {
   if (!response.ok || !response.body) throw new Error('Disk download failed');
   const chunks=[];
@@ -40,7 +66,7 @@ async function bodyBytes(response) {
   return Buffer.concat(chunks,size);
 }
 
-export function createDoctorsDisk(token, request=fetch) {
+export function createDoctorsDisk(token, request=fetch, {writeRoot=null}={}) {
   async function api(endpoint, params) {
     const response=await request(API+endpoint+'?'+new URLSearchParams(params),{
       headers:{Authorization:'OAuth '+token},redirect:'error',signal:AbortSignal.timeout(10000)
@@ -74,8 +100,7 @@ export function createDoctorsDisk(token, request=fetch) {
       return bodyBytes(await request(url,{redirect:'error',signal:AbortSignal.timeout(15000)}));
     },
     async upload(path,bytes){
-      if(!validDiskRoot(path) || !path.startsWith(DOCTORS_TEST_ROOT+'/') || path.slice(DOCTORS_TEST_ROOT.length+1).split('/').length!==2)
-        throw new Error('Disk upload outside test sandbox');
+      if(!allowedPlanWritePath(writeRoot,path))throw new Error('Disk upload outside authorized plan root');
       const url=await link('/upload',{path,overwrite:'true'});
       const response=await request(url,{method:'PUT',body:bytes,redirect:'error',signal:AbortSignal.timeout(15000)});
       if (!response.ok)throw new Error('Disk upload failed');

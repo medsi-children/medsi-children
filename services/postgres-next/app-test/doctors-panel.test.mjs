@@ -8,7 +8,7 @@ import pg from 'pg';
 import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
-import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled} from '../app/doctors-disk.mjs';
+import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
 import {readPlanDates,updatePlanDischarge} from '../app/doctors-xlsx.mjs';
@@ -53,6 +53,23 @@ test('Disk sandbox cannot be redirected to a clinical folder and verifies downlo
   await assert.rejects(disk.upload('disk:/child/plan.xlsx',bytes));
   await assert.rejects(disk.upload(DOCTORS_TEST_ROOT+'/../plan.xlsx',bytes));
   assert.equal(calls,0);
+});
+test('production write policy requires explicit approval, current registry and scoped paths',()=>{
+  const env={DOCTORS_DISK_ROOT:'disk:/',DOCTORS_DISK_TOKEN:'synthetic',
+    DOCTORS_GREENWOOD_SHEET_ID:'synthetic',DOCTORS_DISK_WRITE_ENABLED:'1',
+    DOCTORS_DISK_CONCURRENT_EDIT_ACK:'1',DOCTORS_DISK_WRITE_EPOCH:'synthetic-generation-1'};
+  const storage={configured:true};
+  const policy=diskWritePolicy(env,storage);
+  assert.equal(policy.mode,'production');
+  assert.equal(policy.root,'disk:/');
+  for(const key of ['DOCTORS_DISK_TOKEN','DOCTORS_GREENWOOD_SHEET_ID','DOCTORS_DISK_CONCURRENT_EDIT_ACK','DOCTORS_DISK_WRITE_EPOCH'])
+    assert.equal(diskWritePolicy({...env,[key]:''},storage),null);
+  assert.equal(diskWritePolicy({...env,DOCTORS_DISK_TEST_WRITE:'1'},storage),null);
+  assert.equal(diskWritePolicy(env,{configured:false}),null);
+  assert.notEqual(diskWritePolicy({...env,DOCTORS_DISK_WRITE_EPOCH:'synthetic-generation-2'},storage).scope,policy.scope);
+  assert.equal(allowedPlanWritePath('disk:/','disk:/Тестов Пациент/План.xlsx'),true);
+  for(const path of ['disk:/План.xlsx','disk:/child/sub/План.xlsx','disk:/medsi-doctors-test/План.xlsx','disk:/child/notes.xlsx','disk:/child/../План.xlsx'])
+    assert.equal(allowedPlanWritePath('disk:/',path),false);
 });
 test('read-only OAuth probe reports counts without leaking names, dates or paths',async()=>{
   const root=DOCTORS_TEST_ROOT,folder=root+'/Тестов Пациент',path=folder+'/План.xlsx';
@@ -365,4 +382,46 @@ test('root of Disk discovers active patient plans read-only and ignores unrelate
   assert.equal((await second.dates(id)).discharge,'2024-02-19');
   assert.equal(readPlanDates(bytes).discharge,'2024-02-16');
   assert.deepEqual(visited,[root,folder,root,folder]);
+});
+
+test('production write requires a newly confirmed operation and saves a recovery manifest',{
+  skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
+},async t=>{
+  const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
+    database:process.env.PGDATABASE||'postgres',max:2});
+  t.after(()=>pool.end());
+  const sql=createPostgresSql(pool);
+  const id='synthetic-'+randomUUID(),root='disk:/',folder=root+'Тестов Пациент',path=folder+'/План.xlsx';
+  const original=book('01.02.2024-16.02.2024');
+  let bytes=original,writes=0;
+  const stat=()=>({type:'file',path,name:'План.xlsx',sha256:hash(bytes),modified:'2024-02-05T00:00:00Z'});
+  const disk={
+    async list(p){return p===root?[{type:'dir',name:'Тестов Пациент',path:folder}]:[stat()];},
+    async stat(){return stat();},async download(){return bytes;},
+    async upload(p,next){assert.equal(p,path);assert.equal(backups.size,2);writes++;bytes=next;}
+  };
+  const backups=new Map();
+  const storage={configured:true,async hasObject(key){return backups.has(key);},
+    async putBuffer(key,body){backups.set(key,body);},async sha256Object(key){return hash(backups.get(key));}};
+  const env={DOCTORS_DISK_ROOT:root,DOCTORS_DISK_TOKEN:'synthetic',DOCTORS_GREENWOOD_SHEET_ID:'synthetic',
+    DOCTORS_DISK_CONCURRENT_EDIT_ACK:'1',DOCTORS_DISK_WRITE_EPOCH:'synthetic-generation-1'};
+  const create=enabled=>createDoctorsPlans({sql,disk,storage,env:{...env,DOCTORS_DISK_WRITE_ENABLED:enabled?'1':'0'},
+    listPatients:async()=>[{id,childName:'Тестов Пациент',episode:'2024-02-01',registry:true}]});
+  const read=create(false);await read.start();read.stop();
+  assert.equal((await read.enqueue(id,'2024-02-19',(await read.dates(id)).revision)).ok,true);
+  const enabled=create(true);await enabled.start();enabled.stop();
+  assert.equal(writes,0);
+  const waiting=await enabled.dates(id);
+  assert.equal(waiting.syncConflict,true);
+  assert.equal((await enabled.enqueue(id,'2024-02-19',waiting.revision)).status,409);
+  assert.equal((await enabled.enqueue(id,'2024-02-19',waiting.revision,true)).ok,true);
+  const next=create(true);await next.start();next.stop();
+  assert.equal(writes,1);
+  assert.equal(readPlanDates(bytes).discharge,'2024-02-19');
+  assert.equal((await next.dates(id)).syncConflict,false);
+  const manifest=JSON.parse([...backups.entries()].find(([k])=>k.endsWith('.json'))[1]);
+  assert.equal(manifest.path,path);
+  assert.equal(manifest.originalSha256,hash(original));
+  assert.equal(manifest.replacementSha256,hash(bytes));
+  assert.deepEqual(backups.get(manifest.backupKey),original);
 });

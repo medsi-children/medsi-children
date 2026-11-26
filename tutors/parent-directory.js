@@ -37,7 +37,7 @@
   const fileInput=id('medsiDirectoryFile');
   let records=[],busy=false;
   const norm=v=>String(v??'').toLocaleLowerCase('ru-RU').replace(/ё/g,'е').trim();
-  function setBusy(v){busy=v;if(importButton)importButton.disabled=v;close.disabled=v}
+  function setBusy(v){busy=v;if(importButton)importButton.disabled=v;close.disabled=v&&!doctor}
   async function request(path,{method='GET',body}={}){
     const session=await window.MedsiEducatorSession.get();
     if(!session?.token)throw new Error('Сначала войдите в панель воспитателя.');
@@ -133,7 +133,7 @@
       sourceRow:i+2
     }));
   }
-  const shut=()=>{if(busy)return;overlay.classList.add('hidden')};
+  const shut=()=>{if(busy&&!doctor)return;if(doctor&&overlay.contains(document.activeElement))document.activeElement.blur();overlay.classList.add('hidden');if(doctor)id('medsiParentDirectoryCard')?.focus({preventScroll:true})};
   close.onclick=shut;
   overlay.addEventListener('click',event=>{if(event.target===overlay)shut()});
   overlay.addEventListener('keydown',event=>{if(event.key==='Escape')shut()});
@@ -159,6 +159,6 @@
     if(!tile)return;
     id('tutorSettingsClose')?.click();
     overlay.classList.remove('hidden');
-    search.value='';records=[];list.replaceChildren();load();search.focus();
+    search.value='';records=[];list.replaceChildren();load();if(!doctor)search.focus();else close.focus({preventScroll:true});
   });
 })();

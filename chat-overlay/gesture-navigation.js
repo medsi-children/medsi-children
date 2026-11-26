@@ -94,6 +94,22 @@
     if(visibleModal())return null;
     const screen=String(document.body.dataset.screen||'');
 
+    if(document.getElementById('doctorWorkspace')){
+      const modalBack=[
+        ['dialog.doctor-date-editor[open]',null],
+        ['#medsiParentDirectoryDialog:not(.hidden)','#medsiDirectoryClose'],
+        ['#tutorQrModal:not(.hidden)','#tutorQrClose'],
+        ['#medsiTutorReportLibrary:not(.hidden)','#medsiReportsBack']
+      ];
+      for(const [selector,button] of modalBack){
+        const modal=document.querySelector(selector);
+        if(modal)return button?()=>click(document.querySelector(button)):()=>{modal.close();return true};
+      }
+      if(['screenPhones','screenTherapy','screenPatients'].includes(screen))
+        return()=>click(document.querySelector('#'+screen+(screen==='screenTherapy'&&document.querySelector('#therapyDone:not(.hidden)')?' #therapyAgain':' [data-home]')));
+      return null;
+    }
+
     if(document.getElementById('btnParentChats')){
       if(document.body.classList.contains('medsi-chat-overlay-open')||document.querySelector('.educator-exact-clone')){
         if(['screenChatThread','screenChats','screenNewChat'].includes(screen))return()=>tutorOverlayBack(screen);

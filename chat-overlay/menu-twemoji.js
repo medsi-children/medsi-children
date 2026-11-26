@@ -6,7 +6,7 @@
   const ITEMS=[
     ['#btnChat .menu-card-title','💬','1f4ac.svg'],
     ['#doctorPatients .menu-card-title','📋','1f4cb.svg'],
-    ['#doctorReports .menu-card-title','📑','1f4d1.svg'],
+    ['#doctorReports .menu-card-title','🧒','1f9d2.svg'],
     ['#screenChoose #medsiParentDirectoryCard .menu-card-title','👥','1f465.svg'],
     ['#btnParentChats .menu-card-title','💬','1f4ac.svg'],
     ['#btnMorning .menu-card-title','☀️','2600.svg'],

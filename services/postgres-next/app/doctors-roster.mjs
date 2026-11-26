@@ -50,20 +50,26 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
     // The tab contains no verified contact identifier. Keep contacts in the
     // bot's phone directory and avoid assigning them to a possible namesake.
     const patients=rows.map(row=>({id:ref('greenwood:'+row.key),
-      childName:row.childName,episode:row.episode,parents:[]}));
+      childName:row.childName,episode:row.episode,registry:true,registryDischarge:row.discharge||null,parents:[]}));
     if(!verifiedLinks.size)return patients;
     const botPatients=new Map((await listBot()).filter(p=>p.childId).map(p=>[p.id,p]));
     const namePair=value=>fullName(value).split(' ').slice(0,2).sort().join(' ');
     for(const patient of patients){
       const bot=botPatients.get(verifiedLinks.get(patient.id));
-      if(bot && namePair(bot.childName)===namePair(patient.childName))patient.parents=bot.parents;
+      if(patient.episode && bot && namePair(bot.childName)===namePair(patient.childName))patient.parents=bot.parents;
     }
     return patients;
   }
 
   async function list(options) {
     const patients=await current(options);
-    return Promise.all(patients.map(async({childId,episode,...patient})=>({...patient,...await plans?.dates(patient.id)})));
+    return Promise.all(patients.map(async({childId,episode,registry,registryDischarge,...patient})=>{
+      // A row without a verified start date is visible but cannot be assigned
+      // contacts or a plan from a possibly different stay.
+      if(registry && !episode)return {...patient,admission:null,discharge:null,editable:false};
+      const clinical=await plans?.dates(patient.id);
+      return {...patient,...clinical,discharge:clinical?.discharge || registryDischarge || null};
+    }));
   }
   return {list,listBot,current};
 }

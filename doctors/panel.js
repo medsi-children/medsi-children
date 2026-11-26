@@ -200,7 +200,16 @@
     const error=node('p','status error hidden');error.setAttribute('role','alert');
     cancel.type='button';cancel.onclick=()=>dialog.close();
     actions.append(cancel,save);
-    form.append(label,adjustments,offset,apply,error,actions);
+    form.append(label,adjustments,offset,apply);
+    let confirmConflict;
+    if(patient.syncConflict){
+      const confirmation=node('label');
+      confirmConflict=node('input');
+      confirmConflict.type='checkbox';confirmConflict.required=true;
+      confirmation.append(confirmConflict,document.createTextNode('Проверил актуальный план и подтверждаю выбранную дату.'));
+      form.append(confirmation);
+    }
+    form.append(error,actions);
     dialog.append(form);document.body.append(dialog);
     dialog.onclose=()=>dialog.remove();
     form.onsubmit=async event=>{
@@ -208,7 +217,7 @@
       if(save.disabled||!date.reportValidity())return;
       save.disabled=true;cancel.disabled=true;
       try{
-        await request('/discharge',{body:{patientId:patient.id,date:date.value,revision:patient.revision}});
+        await request('/discharge',{body:{patientId:patient.id,date:date.value,revision:patient.revision,confirmConflict:confirmConflict?.checked===true}});
         dialog.close();await loadPatients();
       }catch(failure){error.textContent=failure.message;error.classList.remove('hidden');}
       finally{save.disabled=false;cancel.disabled=false;}

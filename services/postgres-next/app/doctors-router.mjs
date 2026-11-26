@@ -21,6 +21,7 @@ export function createDoctorsRouter(services, env) {
     try {return res.json(await fn(req,res));}
     catch {return fail(res,503,'Сервис временно недоступен.');}
   };
+  router.use((_req,res,next)=>{res.set('Cache-Control','no-store');next();});
   router.use(express.json({limit:'1mb'}));
   // Same-origin JSON only for state-changing routes, including session creation.
   router.use((req,res,next)=>{
@@ -64,8 +65,8 @@ export function createDoctorsRouter(services, env) {
   router.post('/discharge',async(req,res)=>{
     if(!services.doctorsPlans)return fail(res,503,'Сохранение дат временно недоступно.');
     try{
-      const {patientId,date,revision}=req.body||{};
-      const result=await services.doctorsPlans.enqueue(patientId,date,revision);
+      const {patientId,date,revision,confirmConflict}=req.body||{};
+      const result=await services.doctorsPlans.enqueue(patientId,date,revision,confirmConflict===true);
       if(!result.ok)return fail(res,result.status,result.message);
       return res.json(result);
     }catch{return fail(res,503,'Не удалось подтвердить сохранение даты.');}

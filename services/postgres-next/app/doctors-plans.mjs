@@ -69,11 +69,12 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     };
   }
 
-  async function enqueue(patientId,date,revision) {
+  async function enqueue(patientId,date,revision,confirmConflict=false) {
     if(!validIsoDate(date) || typeof revision!=='string')return {ok:false,status:400,message:'Укажите корректную дату выписки.'};
     await prepare();
     const registered=(await listPatients({fresh:true})).find(patient=>patient.id===patientId);
     if(!registered)return {ok:false,status:404,message:'Пациент больше не в списке.'};
+    if(registered.registry && !registered.episode)return {ok:false,status:409,message:'Укажите дату поступления в реестре.'};
     return sql.begin({isolation:'serializableReadWrite'},async tx=>{
       await tx`SELECT pg_advisory_xact_lock(hashtext(${patientId}))`;
       const [[row]]=await tx`SELECT snapshot FROM doctor_plan_snapshots WHERE patient_id=${patientId}`;
@@ -82,7 +83,10 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
         WHERE patient_id=${patientId} ORDER BY created_at DESC,id DESC LIMIT 1`;
       if((snapshot.version||'')+':'+(latest?.id||'')!==revision)
         return {ok:false,status:409,message:'Планы изменились. Обновите карточку пациента.'};
-      if(snapshot.admission && date<snapshot.admission)
+      if(latest?.status==='conflict' && confirmConflict!==true)
+        return {ok:false,status:409,message:'Подтвердите дату после проверки плана.'};
+      const start=snapshot.admission || registered.episode;
+      if(start && date<start)
         return {ok:false,status:400,message:'Дата выписки раньше даты госпитализации.'};
       if(latest?.status==='pending' && latest.desired===date)return {ok:true};
       if(latest?.status==='pending')await tx`UPDATE doctor_discharge_changes SET status='superseded' WHERE id=${latest.id}`;
@@ -119,7 +123,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       if(old?.version===version)documents.at(-1).owned=old.owned;
     }
     documents.sort((a,b)=>a.path.localeCompare(b.path));
-    const selected=selectCurrentPlans(documents.filter(doc=>doc.owned && (!episode || doc.admission>=episode || doc.discharge>=episode)),today);
+    const selected=selectCurrentPlans(documents.filter(doc=>doc.owned && (!episode || doc.admission===episode)),today);
     const snapshot={...selected,documents,unsafe,
       folder:folder.path};
     snapshot.version=digest(JSON.stringify(snapshot));
@@ -157,6 +161,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       if(await storage.sha256Object(key)!==digest(entry.bytes))throw new Error('Plan backup verification failed');
     }
     for(const entry of staged){
+      if(stopped)return 'pending';
       if (diskVersion(await source.stat(entry.plan.path))!==entry.plan.version)return 'pending';
       await source.upload(entry.plan.path,entry.next);
       const verified=await source.download(entry.plan.path);
@@ -177,13 +182,14 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       const patients=await listPatients({fresh:true});
       const folders=(await source.list(root)).filter(item=>item.type==='dir');
       const today=moscowDay();
+      let patientFailed=false;
       for(const patient of patients) {
         if(stopped)break;
         const parts=identity(patient.childName);
-        if(!parts)continue;
+        if(!parts || (patient.registry && !patient.episode))continue;
         const matchesForPatient=folders.filter(folder=>matches(folder.name,parts));
         const duplicate=patients.some(other=>other.id!==patient.id && matches(other.childName,parts));
-        await sql.begin({isolation:'serializableReadWrite'},async tx=>{
+        try{await sql.begin({isolation:'serializableReadWrite'},async tx=>{
           const [[lock]]=await tx`SELECT pg_try_advisory_xact_lock(hashtext(${patient.id})) AS owned`;
           if(!lock.owned)return;
           const [[row]]=await tx`SELECT snapshot FROM doctor_plan_snapshots WHERE patient_id=${patient.id}`;
@@ -196,10 +202,16 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
             await tx`UPDATE doctor_discharge_changes SET admission=${snapshot.admission}
               WHERE patient_id=${patient.id} AND status IN ('pending','conflict') AND admission IS NULL`;
           }
-          if(write && folder){
+          if(write && folder && patient.episode){
             const [[operation]]=await tx`SELECT id,admission,desired,status,expected FROM doctor_discharge_changes
               WHERE patient_id=${patient.id} ORDER BY created_at DESC,id DESC LIMIT 1`;
             if(operation?.status==='pending'){
+              // Recheck membership just before writing. A patient may have
+              // left the roster during a long cycle.
+              const fresh=await listPatients({fresh:true});
+              if(!fresh.some(p=>p.id===patient.id && p.episode===patient.episode &&
+                fullName(p.childName)===fullName(patient.childName)) ||
+                fresh.some(p=>p.id!==patient.id && matches(p.childName,parts)))return;
               const status=await writeAll(snapshot,operation,parts);
               if(status==='synced'){
                 const refreshed=await scan(folder,parts,snapshot,today,patient.episode);
@@ -211,9 +223,12 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
           }
           await tx`INSERT INTO doctor_plan_snapshots(patient_id,snapshot) VALUES(${patient.id},${JSON.stringify(snapshot)}::jsonb)
             ON CONFLICT(patient_id) DO UPDATE SET snapshot=excluded.snapshot,updated_at=now()`;
-        });
+        });}catch{
+          patientFailed=true;
+          console.warn('MEDSI_DOCTORS_PATIENT_SYNC_UNAVAILABLE');
+        }
       }
-      failures=0;
+      failures=patientFailed?Math.min(failures+1,4):0;
     }catch{
       failures=Math.min(failures+1,4);
       console.warn('MEDSI_DOCTORS_DISK_SYNC_UNAVAILABLE');

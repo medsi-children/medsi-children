@@ -83,6 +83,28 @@ test('a removed Greenwood row disappears from the roster after a refresh',async(
   now+=30000;
   assert.deepEqual(await roster.list(),[]);
 });
+test('Greenwood keeps undated rows and uses an explicitly configured discharge fallback',async()=>{
+  const env={DOCTORS_GREENWOOD_SHEET_ID:'synthetic',DOCTORS_GREENWOOD_DISCHARGE_COLUMN:'H',NEXT_SESSION_SECRET:'synthetic-roster-secret'};
+  const rows=[
+    {c:[{v:'Тестов Пациент'},{v:'Date(2024,1,29)',f:'29.02.2024'},{v:'Date(2024,2,10)',f:'10.03.2024'}]},
+    {c:[{v:'Другой Пациент'},null,null]}
+  ];
+  const greenwood=createGreenwoodSource(env,async url=>{
+    assert.equal(new URL(url).searchParams.get('tq'),'select C,G,H where C is not null');
+    return new Response('google.visualization.Query.setResponse('+JSON.stringify({
+      status:'ok',table:{cols:[{id:'C'},{id:'G'},{id:'H'}],rows}
+    })+');');
+  });
+  const sql=()=>assert.fail('No automatic contact lookup');
+  const roster=createDoctorsRoster(sql,env,{greenwood,plans:{dates:async()=>({admission:null,discharge:null,editable:true})}});
+  const [dated,undated]=await roster.list();
+  assert.equal(dated.discharge,'2024-03-10');
+  assert.equal(undated.discharge,null);
+  assert.equal(undated.editable,false);
+  const override=createDoctorsRoster(sql,env,{greenwood,plans:{dates:async()=>({discharge:'2024-03-12',editable:true})}});
+  assert.equal((await override.list())[0].discharge,'2024-03-12');
+  assert.throws(()=>decodeGreenwood('', 'C'));
+});
 test('Greenwood contacts require explicit episode-specific verified links',async()=>{
   const env={NEXT_SESSION_SECRET:'synthetic-roster-secret'};
   const row={key:'тестов пациент|2024-02-29',childName:'Тестов Пациент',episode:'2024-02-29'};
@@ -139,7 +161,8 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
     [folder+'/План итог дополнительный.xlsx',book('01.02.2024-16.02.2024')],
     [folder+'/План итог.xlsx',book('01.02.2024-16.02.2024')],
     [folder+'/План ещё.xlsx',book('01.02.2024')],
-    [folder+'/Старый итоговый план.xlsx',book('01.01.2023-16.01.2023')]
+    [folder+'/Старый итоговый план.xlsx',book('01.01.2023-16.01.2023')],
+    [folder+'/Пересекающийся старый план.xlsx',book('25.01.2024-16.02.2024')]
   ]);
   const writes=[],backups=new Map();
   let interrupt=true;
@@ -178,6 +201,7 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   assert.equal(writes.length,3);
   for(const path of writes)assert.equal(readPlanDates(records.get(path)).discharge,'2024-02-19');
   assert.equal(readPlanDates(records.get(folder+'/Старый итоговый план.xlsx')).discharge,'2023-01-16');
+  assert.equal(readPlanDates(records.get(folder+'/Пересекающийся старый план.xlsx')).discharge,'2024-02-16');
   const synced=await restarted.dates(patientId);
   assert.equal(synced.discharge,'2024-02-19');
   assert.equal((await restarted.enqueue(patientId,'2024-02-25',synced.revision)).ok,true);
@@ -196,7 +220,8 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   assert.equal(writes.length,3,'a conflicting operation cannot resume automatically');
   assert.equal((await retry.dates(patientId)).syncConflict,true);
   // Explicitly saving after review creates a new operation against the latest snapshot.
-  assert.equal((await retry.enqueue(patientId,'2024-02-25',(await retry.dates(patientId)).revision)).ok,true);
+  assert.equal((await retry.enqueue(patientId,'2024-02-25',(await retry.dates(patientId)).revision)).status,409);
+  assert.equal((await retry.enqueue(patientId,'2024-02-25',(await retry.dates(patientId)).revision,true)).ok,true);
   const confirmed=create();
   await confirmed.start();confirmed.stop();
   assert.equal((await confirmed.dates(patientId)).syncConflict,false);

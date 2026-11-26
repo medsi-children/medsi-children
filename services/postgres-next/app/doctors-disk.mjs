@@ -54,13 +54,23 @@ export function allowedPlanWritePath(root,path){
     isPlan({type:'file',name:segments[1]});
 }
 
+const transferError=code=>Object.assign(new Error(code),{doctorDiskCode:code});
+const safeTransferUrl=value=>{
+  let url;
+  try{url=new URL(value);}catch{throw transferError('invalidTransferUrl');}
+  if(url.protocol!=='https:' || url.username || url.password || (url.port && url.port!=='443') ||
+    !/(?:^|\.)(?:yandex\.(?:net|ru|com)|yandexdisk\.net)$/iu.test(url.hostname))
+    throw transferError('unexpectedTransferHost');
+  return url;
+};
+const httpCode=status=>status===401||status===403?'denied':status===404?'notFound':status===429?'rateLimited':status>=500?'serverError':'httpError';
 async function bodyBytes(response) {
-  if (!response.ok || !response.body) throw new Error('Disk download failed');
+  if (!response.ok || !response.body) throw transferError('download_'+httpCode(response.status));
   const chunks=[];
   let size=0;
   for await (const chunk of response.body) {
     size+=chunk.length;
-    if(size>FILE_LIMIT)throw new Error('Disk file exceeds size limit');
+    if(size>FILE_LIMIT)throw transferError('fileTooLarge');
     chunks.push(chunk);
   }
   return Buffer.concat(chunks,size);
@@ -68,19 +78,16 @@ async function bodyBytes(response) {
 
 export function createDoctorsDisk(token, request=fetch, {writeRoot=null}={}) {
   async function api(endpoint, params) {
-    const response=await request(API+endpoint+'?'+new URLSearchParams(params),{
+    let response;
+    try{response=await request(API+endpoint+'?'+new URLSearchParams(params),{
       headers:{Authorization:'OAuth '+token},redirect:'error',signal:AbortSignal.timeout(10000)
-    });
-    if(!response.ok)throw new Error('Disk API unavailable');
-    return response.json();
+    });}catch{throw transferError('apiNetwork');}
+    if(!response.ok)throw transferError('api_'+httpCode(response.status));
+    try{return await response.json();}catch{throw transferError('apiInvalidJson');}
   }
   async function link(endpoint,params) {
     const {href}=await api(endpoint,params);
-    const url=new URL(href);
-    if(url.protocol!=='https:' || url.username || url.password ||
-      !/(?:^|\.)(?:yandex\.(?:net|ru|com)|yandexdisk\.net)$/iu.test(url.hostname))
-      throw new Error('Unexpected Disk transfer host');
-    return url;
+    return safeTransferUrl(href);
   }
   return {
     async list(path) {
@@ -88,16 +95,31 @@ export function createDoctorsDisk(token, request=fetch, {writeRoot=null}={}) {
       for(let offset=0;offset<10000;offset+=100){
         const page=await api('',{path,offset,limit:100});
         const items=page._embedded?.items;
-        if(!Array.isArray(items))throw new Error('Invalid Disk listing');
+        if(!Array.isArray(items))throw transferError('invalidListing');
         all.push(...items);
         if(items.length<100)return all;
       }
-      throw new Error('Disk directory exceeds supported limit');
+      throw transferError('directoryLimit');
     },
     stat:path=>api('',{path}),
     async download(path){
-      const url=await link('/download',{path});
-      return bodyBytes(await request(url,{redirect:'error',signal:AbortSignal.timeout(15000)}));
+      let url=await link('/download',{path});
+      const signal=AbortSignal.timeout(30000);
+      for(let hop=0;hop<=3;hop++){
+        let response;
+        try{response=await request(url,{redirect:'manual',signal});}
+        catch{throw transferError('downloadNetwork');}
+        if([301,302,303,307,308].includes(response.status)){
+          const location=response.headers.get('location');
+          await response.body?.cancel();
+          if(!location || hop===3)throw transferError('downloadRedirectLimit');
+          url=safeTransferUrl(new URL(location,url).href);
+          continue;
+        }
+        try{return await bodyBytes(response);}
+        catch(error){if(error.doctorDiskCode)throw error;throw transferError('downloadBody');}
+      }
+      throw transferError('downloadRedirectLimit');
     },
     async upload(path,bytes){
       if(!allowedPlanWritePath(writeRoot,path))throw new Error('Disk upload outside authorized plan root');

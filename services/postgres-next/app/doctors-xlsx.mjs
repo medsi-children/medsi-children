@@ -5,7 +5,7 @@ import {posix} from 'node:path';
 const SHEET = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const PACKAGE = 'http://schemas.openxmlformats.org/package/2006/relationships';
-const DATE = '(\\d{2}\\.\\d{2}\\.\\d{4})';
+const DATE = '(\\d{1,2}\\.\\d{1,2}\\.\\d{4})';
 const TIME = '(?:[ \\t]+\\d{1,2}:\\d{2}(?::\\d{2})?)?';
 const RANGE = new RegExp('^(\\s*)'+DATE+'('+TIME+')(?:(\\s*(?:[-–—−]|по)\\s*)(?:'+DATE+'('+TIME+'))?)?(\\s*)$', 'iu');
 
@@ -17,7 +17,8 @@ export function validIsoDate(value) {
 
 function toIso(date) {
   if (!date) return null;
-  const iso = date.split('.').reverse().join('-');
+  const [day,month,year] = date.split('.');
+  const iso = [year,month.padStart(2,'0'),day.padStart(2,'0')].join('-');
   if (!validIsoDate(iso)) throw new Error('Invalid plan date');
   return iso;
 }

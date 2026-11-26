@@ -12,6 +12,7 @@ import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVe
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
 import {readPlanDates,updatePlanDischarge} from '../app/doctors-xlsx.mjs';
+import {probeDoctorsDisk} from '../../../scripts/probe-doctors-disk.mjs';
 
 const MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const SHEET='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
@@ -45,6 +46,24 @@ test('Disk sandbox cannot be redirected to a clinical folder and verifies downlo
   await assert.rejects(disk.upload('disk:/work/child/plan.xlsx',bytes));
   await assert.rejects(disk.upload(DOCTORS_TEST_ROOT+'/../plan.xlsx',bytes));
   assert.equal(calls,0);
+});
+test('read-only OAuth probe reports counts without leaking names, dates or paths',async()=>{
+  const root=DOCTORS_TEST_ROOT,folder=root+'/Тестов Пациент',path=folder+'/План.xlsx';
+  const bytes=book('01.02.2024-16.02.2024');
+  const plan={type:'file',path,name:'План.xlsx',sha256:hash(bytes)};
+  let downloads=0;
+  const disk={
+    async stat(p){return p===root?{type:'dir',path:root}:plan;},
+    async list(p){return p===root?[{type:'dir',path:folder,name:'Тестов Пациент'}]:[plan];},
+    async download(){downloads++;return bytes;},
+    async upload(){assert.fail('Read-only probe must never upload');}
+  };
+  assert.deepEqual(await probeDoctorsDisk({root,disk}),{ok:true,readOnly:true,folders:1,sampleVerified:false});
+  assert.equal(downloads,0);
+  assert.deepEqual(await probeDoctorsDisk({root,disk,sample:true}),{ok:true,readOnly:true,folders:1,sampleVerified:true});
+  assert.equal(downloads,1);
+  await assert.rejects(probeDoctorsDisk({root:'disk:/work',disk,sample:true}));
+  await assert.rejects(probeDoctorsDisk({root,disk:{...disk,download:async()=>Buffer.from('wrong')},sample:true}));
 });
 test('writes only the selected XLSX cell and preserves time, shared references and formulas',()=>{
   const source=book('29.02.2024 12:30 – 01.03.2024 14:00');

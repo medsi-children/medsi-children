@@ -19,6 +19,10 @@ async function closeDatabaseDriver(driver) {
     ]);
   }finally{if(timer)clearTimeout(timer);}
 }
+import {createDoctorsRoster} from './doctors-roster.mjs';
+import {createGreenwoodSource} from './doctors-greenwood.mjs';
+import {createDoctorsPlans} from './doctors-plans.mjs';
+import {createDoctorsRouter} from './doctors-router.mjs';
 import {createSessionService} from './session-auth.mjs';
 import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
 import {prepareCurrentChildSchema} from './current-child-schema.mjs';
@@ -142,6 +146,13 @@ export function createNextServices({sql,env=process.env}) {
   const parentAccess=createParentAccessService({sql,sessions});
   const parentDirectory=createParentDirectory({sql});
   const storage=require('../../../lib/s3-storage.js');
+  const doctors = {};
+  if(env.DOCTORS_ENABLED==='1'){
+    const greenwood=createGreenwoodSource(env);
+    const source=createDoctorsRoster(sql,env,{greenwood});
+    doctors.doctorsPlans=createDoctorsPlans({sql,env,storage,listPatients:source.current});
+    doctors.doctorsRoster=createDoctorsRoster(sql,env,{greenwood,plans:doctors.doctorsPlans});
+  }
   const parentDeletion=createParentDeletionService({sql,currentChildMode:true,
     enabled:env.MEDSI_NEXT_DELETION_ENABLED==='1',
     removeMedia:async key=>{
@@ -159,7 +170,7 @@ export function createNextServices({sql,env=process.env}) {
   const dbHealth=async()=>{await sql`SELECT 1 AS connected`;};
   const dbSchemaHealth=()=>checkCurrentChildSchema(sql);
   return {sessions,reportReader,reports,chatOperations,chatStore,dashboard,roster,
-    nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDirectory,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage};
+    nameVariants,reportEdits,reportHistoryReview,push,parentRegistration,parentAccess,parentDirectory,parentDeletion,passkeys,dbHealth,dbSchemaHealth,media,sql,storage,...doctors};
 }
 
 // Fail closed. Deployments must never replay dormant push queues merely
@@ -310,6 +321,11 @@ export function createNextStandApp(services,{env=process.env,root=ROOT}={}) {
   const send=(file)=> (_req,res)=>res.sendFile(path.join(root,file));
   app.get(['/','/index.html'],send('index.html'));
   app.get(['/tutors','/tutors/','/tutors.html'],send('tutors.html'));
+  if(env.DOCTORS_ENABLED==='1'){
+    app.use('/doctors/api',createDoctorsRouter(services,env));
+    app.get(['/doctors','/doctors/','/doctors.html'],(_req,res)=>res.sendFile('doctors.html',{root}));
+    app.use('/doctors',express.static(path.join(root,'doctors'),{index:false}));
+  }
   app.get(['/psychology','/psychology/','/psychology.html'],send('psychology.html'));
   const opt={dotfiles:'ignore',index:false,etag:true,maxAge:0};
   for(const dir of ['parents','chat-overlay','tutors','psychology']){
@@ -375,8 +391,10 @@ export async function startIsolatedStand(env=process.env,{
     console.log('MEDSI_NEXT_STAND_HTTP_LISTENING');
   });
   if(externalServer)installHandler(app);
+  let doctorsPlans;
   const shutdown=async()=>{
     stopped=true;
+    doctorsPlans?.stop();
     if(ticker)clearInterval(ticker);
     await new Promise(resolve=>server.close(resolve));
     await closeDatabaseDriver(driver);
@@ -413,6 +431,8 @@ export async function startIsolatedStand(env=process.env,{
       state.phase='ready';
       state.code='READY';
       console.log('MEDSI_NEXT_STAND_READY');
+      doctorsPlans=services.doctorsPlans;
+      doctorsPlans?.start();
       // Report the catalog-only schema check even if the public endpoint is unreachable.
       if(typeof services.dbSchemaHealth==='function'){
         void Promise.resolve().then(()=>services.dbSchemaHealth()).then(

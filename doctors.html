@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#0fc7ce">
+  <meta name="format-detection" content="telephone=no">
+  <meta http-equiv="cache-control" content="no-cache, no-store, must-revalidate">
+  <title>Медси Бот · Панель врачей</title>
+  <link rel="shortcut icon" href="/favicon.ico">
+  <link rel="apple-touch-icon" href="/apple-touch-icon2.png">
+  <link rel="stylesheet" href="/tutors/full-web.css?v=20260905-production">
+  <link rel="stylesheet" href="/tutors/full-web-fixes.css?v=20261103-inline-format-warning-1">
+  <link rel="stylesheet" href="/tutors/layout-stability.css?v=20260905-production">
+  <link rel="stylesheet" href="/tutors/dashboard-ui.css?v=20261005-therapy-wrap-1">
+  <link rel="stylesheet" href="/tutors/report-ui.css?v=20260907-1">
+  <link rel="stylesheet" href="/tutors/phone-cards-ui.css?v=20261105-no-delete-2">
+  <link rel="stylesheet" href="/parents/bot-character.css?v=20261003-2">
+  <link rel="stylesheet" href="/parents/smart-bot-widget.css?v=20261005-1">
+  <link rel="stylesheet" href="/tutors/assistant.css?v=20261015-no-context-assistant-1">
+  <link rel="stylesheet" href="/tutors/next-settings.css?v=20261119-feedback-1">
+  <link rel="stylesheet" href="/tutors/parent-directory.css?v=20261117-clean-cards-1">
+  <link rel="stylesheet" href="/tutors/home-card-concept-v4.css?v=20261105-concept-cards-1">
+  <link rel="preload" as="image" href="/parents/blob.webp" fetchpriority="high">
+  <style>
+    .educator-logo{width:96px!important;height:45px!important;margin-bottom:2px!important}
+    .educator-logo span:nth-child(1){width:28px!important;height:28px!important;left:0!important;bottom:0!important;top:auto!important}
+    .educator-logo span:nth-child(2){width:22px!important;height:22px!important;left:23px!important;top:0!important;bottom:auto!important}
+    .educator-logo span:nth-child(3){width:19px!important;height:19px!important;left:45px!important;top:20px!important;bottom:auto!important}
+    .educator-logo span:nth-child(4){width:16px!important;height:16px!important;left:66px!important;top:4px!important;bottom:auto!important}
+    .educator-logo span:nth-child(5){width:12px!important;height:12px!important;left:84px!important;top:24px!important;bottom:auto!important}
+    .auth-gate.checking #authForm{display:none!important}
+    .auth-checking{text-align:center;color:var(--muted);line-height:1.45}
+    .auth-checking p{margin:14px 0 0}
+  </style>
+  <link rel="stylesheet" href="/doctors/panel.css">
+  <script defer src="/chat-overlay/menu-twemoji.js"></script>
+  <script defer src="/tutors/phone-cards-ui.js"></script>
+  <script defer src="/doctors/panel.js"></script>
+  <script defer src="/tutors/parent-directory.js"></script>
+  <script defer src="/doctors/reports.js"></script>
+</head>
+<body data-screen="screenChoose">
+  <div id="tutorAuthGate" class="auth-gate">
+    <div class="auth-card">
+      <div class="educator-start-brand">
+        <div class="educator-logo" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span></div>
+        <h1 class="auth-title">Медси Бот</h1>
+        <p class="auth-subtitle">Войдите в панель врачей.</p>
+      </div>
+      <div id="authChecking" class="auth-checking" role="status" aria-live="polite">
+        <div class="boot-spinner" aria-hidden="true"></div>
+        <p id="authCheckingText">Загружаем панель…</p>
+        <button id="authRetry" class="btn hidden" type="button" onclick="location.reload()">Повторить загрузку</button>
+      </div>
+      <form id="authForm" class="hidden">
+        <div class="auth-fields">
+          <label for="tutorLogin">Логин</label>
+          <input id="tutorLogin" type="text" autocomplete="username" spellcheck="false">
+          <label for="tutorPassword">Пароль</label>
+          <input id="tutorPassword" type="password" autocomplete="current-password">
+        </div>
+        <p id="tutorAuthError" class="status error hidden" role="alert"></p>
+        <button id="tutorLoginBtn" class="btn btn-teal auth-submit" type="submit">Войти в систему</button>
+        <p class="auth-note">На этом устройстве вход сохранится.</p>
+      </form>
+    </div>
+  </div>
+
+  <div class="wrap hidden" id="doctorWorkspace">
+    <article class="frame choose-mode" id="frame">
+      <div id="rim" class="rim"></div>
+      <div class="scene">
+        <h1 id="title" class="title">Медси Бот</h1>
+
+        <section id="screenChoose">
+
+          <div class="educator-start-brand">
+            <div id="medsiAssistantLogo" class="medsi-assistant-logo" aria-hidden="true"><div class="medsi-bot-dock medsi-bot-dock--brand"><div class="medsi-bot-launcher"><span class="medsi-bot-scale"><span class="medsi-character"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/parents/blob.webp" fetchpriority="high" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span></div></div></div>
+            <h1 class="educator-start-title">Медси Бот</h1>
+            <p class="educator-start-subtitle">Панель врачей</p>
+          </div>
+          <div class="educator-dashboard">
+            <div class="educator-actions">
+              <button id="doctorPatients" class="btn menu-card menu-card-chat block start-cascade start-cascade-1">
+                <span class="menu-card-title">📋 Список пациентов</span>
+                <span class="menu-card-text">Сроки госпитализации и выписки.</span>
+              </button>
+              <div class="grid2 educator-report-grid">
+                <button id="doctorReports" class="btn menu-card menu-card-morning block start-cascade start-cascade-2">
+                  <span class="menu-card-title">📑 Отчёты и дети</span>
+                  <span class="menu-card-text">Исходные отчёты и отчёты по детям.</span>
+                </button>
+                <button id="medsiParentDirectoryCard" class="btn menu-card menu-card-evening block start-cascade start-cascade-2">
+                  <span class="menu-card-title">👥 База родителей</span>
+                  <span class="menu-card-text">Найти контакт в архиве.</span>
+                </button>
+              </div>
+              <div class="grid2 educator-secondary-grid">
+                <button id="btnPsychology" class="btn menu-card menu-card-therapy block start-cascade start-cascade-3">
+                  <span class="menu-card-title">🧠 Психотерапия</span>
+                  <span class="menu-card-text">Отправить отчёт по групповой терапии.</span>
+                </button>
+                <button id="btnParentPhones" class="btn menu-card menu-card-phones block start-cascade start-cascade-3">
+                  <span class="menu-card-title">📞 Телефоны</span>
+                  <span class="menu-card-text">Дать ребёнку позвонить родителю.</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section id="screenPhones" class="hidden">
+          <button type="button" class="btn soft-back-btn" data-home>← В меню</button>
+          <input id="phoneSearch" type="search" placeholder="Поиск по имени или телефону" aria-label="Поиск телефонов">
+          <div id="phonesList" class="phones-list"></div>
+          <p id="phonesError" class="status error hidden" role="alert"></p>
+        </section>
+        <section id="screenTherapy" class="hidden">
+          <button type="button" class="btn soft-back-btn" data-home>← В меню</button>
+          <form id="therapyForm">
+            <textarea id="therapyText" class="report-area" required maxlength="240000" placeholder="Вставьте отчёт по групповой терапии" aria-label="Отчёт по групповой терапии"></textarea>
+            <p id="therapyError" class="status error hidden" role="alert"></p>
+            <button id="therapySend" class="btn btn-teal">Отправить</button>
+          </form>
+          <div id="therapyDone" class="hidden">
+            <p class="status success">Отчёт отправлен.</p>
+            <button id="therapyAgain" class="btn soft-back-btn" type="button">Следующий отчёт</button>
+          </div>
+        </section>
+      </div>
+    </article>
+  </div>
+  <section id="screenPatients" class="medsi-tutor-reports hidden" aria-labelledby="patientTitle" tabindex="-1">
+    <div class="medsi-reports-shell patient-shell">
+      <header class="medsi-reports-header patient-header">
+        <button class="medsi-reports-back" type="button" data-home aria-label="В меню">←</button>
+        <h2 id="patientTitle">Список пациентов</h2>
+        <button id="refreshPatients" class="medsi-reports-refresh" type="button" aria-label="Обновить список">↻</button>
+      </header>
+      <p id="patientCount" role="status"></p>
+      <div class="patient-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <input id="patientSearch" type="search" placeholder="Поиск пациента" aria-label="Поиск пациентов">
+      </div>
+      <p id="patientError" class="medsi-reports-feedback hidden" role="alert"></p>
+      <ul id="patientList" class="medsi-reports-content" aria-label="Пациенты"></ul>
+    </div>
+  </section>
+</body>
+</html>

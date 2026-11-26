@@ -10,6 +10,7 @@ import pg from 'pg';
 import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
+import {createDoctorsLocalDates} from '../app/doctors-local-dates.mjs';
 import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
@@ -573,4 +574,61 @@ test('Greenwood parses calendar datetimes without guessing missing admission',()
   assert.equal(rows[0].episode,'2024-02-29');
   assert.equal(rows[1].episode,'2024-03-01');
   assert.equal(rows[2].episode,null);
+});
+
+test('Google roster uses actual second header row and C G I projection',async()=>{
+  const greenwood=createGreenwoodSource({DOCTORS_GREENWOOD_SHEET_ID:'synthetic',DOCTORS_GREENWOOD_DISCHARGE_COLUMN:'I'},async url=>{
+    const params=new URL(url).searchParams;
+    assert.equal(params.get('range'),'A2:Z1007');
+    assert.equal(params.get('headers'),'1');
+    assert.equal(params.get('tq'),'select C,G,I where C is not null');
+    return new Response('google.visualization.Query.setResponse('+JSON.stringify({status:'ok',table:{
+      cols:[{id:'C'},{id:'G'},{id:'I'}],rows:[{c:[{v:'Тестов Пациент'},{v:'Date(2024,1,1)'},{v:'Date(2024,1,20)'}]}]
+    }})+');');
+  });
+  assert.equal((await greenwood.read())[0].discharge,'2024-02-20');
+  assert.equal(greenwood.diagnostics().counters.withDischarge,1);
+});
+test('doctor local override survives restart and sheet changes but not a different stay',{
+  skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
+},async t=>{
+  const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
+    database:process.env.PGDATABASE||'postgres',max:2});
+  t.after(()=>pool.end());
+  const sql=createPostgresSql(pool);
+  const id='synthetic-'+randomUUID();
+  const env={NEXT_SESSION_SECRET:'synthetic-local-secret'};
+  let rows=[{key:id+'|2024-02-01',childName:'Тестов Пациент',episode:'2024-02-01',discharge:'2024-02-20'}];
+  const greenwood={configured:true,read:async()=>rows,diagnostics:()=>({})};
+  const create=()=>{
+    const source=createDoctorsRoster(sql,env,{greenwood});
+    const local=createDoctorsLocalDates({sql,greenwood,listPatients:source.current});
+    return {local,roster:createDoctorsRoster(sql,env,{greenwood,plans:local})};
+  };
+  const first=create();
+  const [patient]=await first.roster.list();
+  assert.equal(patient.discharge,'2024-02-20');
+  assert.equal(patient.dischargeSource,'google');
+  assert.equal(patient.admission,'2024-02-01');
+  assert.equal((await first.local.enqueue(patient.id,'2024-02-25',patient.revision)).ok,true);
+  rows[0].discharge='2024-02-21';
+  const restarted=create();
+  const [changed]=await restarted.roster.list();
+  assert.equal(changed.discharge,'2024-02-25');
+  assert.equal(changed.dischargeSource,'doctor');
+  assert.equal((await restarted.local.enqueue(patient.id,'2024-02-26',patient.revision)).status,409);
+  assert.equal((await restarted.local.enqueue(patient.id,'2024-01-31',changed.revision)).status,400);
+  assert.equal((await restarted.local.enqueue(patient.id,'2024-02-26',changed.revision)).ok,true);
+  assert.equal((await restarted.roster.list())[0].discharge,'2024-02-26');
+  rows=[];
+  assert.deepEqual(await restarted.roster.list(),[]);
+  assert.equal((await restarted.local.enqueue(patient.id,'2024-02-27',changed.revision)).status,404);
+  rows=[{key:id+'|2024-03-01',childName:'Тестов Пациент',episode:'2024-03-01',discharge:'2024-03-15'}];
+  const [newStay]=await restarted.roster.list();
+  assert.notEqual(newStay.id,patient.id);
+  assert.equal(newStay.discharge,'2024-03-15');
+  assert.equal(newStay.dischargeSource,'google');
+  assert.equal(restarted.local.diagnostics().diskEnabled,false);
+  const [[saved]]=await sql`SELECT status FROM doctor_discharge_changes WHERE patient_id=${patient.id} ORDER BY created_at DESC,id DESC LIMIT 1`;
+  assert.equal(saved.status,'local');
 });

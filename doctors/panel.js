@@ -157,6 +157,7 @@
 
     const dates=node('div','patient-dates');
     const discharge=patientDate('Выписка',patient.discharge);
+    if(patient.dischargeSource==='doctor')discharge.append(node('span','patient-date-source','Установлено врачом'));
     if(patient.editable){
       const edit=node('button','medsi-roster-status-icon patient-edit');
       edit.type='button';

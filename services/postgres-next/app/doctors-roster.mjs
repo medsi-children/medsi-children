@@ -67,7 +67,7 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
       // A row without a verified start date is visible but cannot be assigned
       // contacts or a plan from a possibly different stay.
       if(registry && !episode)return {...patient,admission:null,discharge:null,editable:false};
-      const clinical=await plans?.dates(patient.id);
+      const clinical=await plans?.dates(patient.id,{episode,registry,registryDischarge});
       return {...patient,...clinical,admission:clinical?.admission || episode || null,discharge:clinical?.discharge || registryDischarge || null};
     }));
   }

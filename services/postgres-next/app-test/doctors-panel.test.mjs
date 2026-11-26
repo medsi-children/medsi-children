@@ -196,7 +196,8 @@ test('Greenwood contacts require explicit episode-specific verified links',async
 });
 test('doctor routes require their own cookie and only publish psychotherapy',async t=>{
   const calls=[];
-  const service={doctorsRoster:{list:async()=>[]},reports:{submit:async opts=>calls.push(opts)}};
+  const service={doctorsRoster:{list:async()=>[]},reports:{submit:async opts=>calls.push(opts)},
+    doctorsPlans:{diagnostics:()=>({mode:'read-only',counters:{patients:0}})}};
   const app=express();
   app.use('/doctors/api',createDoctorsRouter(service,{NEXT_TUTOR_LOGIN:'test',NEXT_TUTOR_PASSWORD:'test-pass',
     NEXT_SESSION_SECRET:'synthetic-key-that-is-more-than-32-characters',DOCTORS_LOCAL_HTTP:'1'}));
@@ -205,6 +206,7 @@ test('doctor routes require their own cookie and only publish psychotherapy',asy
   await once(server,'listening');
   const base='http://127.0.0.1:'+server.address().port+'/doctors/api';
   assert.equal((await fetch(base+'/patients',{headers:{'X-Medsi-Chat-Session':'educator'}})).status,401);
+  assert.equal((await fetch(base+'/diagnostics')).status,401);
   const login=await fetch(base+'/login',{method:'POST',headers:{'content-type':'application/json'},
     body:JSON.stringify({login:'test',password:'test-pass'})});
   assert.equal(login.status,200);
@@ -212,6 +214,9 @@ test('doctor routes require their own cookie and only publish psychotherapy',asy
   const patientResponse=await fetch(base+'/patients',{headers:{cookie}});
   assert.equal(patientResponse.status,200);
   assert.equal(patientResponse.headers.get('cache-control'),'no-store');
+  const diagnostics=await fetch(base+'/diagnostics',{headers:{cookie}});
+  assert.equal(diagnostics.headers.get('cache-control'),'no-store');
+  assert.deepEqual(await diagnostics.json(),{ok:true,sync:{mode:'read-only',counters:{patients:0}}});
   assert.equal((await fetch(base+'/parent-directory/import',{method:'POST',headers:{cookie,'content-type':'application/json'},body:'{}'})).status,404);
   const publication=await fetch(base+'/psychology',{method:'POST',headers:{cookie,'content-type':'application/json'},
     body:JSON.stringify({text:'Синтетический отчёт',submissionId:'report_fixture',reportType:'morning'})});
@@ -376,6 +381,8 @@ test('root of Disk discovers active patient plans read-only and ignores unrelate
   const initial=await first.dates(id);
   assert.equal(initial.admission,'2024-02-01');
   assert.equal(initial.discharge,'2024-02-16');
+  assert.equal(first.diagnostics().mode,'read-only');
+  assert.deepEqual(first.diagnostics().counters,{patients:1,matched:1,withPlans:1,unsafe:0,skipped:0,errors:0});
   assert.deepEqual(visited,[root,folder]);
   assert.equal((await first.enqueue(id,'2024-02-19',initial.revision)).ok,true);
   const second=create();await second.start();second.stop();

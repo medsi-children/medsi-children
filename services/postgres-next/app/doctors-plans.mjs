@@ -188,31 +188,39 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
 
   let working=false,timer,stopped=false;
   let failures=0;
+  let lastCycle=null,lastComplete=null;
+  let counters={patients:0,matched:0,withPlans:0,unsafe:0,skipped:0,errors:0};
   const configuredInterval=Number(env.DOCTORS_DISK_INTERVAL_MS || 300000);
   const interval=Number.isFinite(configuredInterval)?Math.max(60000,configuredInterval):300000;
   async function cycle(){
     if(working || stopped)return;
     working=true;
+    lastCycle=new Date().toISOString();
+    const counts={patients:0,matched:0,withPlans:0,unsafe:0,skipped:0,errors:0};
     try{
       await prepare();
       const patients=await listPatients({fresh:true});
+      counts.patients=patients.length;
       const folders=(await source.list(root)).filter(item=>item.type==='dir' && directDiskChild(root,item) && item.path!=='disk:/medsi-doctors-test');
       const today=moscowDay();
       let patientFailed=false;
       for(const patient of patients) {
         if(stopped)break;
         const parts=identity(patient.childName);
-        if(!parts || (patient.registry && !patient.episode))continue;
+        if(!parts || (patient.registry && !patient.episode)){counts.skipped++;continue;}
         const matchesForPatient=folders.filter(folder=>matches(folder.name,parts));
         const duplicate=patients.some(other=>other.id!==patient.id && matches(other.childName,parts));
         try{await sql.begin({isolation:'serializableReadWrite'},async tx=>{
           const [[lock]]=await tx`SELECT pg_try_advisory_xact_lock(hashtext(${patient.id})) AS owned`;
-          if(!lock.owned)return;
+          if(!lock.owned){counts.skipped++;return;}
           const [[row]]=await tx`SELECT snapshot FROM doctor_plan_snapshots WHERE patient_id=${patient.id}`;
           const previous=row?.snapshot;
           const folder=matchesForPatient.length===1&&!duplicate?matchesForPatient[0]:null;
           const snapshot=folder ? await scan(folder,parts,previous,today,patient.episode) :
             {documents:[],current:[],admission:null,discharge:null,unsafe:matchesForPatient.length>1||duplicate};
+          if(folder)counts.matched++;
+          if(snapshot.current.length)counts.withPlans++;
+          if(snapshot.unsafe)counts.unsafe++;
           snapshot.version ||= digest(JSON.stringify(snapshot));
           if(snapshot.admission){
             await tx`UPDATE doctor_discharge_changes SET admission=${snapshot.admission}
@@ -246,17 +254,23 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
             ON CONFLICT(patient_id) DO UPDATE SET snapshot=excluded.snapshot,updated_at=now()`;
         });}catch{
           patientFailed=true;
+          counts.errors++;
           console.warn('MEDSI_DOCTORS_PATIENT_SYNC_UNAVAILABLE');
         }
       }
       failures=patientFailed?Math.min(failures+1,4):0;
+      if(!patientFailed && !stopped)lastComplete=new Date().toISOString();
     }catch{
+      counts.errors++;
       failures=Math.min(failures+1,4);
       console.warn('MEDSI_DOCTORS_DISK_SYNC_UNAVAILABLE');
     }finally{
+      counters=counts;
       working=false;
       if(!stopped){timer=setTimeout(cycle,interval*2**failures);timer.unref();}
     }
   }
-  return {dates,enqueue,start(){if(source)return cycle();},stop(){stopped=true;clearTimeout(timer);}};
+  return {dates,enqueue,diagnostics(){return {configured:Boolean(source),registryConfigured:Boolean(env.DOCTORS_GREENWOOD_SHEET_ID),
+    mode:write?policy.mode:'read-only',running:working,lastCycle,lastComplete,failures,counters:{...counters}};},
+    start(){if(source)return cycle();},stop(){stopped=true;clearTimeout(timer);}};
 }

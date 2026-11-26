@@ -56,6 +56,7 @@ export function createDoctorsRouter(services, env) {
   });
 
   router.get('/session',run(()=>({ok:true})));
+  router.get('/diagnostics',run(()=>({ok:true,sync:services.doctorsPlans?.diagnostics()||null})));
   router.get('/patients',run(async(req)=>({ok:true,
     patients:await roster.list({refresh:req.query.refresh==='1'})
   })));

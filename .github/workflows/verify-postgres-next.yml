@@ -88,7 +88,7 @@ jobs:
           PGDATABASE=medsi_full_import node --test services/postgres-next/test/full-import.test.mjs
       - name: Existing NEXT report logic and app regressions
         run: |
-          npm test --prefix services/postgres-next
+          npm run verify:postgres-next
           npm run verify
 
       - name: Rehearse doctors plan writes, conflicts and restart on disposable PostgreSQL 18

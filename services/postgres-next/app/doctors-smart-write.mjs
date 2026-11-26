@@ -13,6 +13,10 @@ export function smartWritePolicy(env,storage){
 export function createDoctorsSmartWrite({sql,policy,storage,source,root}){
   let prepared;
   const prepare=()=>prepared||=(async()=>{
+    await sql`CREATE TABLE IF NOT EXISTS doctor_discharge_changes (
+      id uuid PRIMARY KEY, patient_id text NOT NULL, version text NOT NULL,
+      admission text, desired text NOT NULL, expected jsonb NOT NULL,
+      status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now())`;
     await sql`CREATE TABLE IF NOT EXISTS doctor_smart_write_jobs (
       id uuid PRIMARY KEY, patient_id text NOT NULL, admission text NOT NULL,
       desired text NOT NULL, scope text NOT NULL, targets jsonb NOT NULL,

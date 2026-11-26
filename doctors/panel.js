@@ -124,7 +124,9 @@
     const footer=node('div','patient-deadline');
     const remaining=patient.discharge?days(patient.discharge,day):null;
     const left=Math.max(0,remaining);
-    const label=remaining===null?'Дата выписки не назначена':remaining<0?'Плановая дата выписки прошла':remaining===0?'Выписка сегодня':
+    const absentLabel=!patient.admission?'Проверьте дату поступления':patient.planStatus==='noDischarge'?'Дата выписки не указана ни в плане, ни в реестре':
+      patient.planStatus==='checking'?'Проверяем планы':patient.planStatus==='conflict'?'Дата выписки требует проверки':'Дата выписки не подтверждена';
+    const label=remaining===null?absentLabel:remaining<0?'Плановая дата выписки прошла':remaining===0?'Выписка сегодня':
       (plural.select(left)==='one'?'Остался ':'Осталось ')+countDays(left);
     footer.dataset.tone=remaining===null?'muted':remaining<0?'overdue':remaining>0&&remaining<=3?'warning':'scheduled';
     const status=node('span','patient-deadline-label');
@@ -171,8 +173,11 @@
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
     row.append(identity,dates,patientDeadline(patient,day));
     if(patient.syncConflict)row.append(node('p','status error','Требуется проверить актуальный план перед повторным сохранением даты.'));
-    if(patient.dischargeSource!=='doctor'&&['conflict','incomplete','stale'].includes(patient.planStatus))
+    if(patient.dischargeSource!=='doctor'&&['conflict','incomplete','stale','unverified'].includes(patient.planStatus))
       row.append(node('p','status error',patient.planStatus==='conflict'?'В планах разные даты. Требуется проверка.':'Не удалось подтвердить актуальный план.'));
+    const writeLabels={pending:'Дата сохранена в боте. Ожидает записи в планы.',synced:'Дата записана в проверенные планы.',conflict:'Планы изменились или не поддерживают запись. Проверьте и сохраните дату снова.',needsReview:'Планы пока не подтверждены. Проверьте и сохраните дату снова.',notQueued:'Дата сохранена только в боте. Сохраните повторно для отправки в планы.'};
+    if(writeLabels[patient.diskWriteStatus])row.append(node('p','status '+(['conflict','needsReview'].includes(patient.diskWriteStatus)?'error':''),writeLabels[patient.diskWriteStatus]));
+    if(patient.unverifiedPlans>0&&patient.dischargeSource==='doctor')row.append(node('p','status','Есть непроверенные планы: '+patient.unverifiedPlans+'. Они не изменяются автоматически.'));
     return row;
   }
   function openDateEditor(patient){

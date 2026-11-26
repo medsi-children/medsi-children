@@ -99,6 +99,7 @@
   let patients=[],phones=[],listing=false;
   function patientCard(patient){
     const card=node('article','doctor-patient');
+    card.dataset.status='unscheduled';
     const header=node('header','doctor-patient-heading');
     header.append(node('h2','',patient.childName||'Имя ребёнка не указано'));
     card.append(header);

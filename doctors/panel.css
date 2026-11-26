@@ -6,22 +6,28 @@
 #screenPhones .soft-back-btn {margin-bottom:6px}
 .doctor-tools {display:flex;align-items:center;justify-content:space-between;gap:10px}
 #patientCount {margin:-4px 2px 0;color:#50727a;font-size:.82rem;font-weight:650}
-#patientSearch {min-height:48px;background:#f5fbfc;border-color:#d4e9eb}
-#patientList {gap:12px;align-items:start}
+#patientSearch {min-height:48px;background:#fff;border-color:#ade0e4;box-shadow:0 3px 10px #269caf0a}
+#patientList {gap:15px;align-items:start}
 #screenPatients .doctor-tools .btn {box-shadow:none}
 .doctor-patient {
-  min-width:0;overflow:hidden;border:1px solid #d4e8e6;border-radius:19px;
-  background:#fff;box-shadow:0 5px 18px #2054570c;overflow-wrap:anywhere;
+  min-width:0;overflow:hidden;border:1px solid #86d7d4;border-radius:20px;
+  background:linear-gradient(155deg,#fff 45%,#f2fdfc);overflow-wrap:anywhere;
+  box-shadow:0 10px 17px -7px #23798235,0 2px 3px #2379820a;
+  --discharge-top:#d7f8ec;--discharge-bottom:#b5efe0;--discharge-edge:#a1e4d4;
+  --discharge-ink:#236a64;--fill-top:#2ecfae;--fill-bottom:#14a1ad;--track:#d3f2ec;
 }
 .doctor-patient-heading {
-  position:relative;isolation:isolate;overflow:hidden;padding:13px 15px;
-  background:linear-gradient(116deg,#e8faf4 8%,#d6f4ef 100%);
+  position:relative;isolation:isolate;overflow:hidden;padding:15px 15px 17px;
+  box-shadow:inset 0 1px 0 #ffffff9c,inset 0 -1px 0 #238a8c28;
 }
 .doctor-patient-heading::after {
-  content:'';position:absolute;z-index:-1;right:-19px;top:5px;width:48%;height:135%;
-  border-radius:55% 45% 0 0;transform:rotate(-14deg);background:#f1fffcaa;pointer-events:none;
+  content:'';position:absolute;z-index:-1;inset:27% 0 0;
+  background:var(--medsi-home-wave) center bottom/100% 100% no-repeat;pointer-events:none;
 }
-.doctor-patient h2 {margin:0;color:#164d4c;font-size:1.06rem;line-height:1.24;font-weight:810}
+.doctor-patient h2 {
+  margin:0;color:#083e43;font-size:1.1rem;line-height:1.24;font-weight:820;
+  text-shadow:0 1px 0 #e1fffa75;
+}
 .doctor-patient-details {padding:12px 14px 14px;display:grid;gap:12px}
 .doctor-contacts {display:grid;gap:8px}
 .doctor-contact {display:flex;align-items:center;justify-content:space-between;gap:9px;text-decoration:none;color:#204e52}
@@ -29,37 +35,61 @@
 .doctor-contact-text {display:grid;line-height:1.35;gap:2px;font-size:.81rem}
 .doctor-contact-text span {color:#456e72;white-space:nowrap;font-variant-numeric:tabular-nums}
 .doctor-call-icon {
-  display:grid;place-items:center;flex:0 0 34px;height:34px;border-radius:50%;background:#e7f7f5;
+  display:grid;place-items:center;flex:0 0 36px;height:36px;border-radius:50%;
+  background:linear-gradient(155deg,#20b4ae,#087d9b);box-shadow:0 4px 9px #168ca440,inset 0 1px 0 #ffffff55;
 }
 .doctor-call-icon::after {
-  content:'';width:15px;height:15px;background:#148d87;
+  content:'';width:15px;height:15px;background:#fff;
   mask:url('/chat-overlay/assets/twemoji/1f4de.svg') center/contain no-repeat;
 }
 .doctor-contact-empty {margin:0;color:#5c777b;font-size:.8rem}
 .doctor-dates {display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .doctor-date {
   display:grid;gap:3px;position:relative;min-width:0;padding:8px 10px;
-  border-radius:11px;background:#f1f7f7;
+  border:1px solid #b9e5f8;border-radius:11px;
+  background:linear-gradient(145deg,#e5f6ff,#caecfc);
+  box-shadow:inset 0 1px 0 #ffffffb8,0 2px 4px #4486ab0a;
 }
-.doctor-date-discharge {background:#e9f7f4}
-.doctor-date-label {color:#4d6d70;font-size:.72rem;line-height:1.25;white-space:nowrap;font-weight:650}
+.doctor-date-discharge {
+  color:var(--discharge-ink);border-color:var(--discharge-edge);
+  background:linear-gradient(145deg,var(--discharge-top),var(--discharge-bottom));
+}
+.doctor-date-label {color:#315f76;font-size:.72rem;line-height:1.25;white-space:nowrap;font-weight:680}
+.doctor-date-discharge .doctor-date-label,
+.doctor-date-discharge .doctor-date-edit {color:var(--discharge-ink)}
 .doctor-date-value {line-height:1.35;white-space:nowrap}
 .doctor-date-value strong {color:#1d4548;font-size:.97rem;font-variant-numeric:tabular-nums}
 .doctor-date-value .doctor-date-missing {color:#4f7072;font-size:.78rem;font-weight:600}
 .doctor-date-edit {
   position:absolute;display:grid;place-items:center;top:3px;right:3px;width:30px;height:30px;
-  border:0;border-radius:8px;background:transparent;color:#187e78;font-size:18px;line-height:1;cursor:pointer;
+  border:0;border-radius:8px;background:transparent;font-size:18px;line-height:1;cursor:pointer;
 }
 .doctor-date-edit::before {content:'';position:absolute;inset:-6px}
-.doctor-date-edit:hover {background:#d4efea}
-.doctor-timeline {display:grid;gap:6px;--fill:#159486;--fg:#27796c;--track:#e1f3ed}
-.doctor-timeline p {margin:0;color:var(--fg);font-size:.78rem;font-weight:750;line-height:1.35}
-.doctor-patient progress {display:block;width:100%;height:5px;appearance:none;border:0;border-radius:8px;background:var(--track);overflow:hidden}
+.doctor-date-edit:hover {background:#ffffff85}
+.doctor-timeline {display:grid;gap:6px}
+.doctor-timeline p {margin:0;color:var(--discharge-ink);font-size:.78rem;font-weight:780;line-height:1.35}
+.doctor-patient progress {
+  display:block;width:100%;height:7px;appearance:none;border:0;border-radius:8px;
+  background:var(--track);overflow:hidden;
+}
 .doctor-patient progress::-webkit-progress-bar {background:var(--track)}
-.doctor-patient progress::-webkit-progress-value {background:var(--fill)}
-.doctor-patient progress::-moz-progress-bar {background:var(--fill)}
-.doctor-patient[data-status="soon"] .doctor-timeline {--fill:#d79836;--fg:#845919;--track:#faeed9}
-.doctor-patient[data-status="overdue"] .doctor-timeline {--fill:#bf6069;--fg:#943e51;--track:#f8e6eb}
+.doctor-patient progress::-webkit-progress-value {
+  background:linear-gradient(90deg,var(--fill-top),var(--fill-bottom));border-radius:8px;
+}
+.doctor-patient progress::-moz-progress-bar {
+  background:linear-gradient(90deg,var(--fill-top),var(--fill-bottom));border-radius:8px;
+}
+.doctor-patient[data-status="soon"] {
+  --discharge-top:#ffedab;--discharge-bottom:#ffdb86;--discharge-edge:#f3cc72;
+  --discharge-ink:#725012;--fill-top:#ffca52;--fill-bottom:#e99021;--track:#ffedc7;
+}
+.doctor-patient[data-status="overdue"] {
+  --discharge-top:#ffe1e5;--discharge-bottom:#ffc5d4;--discharge-edge:#eeadc1;
+  --discharge-ink:#86354e;--fill-top:#f59baf;--fill-bottom:#d85e86;--track:#ffe5ed;
+}
+.doctor-patient[data-status="unscheduled"] {
+  --discharge-top:#eef0ff;--discharge-bottom:#dfdefb;--discharge-edge:#d4d4f4;--discharge-ink:#514a83;
+}
 .doctor-plan-conflict {margin:0;color:#893e46;font-size:.8rem}
 @media(min-width:740px) {
   #patientList {grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -73,6 +103,9 @@
 }
 #therapyForm {display:grid;gap:12px}
 body[data-screen="screenPatients"] .wrap {align-items:start;padding-top:calc(14px + env(safe-area-inset-top))}
+body[data-screen="screenPatients"] .frame {
+  background:linear-gradient(165deg,#fbffff,#ecfbfb 65%,#e1f7f9);
+}
 body[data-screen="screenPatients"] .frame, body[data-screen="screenTherapy"] .frame {
   width:min(100%,860px);aspect-ratio:auto;min-height:0;
 }

@@ -3,6 +3,7 @@ import {validIsoDate} from './doctors-xlsx.mjs';
 
 const SHEET='5 этаж';
 const RANGE='C1:G1000';
+const ROSTER_CACHE_MS=25000;
 
 export function decodeGreenwood(text) {
   const payload=/^\s*(?:\/\*O_o\*\/\s*)?google\.visualization\.Query\.setResponse\(([\s\S]+)\);\s*$/.exec(text)?.[1];
@@ -24,7 +25,7 @@ export function decodeGreenwood(text) {
   return [...byId.values()];
 }
 
-export function createGreenwoodSource(env, request=fetch) {
+export function createGreenwoodSource(env, request=fetch, now=Date.now) {
   const id=env.DOCTORS_GREENWOOD_SHEET_ID;
   let latest=null,expires=0,reading,stale=false;
   const refresh=async()=>{
@@ -39,13 +40,13 @@ export function createGreenwoodSource(env, request=fetch) {
     if(body.length>1024*1024)throw new Error('Oversized Greenwood response');
     latest=decodeGreenwood(body);
   };
-  return {configured:Boolean(id),async read({fresh=false}={}){
+  return {configured:Boolean(id),async read({fresh=false,refresh:force=false}={}){
     if(!id)return [];
-    if(!reading && Date.now()>=expires){
+    if(!reading && (force || now()>=expires)){
       reading=refresh().then(()=>{stale=false;},()=>{
         stale=true;
         console.warn('MEDSI_DOCTORS_GREENWOOD_STALE');
-      }).finally(()=>{expires=Date.now()+300000;reading=null;});
+      }).finally(()=>{expires=now()+ROSTER_CACHE_MS;reading=null;});
     }
     await reading;
     if(!latest || (fresh && stale))throw new Error('Greenwood unavailable');

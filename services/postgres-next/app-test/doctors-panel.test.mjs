@@ -8,7 +8,8 @@ import pg from 'pg';
 import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
-import {decodeGreenwood} from '../app/doctors-greenwood.mjs';
+import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
+import {createDoctorsRoster} from '../app/doctors-roster.mjs';
 import {readPlanDates,updatePlanDischarge} from '../app/doctors-xlsx.mjs';
 
 const MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
@@ -40,12 +41,16 @@ test('writes only the selected XLSX cell and preserves time, shared references a
   assert.throws(()=>readPlanDates(book('29.02.2025')));
   assert.equal(readPlanDates(updatePlanDischarge(book('29.02.2024 — '),'2024-03-03')).discharge,'2024-03-03');
 });
-test('latest stay precedes final plan ordering and equal versions with different dates conflict',()=>{
+test('selects one discharge date by stay, final plan, version and a stable date tie-break',()=>{
+  const today='2024-02-08';
   const prior={admission:'2024-01-01',discharge:'2024-01-22',final:true,modified:'3',nameDate:''};
   const current={admission:'2024-02-01',discharge:'2024-02-22',final:false,modified:'1',nameDate:''};
-  assert.equal(selectCurrentPlans([prior,current],'2024-02-08').discharge,current.discharge);
-  assert.equal(selectCurrentPlans([current,{...current,discharge:null}],'2024-02-08').conflict,true);
-  assert.equal(selectCurrentPlans([current,{...current,final:true,discharge:'2024-02-20'}],'2024-02-08').discharge,'2024-02-20');
+  assert.equal(selectCurrentPlans([prior,current],today).discharge,current.discharge);
+  assert.equal(selectCurrentPlans([current,{...current,final:true,discharge:'2024-02-20'}],today).discharge,'2024-02-20');
+  assert.equal(selectCurrentPlans([current,{...current,modified:'2',discharge:'2024-02-20'}],today).discharge,'2024-02-20');
+  const later={...current,discharge:'2024-02-27'};
+  assert.equal(selectCurrentPlans([current,later],today).discharge,later.discharge);
+  assert.equal(selectCurrentPlans([later,{...current,discharge:null},current],today).discharge,later.discharge);
 });
 test('Greenwood accepts only the projected columns and detects ambiguous rows',()=>{
   const row={c:[{v:'Тестов Пациент'},{v:'Date(2024,1,29)',f:'29.02.2024'}]};
@@ -55,6 +60,28 @@ test('Greenwood accepts only the projected columns and detects ambiguous rows',(
   assert.equal(decodeGreenwood(encode([row]))[0].episode,'2024-02-29');
   assert.throws(()=>decodeGreenwood(encode([row,row])));
   assert.throws(()=>decodeGreenwood('<html>Sign in</html>'));
+});
+test('a removed Greenwood row disappears from the roster after a refresh',async()=>{
+  const row={c:[{v:'Тестов Пациент'},{v:'Date(2024,1,29)',f:'29.02.2024'}]};
+  const env={DOCTORS_GREENWOOD_SHEET_ID:'synthetic',NEXT_SESSION_SECRET:'synthetic-roster-secret'};
+  let now=0,rows=[row],requests=0;
+  const greenwood=createGreenwoodSource(env,async()=>{
+    requests++;
+    const response={status:'ok',table:{cols:[{id:'C'},{id:'G'}],rows}};
+    return new Response('google.visualization.Query.setResponse('+JSON.stringify(response)+');');
+  },()=>now);
+  const roster=createDoctorsRoster(()=>assert.fail('Authoritative roster must not fall back to PostgreSQL'),env,{greenwood});
+  assert.equal((await roster.list()).length,1);
+  rows=[];
+  assert.equal((await roster.list()).length,1);
+  assert.deepEqual(await roster.list({refresh:true}),[]);
+  assert.equal(requests,2);
+  rows=[row];
+  now+=30000;
+  assert.equal((await roster.list()).length,1);
+  rows=[];
+  now+=30000;
+  assert.deepEqual(await roster.list(),[]);
 });
 test('doctor routes require their own cookie and only publish psychotherapy',async t=>{
   const calls=[];
@@ -140,9 +167,9 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   const independent=create();
   await independent.start();
   independent.stop();
-  const conflicted=await independent.dates(patientId);
-  assert.equal(conflicted.conflict,true);
-  assert.equal(conflicted.discharge,'2024-02-25');
-  assert.equal(readPlanDates(records.get(independentPath)).discharge,'2024-02-21');
-  assert.equal(writes.length,3);
+  const resolved=await independent.dates(patientId);
+  assert.equal(resolved.discharge,'2024-02-25');
+  assert.equal(readPlanDates(records.get(independentPath)).discharge,'2024-02-25');
+  assert.ok([...backups.values()].some(bytes=>readPlanDates(bytes).discharge==='2024-02-21'));
+  assert.equal(writes.length,6);
 });

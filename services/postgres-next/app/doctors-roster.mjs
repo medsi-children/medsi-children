@@ -32,17 +32,17 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
     return [...patients.values()];
   }
 
-  async function current({fresh=false}={}) {
+  async function current(options) {
     if(!greenwood?.configured)return listBot();
-    const rows = await greenwood.read({fresh});
+    const rows = await greenwood.read(options);
     // The tab contains no verified contact identifier. Keep contacts in the
     // bot's phone directory and avoid assigning them to a possible namesake.
     return rows.map(row=>({id:ref('greenwood:'+row.key),
       childName:row.childName,episode:row.episode,parents:[]}));
   }
 
-  async function list() {
-    const patients=await current();
+  async function list(options) {
+    const patients=await current(options);
     return Promise.all(patients.map(async({childId,episode,...patient})=>({...patient,...await plans?.dates(patient.id)})));
   }
   return {list,listBot,current};

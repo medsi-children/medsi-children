@@ -55,7 +55,9 @@ export function createDoctorsRouter(services, env) {
   });
 
   router.get('/session',run(()=>({ok:true})));
-  router.get('/patients',run(async()=>({ok:true,patients:await roster.list()})));
+  router.get('/patients',run(async(req)=>({ok:true,
+    patients:await roster.list({refresh:req.query.refresh==='1'})
+  })));
   router.get('/phones',run(async()=>({ok:true,patients:(await roster.listBot()).map(({childId,...patient})=>patient)})));
   router.get('/reports',run(()=>services.dashboard.readForEducator()));
   router.get('/parent-directory',run(()=>services.parentDirectory.list()));

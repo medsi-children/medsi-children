@@ -42,36 +42,36 @@ body[data-screen="screenPatients"] {overflow:hidden}
 .patient-date-value[aria-label] {color:#5e7681}
 .patient-edit {position:absolute;top:50%;right:0;transform:translateY(-50%);color:#397984}
 .patient-edit:hover {background:#e4f2f4}
-.patient-edit:focus-visible,.patient-deadline-label:focus-visible,.patient-contact a:focus-visible {
+.patient-edit:focus-visible,.patient-contact a:focus-visible {
   outline:2px solid #55bdc6;outline-offset:2px;
 }
-.patient-deadline {display:grid;justify-items:start;gap:8px;color:#237764;--patient-progress-track:#e4efec}
+.patient-deadline {
+  display:grid;justify-items:start;gap:9px;color:#237764;
+  --patient-progress-track:#e2efee;--patient-progress-start:#40c3ad;--patient-progress-end:#249482;
+}
 .patient-deadline-label {
   display:inline-flex;align-items:center;gap:7px;padding:0;border:0;background:transparent;
   color:inherit;font-family:inherit;font-size:14px;font-weight:680;line-height:1.3;text-align:left;
 }
-button.patient-deadline-label {cursor:pointer;text-decoration:underline;text-underline-offset:3px}
 .patient-deadline-label svg {
   width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round;
 }
-.patient-deadline[data-tone="warning"] {color:#886220;--patient-progress-track:#fff3d9}
-.patient-deadline[data-tone="overdue"] {color:#a0526d;--patient-progress-track:#ffedf2}
+.patient-deadline[data-tone="warning"] {
+  color:#886220;--patient-progress-track:#fff1d9;--patient-progress-start:#f5cc74;--patient-progress-end:#dca047;
+}
 .patient-deadline[data-tone="muted"] {color:#5e7681}
 .patient-deadline progress {
-  display:block;width:100%;height:5px;appearance:none;border:0;border-radius:6px;overflow:hidden;
+  display:block;width:100%;height:9px;appearance:none;border:0;border-radius:999px;overflow:hidden;
   background:var(--patient-progress-track);
 }
-.patient-deadline progress::-webkit-progress-bar {background:var(--patient-progress-track)}
-.patient-deadline progress::-webkit-progress-value {background:currentColor;border-radius:6px}
-.patient-deadline progress::-moz-progress-bar {background:currentColor;border-radius:6px}
-.patient-detail-dialog h2 {margin:0;font-size:1.1rem;line-height:1.35;overflow-wrap:anywhere}
-.patient-detail-dialog p {margin:12px 0;color:#557178;font-size:.85rem}
-.patient-detail-dialog .patient-detail-conflict {color:#984e5c}
-.patient-detail-dialog .btn {margin-top:12px}
-.patient-detail-contacts {display:grid;gap:8px;list-style:none;padding:0;margin:12px 0;font-size:.85rem}
-.patient-detail-contacts li {display:grid;gap:2px;overflow-wrap:anywhere}
-.patient-detail-contacts a {color:#217b80}
+.patient-deadline progress::-webkit-progress-bar {background:var(--patient-progress-track);border-radius:999px}
+.patient-deadline progress::-webkit-progress-value {
+  background:linear-gradient(90deg,var(--patient-progress-start),var(--patient-progress-end));border-radius:999px;
+}
+.patient-deadline progress::-moz-progress-bar {
+  background:linear-gradient(90deg,var(--patient-progress-start),var(--patient-progress-end));border-radius:999px;
+}
 @media(max-width:650px) {
   #screenPatients .patient-shell {gap:11px}
   #patientList .patient-card {gap:11px;padding:14px}

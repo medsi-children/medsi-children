@@ -24,12 +24,10 @@ export function selectCurrentPlans(documents, today){
   const admission=dated.map(plan=>plan.admission).sort().at(-1);
   const current=dated.filter(plan=>plan.admission===admission);
   current.sort((a,b)=>Number(b.final)-Number(a.final) || b.modified.localeCompare(a.modified) ||
-    String(b.nameDate||'').localeCompare(String(a.nameDate||'')));
-  const preferred=current[0];
-  const tied=current.filter(plan=>plan.final===preferred?.final && plan.modified===preferred.modified &&
-    plan.nameDate===preferred.nameDate);
-  return {admission,discharge:preferred?.discharge||null,current,
-    conflict:new Set(tied.map(plan=>plan.discharge)).size>1};
+    String(b.nameDate||'').localeCompare(String(a.nameDate||'')) ||
+    String(b.discharge||'').localeCompare(String(a.discharge||'')) ||
+    String(a.path||'').localeCompare(String(b.path||'')));
+  return {admission,discharge:current[0]?.discharge||null,current};
 }
 
 export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
@@ -65,8 +63,6 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     return {
       admission:snapshot.admission || null,
       discharge:(sameEpisode && ['pending','conflict'].includes(pending.status) ? pending.desired : snapshot.discharge)||null,
-      conflict:Boolean(snapshot.conflict || (sameEpisode && pending.status==='conflict')),
-      diskDischarge:sameEpisode && pending.status==='conflict' ? snapshot.discharge : null,
       revision:(snapshot.version || '')+':'+(pending?.id||''),
       editable:true
     };
@@ -83,7 +79,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       const snapshot=row?.snapshot || {};
       const [[latest]]=await tx`SELECT id,desired,status FROM doctor_discharge_changes
         WHERE patient_id=${patientId} ORDER BY created_at DESC,id DESC LIMIT 1`;
-      if((snapshot.version||'')+':'+(latest?.id||'')!==revision || snapshot.conflict)
+      if((snapshot.version||'')+':'+(latest?.id||'')!==revision)
         return {ok:false,status:409,message:'Планы изменились. Обновите карточку пациента.'};
       if(snapshot.admission && date<snapshot.admission)
         return {ok:false,status:400,message:'Дата выписки раньше даты госпитализации.'};
@@ -99,10 +95,10 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
   async function scan(folder, parts, previous, today, episode) {
     const cached=new Map((previous?.documents||[]).map(doc=>[doc.path,doc]));
     const documents=[];
-    let conflict=false;
+    let unsafe=false;
     for(const item of (await source.list(folder.path)).filter(isPlan)){
       const version=diskVersion(item);
-      if(!version){conflict=true;continue;}
+      if(!version){unsafe=true;continue;}
       const old=cached.get(item.path);
       let dates=old?.version===version ? old : null;
       if(!dates){
@@ -112,7 +108,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
         try {dates=readPlanDates(bytes);}
         catch{dates={invalid:true};}
       }
-      if(dates.invalid || !(old?.version===version ? old.owned : dates.patient && matches(dates.patient,parts)))conflict=true;
+      if(dates.invalid || !(old?.version===version ? old.owned : dates.patient && matches(dates.patient,parts)))unsafe=true;
       const compactDate=/\b(\d{2})\.(\d{2})\.(\d{4})\b/u.exec(item.name);
       const nameDate=compactDate ? [compactDate[3],compactDate[2],compactDate[1]].join('-') : '';
       documents.push({path:item.path,version,modified:item.modified||'',nameDate:validIsoDate(nameDate)?nameDate:'',
@@ -121,9 +117,9 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       // Retain only the fields needed for date synchronization.
       if(old?.version===version)documents.at(-1).owned=old.owned;
     }
-    conflict ||= documents.some(doc=>doc.invalid || !doc.owned);
+    documents.sort((a,b)=>a.path.localeCompare(b.path));
     const selected=selectCurrentPlans(documents.filter(doc=>doc.owned && (!episode || doc.admission>=episode || doc.discharge>=episode)),today);
-    const snapshot={...selected,documents,unsafe:conflict,conflict:conflict||selected.conflict,
+    const snapshot={...selected,documents,unsafe,
       folder:folder.path};
     snapshot.version=digest(JSON.stringify(snapshot));
     return snapshot;
@@ -145,8 +141,6 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       const dates=readPlanDates(bytes);
       if(!matches(dates.patient,parts) || dates.admission!==snapshot.admission)return 'conflict';
       if(dates.discharge===operation.desired)continue;
-      const original=operation.expected[plan.path]??null;
-      if(dates.discharge!==original)return 'conflict';
       staged.push({plan,bytes,next:updatePlanDischarge(bytes,operation.desired)});
     }
     for(const entry of staged){
@@ -160,7 +154,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       if (diskVersion(await source.stat(entry.plan.path))!==entry.plan.version)return 'pending';
       await source.upload(entry.plan.path,entry.next);
       const verified=await source.download(entry.plan.path);
-      if(digest(verified)!==digest(entry.next))return 'conflict';
+      if(digest(verified)!==digest(entry.next))throw new Error('Plan upload verification changed');
     }
     return 'synced';
   }
@@ -190,16 +184,16 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
           const previous=row?.snapshot;
           const folder=matchesForPatient.length===1&&!duplicate?matchesForPatient[0]:null;
           const snapshot=folder ? await scan(folder,parts,previous,today,patient.episode) :
-            {documents:[],current:[],admission:null,discharge:null,conflict:matchesForPatient.length>1||duplicate};
+            {documents:[],current:[],admission:null,discharge:null,unsafe:matchesForPatient.length>1||duplicate};
           snapshot.version ||= digest(JSON.stringify(snapshot));
           if(snapshot.admission){
             await tx`UPDATE doctor_discharge_changes SET admission=${snapshot.admission}
-              WHERE patient_id=${patient.id} AND status='pending' AND admission IS NULL`;
+              WHERE patient_id=${patient.id} AND status IN ('pending','conflict') AND admission IS NULL`;
           }
           if(write && folder){
-            const [[operation]]=await tx`SELECT id,admission,desired,expected FROM doctor_discharge_changes
-              WHERE patient_id=${patient.id} AND status='pending'`;
-            if(operation){
+            const [[operation]]=await tx`SELECT id,admission,desired,status FROM doctor_discharge_changes
+              WHERE patient_id=${patient.id} ORDER BY created_at DESC,id DESC LIMIT 1`;
+            if(['pending','conflict'].includes(operation?.status)){
               const status=await writeAll(snapshot,operation,parts);
               if(status==='synced'){
                 const refreshed=await scan(folder,parts,snapshot,today,patient.episode);

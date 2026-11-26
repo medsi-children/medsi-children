@@ -5,6 +5,9 @@
   const BASE='/chat-overlay/assets/twemoji/';
   const ITEMS=[
     ['#btnChat .menu-card-title','💬','1f4ac.svg'],
+    ['#doctorPatients .menu-card-title','📋','1f4cb.svg'],
+    ['#doctorReports .menu-card-title','📑','1f4d1.svg'],
+    ['#screenChoose #medsiParentDirectoryCard .menu-card-title','👥','1f465.svg'],
     ['#btnParentChats .menu-card-title','💬','1f4ac.svg'],
     ['#btnMorning .menu-card-title','☀️','2600.svg'],
     ['#btnEvening .menu-card-title','🌙','1f319.svg'],
@@ -39,8 +42,8 @@
     document.head.appendChild(style);
   }
 
-  // Start the six tiny same-origin asset requests immediately so menu paint is normally cache-hot.
-  [...new Set(ITEMS.map(item=>item[2]))].forEach(file=>{const img=new Image();img.decoding='async';img.src=BASE+file});
+  // Warm the same-origin icons used by the current menu.
+  [...new Set(ITEMS.filter(item=>document.querySelector(item[0])).map(item=>item[2]))].forEach(file=>{const img=new Image();img.decoding='async';img.src=BASE+file});
 
   function paintOne(selector,emoji,file){
     const title=document.querySelector(selector);

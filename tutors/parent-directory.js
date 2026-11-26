@@ -1,6 +1,7 @@
 (function(){
   'use strict';
   if(document.getElementById('medsiParentDirectoryDialog'))return;
+  const doctor=Boolean(window.MedsiDoctors);
   const overlay=document.createElement('div');
   overlay.id='medsiParentDirectoryDialog';
   overlay.className='medsi-directory-overlay hidden';
@@ -20,10 +21,10 @@
         <input type="search" id="medsiDirectorySearch" placeholder="Поиск по ребёнку, родителю или телефону" aria-label="Поиск по базе родителей">
         <div class="medsi-directory-tools">
           <span id="medsiDirectoryCount" role="status">Загрузка записей…</span>
-          <button type="button" id="medsiDirectoryImport" class="medsi-directory-import">Импорт CSV</button>
-          <input type="file" id="medsiDirectoryFile" accept=".csv,text/csv" class="hidden">
+          ${doctor?'':`<button type="button" id="medsiDirectoryImport" class="medsi-directory-import">Импорт CSV</button>
+          <input type="file" id="medsiDirectoryFile" accept=".csv,text/csv" class="hidden">`}
         </div>
-        <p class="medsi-directory-help">В архив попадают новые регистрации. Сохранённую старую базу можно импортировать из CSV один раз. Совпадающие номера автоматически объединяются: один телефон, одна запись.</p>
+        ${doctor?'':`<p class="medsi-directory-help">В архив попадают новые регистрации. Сохранённую старую базу можно импортировать из CSV один раз. Совпадающие номера автоматически объединяются: один телефон, одна запись.</p>`}
         <p id="medsiDirectoryFeedback" role="status" class="medsi-directory-feedback"></p>
       </div>
       <div id="medsiDirectoryList" class="medsi-directory-list"></div>
@@ -36,7 +37,7 @@
   const fileInput=id('medsiDirectoryFile');
   let records=[],busy=false;
   const norm=v=>String(v??'').toLocaleLowerCase('ru-RU').replace(/ё/g,'е').trim();
-  function setBusy(v){busy=v;importButton.disabled=v;close.disabled=v}
+  function setBusy(v){busy=v;if(importButton)importButton.disabled=v;close.disabled=v}
   async function request(path,{method='GET',body}={}){
     const session=await window.MedsiEducatorSession.get();
     if(!session?.token)throw new Error('Сначала войдите в панель воспитателя.');
@@ -74,6 +75,7 @@
       const parent=document.createElement('span');parent.className='medsi-directory-parent';parent.textContent='Родитель '+row.parentName;
       const phone=document.createElement('span');phone.className='medsi-directory-phone';phone.textContent='Телефон: +'+row.phone;
       info.append(title,parent,phone);
+      if(doctor){card.append(info);list.appendChild(card);return;}
       const remove=document.createElement('button');remove.type='button';remove.className='medsi-directory-remove';
       remove.setAttribute('aria-label','Удалить запись из базы родителей');
       remove.title='Удалить запись';
@@ -94,7 +96,7 @@
   async function load(){
     feedback.textContent='';count.textContent='Загружаем базу родителей…';setBusy(true);
     try{
-      const data=await request('/lab/admin/parent-directory');
+      const data=doctor?await MedsiDoctors.request('/parent-directory'):await request('/lab/admin/parent-directory');
       records=Array.isArray(data.rows)?data.rows:[];
       render();
     }catch(error){feedback.textContent=error.message;count.textContent='База недоступна'}
@@ -136,8 +138,8 @@
   overlay.addEventListener('click',event=>{if(event.target===overlay)shut()});
   overlay.addEventListener('keydown',event=>{if(event.key==='Escape')shut()});
   search.addEventListener('input',render);
-  importButton.onclick=()=>fileInput.click();
-  fileInput.onchange=async()=>{
+  if(importButton)importButton.onclick=()=>fileInput.click();
+  if(fileInput)fileInput.onchange=async()=>{
     const file=fileInput.files?.[0];fileInput.value='';if(!file)return;
     try{
       if(file.size>500*1024)throw new Error('CSV слишком большой. Максимум 500 КБ.');

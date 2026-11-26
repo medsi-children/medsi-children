@@ -16,13 +16,13 @@ const MIME='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const SHEET='http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 const REL='http://schemas.openxmlformats.org/officeDocument/2006/relationships';
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
-function book(dates){
+function book(dates,patient='Тестов Пациент 15 лет'){
   const zip=new AdmZip();
   const add=(path,text)=>zip.addFile(path,Buffer.from(text));
   add('xl/workbook.xml',`<workbook xmlns="${SHEET}" xmlns:r="${REL}"><sheets><sheet name="ДЕТСКИЙ СТАЦИОНАР" r:id="rId1"/></sheets></workbook>`);
   add('xl/_rels/workbook.xml.rels','<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Target="worksheets/sheet1.xml"/></Relationships>');
   add('xl/sharedStrings.xml',`<sst xmlns="${SHEET}"><si><t>${dates}</t></si></sst>`);
-  add('xl/worksheets/sheet1.xml',`<worksheet xmlns="${SHEET}"><sheetData><row r="4"><c r="B4" t="inlineStr"><is><t>Дата, время:</t></is></c><c r="C4" s="1" t="s"><v>0</v></c><c r="G4" t="s"><v>0</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Ф.И.О. пациента, возраст:</t></is></c><c r="C5" t="inlineStr"><is><t>Тестов Пациент 15 лет</t></is></c></row><row r="6"><c r="F6"><f>C6*D6</f><v>123</v></c></row></sheetData><mergeCells><mergeCell ref="C4:F4"/></mergeCells></worksheet>`);
+  add('xl/worksheets/sheet1.xml',`<worksheet xmlns="${SHEET}"><sheetData><row r="4"><c r="B4" t="inlineStr"><is><t>Дата, время:</t></is></c><c r="C4" s="1" t="s"><v>0</v></c><c r="G4" t="s"><v>0</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Ф.И.О. пациента, возраст:</t></is></c><c r="C5" t="inlineStr"><is><t>${patient}</t></is></c></row><row r="6"><c r="F6"><f>C6*D6</f><v>123</v></c></row></sheetData><mergeCells><mergeCell ref="C4:F4"/></mergeCells></worksheet>`);
   return zip.toBuffer();
 }
 test('writes only the selected XLSX cell and preserves time, shared references and formulas',()=>{
@@ -139,7 +139,9 @@ test('doctor routes require their own cookie and only publish psychotherapy',asy
     body:JSON.stringify({login:'test',password:'test-pass'})});
   assert.equal(login.status,200);
   const cookie=login.headers.get('set-cookie').split(';')[0];
-  assert.equal((await fetch(base+'/patients',{headers:{cookie}})).status,200);
+  const patientResponse=await fetch(base+'/patients',{headers:{cookie}});
+  assert.equal(patientResponse.status,200);
+  assert.equal(patientResponse.headers.get('cache-control'),'no-store');
   assert.equal((await fetch(base+'/parent-directory/import',{method:'POST',headers:{cookie,'content-type':'application/json'},body:'{}'})).status,404);
   const publication=await fetch(base+'/psychology',{method:'POST',headers:{cookie,'content-type':'application/json'},
     body:JSON.stringify({text:'Синтетический отчёт',submissionId:'report_fixture',reportType:'morning'})});
@@ -228,4 +230,49 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   assert.equal(readPlanDates(records.get(independentPath)).discharge,'2024-02-25');
   assert.ok([...backups.values()].some(bytes=>readPlanDates(bytes).discharge==='2024-02-21'));
   assert.equal(writes.length,6);
+});
+
+test('one broken folder cannot starve other patients, and removed registry rows stop writes',{
+  skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
+},async t=>{
+  const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
+    database:process.env.PGDATABASE||'postgres',max:2});
+  t.after(()=>pool.end());
+  const sql=createPostgresSql(pool);
+  const root='disk:/synthetic-isolation';
+  const bad={id:'synthetic-'+randomUUID(),childName:'Тестов Пациент',episode:'2024-02-01'};
+  const good={id:'synthetic-'+randomUUID(),childName:'Другой Пациент',episode:'2024-02-01'};
+  const badPath=root+'/Тестов Пациент';
+  const goodPath=root+'/Другой Пациент';
+  const path=goodPath+'/План.xlsx';
+  let bytes=book('01.02.2024-16.02.2024','Другой Пациент'),writes=0,reads=0,removeDuringWrite=false;
+  const stat=()=>({type:'file',name:'План.xlsx',path,sha256:hash(bytes),modified:'2024-02-05T00:00:00Z'});
+  const disk={
+    async list(requested){
+      if(requested===root)return [{type:'dir',name:'Тестов Пациент',path:badPath},{type:'dir',name:'Другой Пациент',path:goodPath}];
+      if(requested===badPath)throw new Error('Synthetic broken directory');
+      assert.equal(requested,goodPath);
+      return [stat()];
+    },
+    async stat(){return stat();},
+    async download(){return bytes;},
+    async upload(_path,next){writes++;bytes=next;}
+  };
+  const backups=new Map();
+  const storage={configured:true,async hasObject(key){return backups.has(key);},
+    async putBuffer(key,content){backups.set(key,content);},
+    async sha256Object(key){return hash(backups.get(key));}};
+  const create=()=>createDoctorsPlans({sql,storage,disk,env:{
+    DOCTORS_DISK_ROOT:root,DOCTORS_DISK_WRITE_TEST_ROOT:root,DOCTORS_DISK_TEST_WRITE:'1'
+  },listPatients:async()=>removeDuringWrite && ++reads>=2?[bad]:[bad,good]});
+  const first=create();await first.start();first.stop();
+  const before=await first.dates(good.id);
+  assert.equal(before.discharge,'2024-02-16','a preceding broken folder must not stop a good scan');
+  assert.equal((await first.enqueue(good.id,'2024-02-19',before.revision)).ok,true);
+  removeDuringWrite=true;
+  const second=create();await second.start();second.stop();
+  assert.equal(writes,0,'patient removed during scan must never be written');
+  assert.equal(backups.size,0);
+  assert.equal(readPlanDates(bytes).discharge,'2024-02-16');
+  assert.equal((await second.dates(good.id)).discharge,'2024-02-19','pending intent is retained without overwriting source');
 });

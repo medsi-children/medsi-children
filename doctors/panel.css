@@ -60,6 +60,9 @@ body[data-screen="screenPatients"] {overflow:hidden}
 .patient-deadline[data-tone="warning"] {
   color:#886220;--patient-progress-track:#fff1d9;--patient-progress-start:#f5cc74;--patient-progress-end:#dca047;
 }
+.patient-deadline[data-tone="overdue"] {
+  color:#9a4d57;--patient-progress-track:#f7e5e8;--patient-progress-start:#de9ba5;--patient-progress-end:#b76572;
+}
 .patient-deadline[data-tone="muted"] {color:#5e7681}
 .patient-deadline progress {
   display:block;width:100%;height:9px;appearance:none;border:0;border-radius:999px;overflow:hidden;

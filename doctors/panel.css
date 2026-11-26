@@ -61,9 +61,6 @@ body[data-screen="screenPatients"] {overflow:hidden}
 .patient-deadline[data-tone="warning"] {
   color:#886220;--patient-progress-track:#fff1d9;--patient-progress-start:#f5cc74;--patient-progress-end:#dca047;
 }
-.patient-deadline[data-tone="overdue"] {
-  color:#9a4d57;--patient-progress-track:#f7e5e8;--patient-progress-start:#de9ba5;--patient-progress-end:#b76572;
-}
 .patient-deadline[data-tone="muted"] {color:#5e7681}
 .patient-deadline progress {
   display:block;width:100%;height:9px;appearance:none;border:0;border-radius:999px;overflow:hidden;
@@ -129,3 +126,27 @@ body.doctor-panel[data-screen="screenChoose"] .frame.choose-mode .scene {
 .doctor-date-editor label {display:grid;gap:4px}
 .doctor-date-editor .doctor-tools {flex-wrap:wrap}
 .doctor-date-editor .doctor-tools .btn {margin:0}
+
+.patient-list-meta {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  justify-content:space-between;
+  gap:.25rem 1rem;
+}
+.patient-visibility {
+  min-height:36px;
+  justify-self:start;
+  padding:0 .3rem;
+  border:0;
+  border-radius:.35rem;
+  background:transparent;
+  color:#376b78;
+  font:inherit;
+  font-size:.875rem;
+  text-decoration:underline;
+  text-underline-offset:.16em;
+  cursor:pointer;
+}
+.patient-visibility:hover {color:#124957}
+.patient-visibility:focus-visible {outline:2px solid #197383;outline-offset:2px}

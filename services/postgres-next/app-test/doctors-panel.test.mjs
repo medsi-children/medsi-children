@@ -137,6 +137,10 @@ test('Greenwood accepts only the projected columns and detects ambiguous rows',(
   assert.throws(()=>decodeGreenwood(encode([row,row])));
   assert.throws(()=>decodeGreenwood('<html>Sign in</html>'));
 });
+async function emptyDoctorVisibility([query]){
+  assert.match(query,/\bdoctor_hidden_patients\b/u,'The roster must not query registered children or contacts');
+  return [[]];
+}
 test('a removed Greenwood row disappears from the roster after a refresh',async()=>{
   const row={c:[{v:'Тестов Пациент'},{v:'Date(2024,1,29)',f:'29.02.2024'}]};
   const env={DOCTORS_GREENWOOD_SHEET_ID:'synthetic',NEXT_SESSION_SECRET:'synthetic-roster-secret'};
@@ -146,7 +150,7 @@ test('a removed Greenwood row disappears from the roster after a refresh',async(
     const response={status:'ok',table:{cols:[{id:'C'},{id:'G'}],rows}};
     return new Response('google.visualization.Query.setResponse('+JSON.stringify(response)+');');
   },()=>now);
-  const roster=createDoctorsRoster(()=>assert.fail('Authoritative roster must not fall back to PostgreSQL'),env,{greenwood});
+  const roster=createDoctorsRoster(emptyDoctorVisibility,env,{greenwood});
   assert.equal((await roster.list()).length,1);
   rows=[];
   assert.equal((await roster.list()).length,1);
@@ -171,7 +175,7 @@ test('Greenwood keeps undated rows and uses an explicitly configured discharge f
       status:'ok',table:{cols:[{id:'C'},{id:'G'},{id:'H'}],rows}
     })+');');
   });
-  const sql=()=>assert.fail('No automatic contact lookup');
+  const sql=emptyDoctorVisibility;
   const roster=createDoctorsRoster(sql,env,{greenwood,plans:{dates:async()=>({admission:null,discharge:null,editable:true})}});
   const [dated,undated]=await roster.list();
   assert.equal(dated.admission,'2024-02-29','registry admission is visible before a Disk plan is found');
@@ -187,8 +191,9 @@ test('Greenwood contacts require explicit episode-specific verified links',async
   const row={key:'тестов пациент|2024-02-29',childName:'Тестов Пациент',episode:'2024-02-29'};
   let rows=[row];
   const greenwood={configured:true,read:async()=>rows};
-  const sql=async()=>[[{phone10:'9000000001',parent_name:'Тестовый родитель',
-    child_id:'child_synthetic',registered_first_name:'Пациент',surname:'Тестов'}]];
+  const sql=async strings=>strings[0].includes('doctor_hidden_patients')?emptyDoctorVisibility(strings):
+    [[{phone10:'9000000001',parent_name:'Тестовый родитель',
+      child_id:'child_synthetic',registered_first_name:'Пациент',surname:'Тестов'}]];
   const roster=createDoctorsRoster(sql,env,{greenwood});
   const [patient]=await roster.list();
   const [bot]=await roster.listBot();
@@ -622,8 +627,16 @@ test('doctor local override survives restart and sheet changes but not a differe
   assert.equal((await restarted.local.enqueue(patient.id,'2024-01-31',changed.revision)).status,400);
   assert.equal((await restarted.local.enqueue(patient.id,'2024-02-26',changed.revision)).ok,true);
   assert.equal((await restarted.roster.list())[0].discharge,'2024-02-26');
+  assert.equal((await restarted.roster.setHidden(patient.id,true)).ok,true);
+  const freshPanel=create();
+  assert.deepEqual(await freshPanel.roster.list(),[]);
+  assert.equal((await freshPanel.roster.list({includeHidden:true}))[0].hidden,true);
+  assert.equal((await freshPanel.roster.setHidden(patient.id,false)).ok,true);
+  assert.equal((await freshPanel.roster.list())[0].discharge,'2024-02-26');
+  await freshPanel.roster.setHidden(patient.id,true);
   rows=[];
-  assert.deepEqual(await restarted.roster.list(),[]);
+  assert.deepEqual(await restarted.roster.list({includeHidden:true}),[]);
+  assert.equal((await freshPanel.roster.setHidden(patient.id,false)).status,404);
   assert.equal((await restarted.local.enqueue(patient.id,'2024-02-27',changed.revision)).status,404);
   rows=[{key:id+'|2024-03-01',childName:'Тестов Пациент',episode:'2024-03-01',discharge:'2024-03-15'}];
   const [newStay]=await restarted.roster.list();
@@ -662,11 +675,15 @@ test('synthetic copies of the observed C2/C3 layout read ranges and single numer
   assert.throws(()=>readPlanDates(book('21.02.2024-12.02.2024')));
 });
 test('read-only selector prefers explicit final date, detects contradictory duplicates, never infers a discharge',()=>{
-  const p={admission:'2024-02-01',discharge:'2024-02-15',rank:2,modifiedDay:'2024-02-05'};
+  const p={admission:'2024-02-01',discharge:'2024-02-15',rank:2,modified:'2024-02-05T08:00:00Z'};
   assert.equal(chooseReadOnlyPlan([p,{...p,rank:3,discharge:'2024-02-18'}]).discharge,'2024-02-18');
   assert.equal(chooseReadOnlyPlan([{...p,rank:3,discharge:null}]).status,'noDischarge');
   assert.equal(chooseReadOnlyPlan([p,{...p,discharge:'2024-02-16'}]).status,'conflict');
-  assert.equal(chooseReadOnlyPlan([p,{...p,discharge:'2024-02-16',modifiedDay:'2024-02-06'}]).discharge,'2024-02-16');
+  assert.equal(chooseReadOnlyPlan([p,{...p,discharge:'2024-02-16',modified:'2024-02-05T09:00:00Z'}]).discharge,'2024-02-16');
+  const final={...p,rank:3,created:'2024-02-05T08:00:00Z'};
+  const uploadedLater={...final,created:'2024-02-05T09:00:00Z',discharge:'2024-02-14'};
+  assert.equal(chooseReadOnlyPlan([{...final,modified:'2024-02-06T00:00:00Z'},uploadedLater]).discharge,'2024-02-14');
+  assert.equal(chooseReadOnlyPlan([{...p,created:'2024-02-06T00:00:00Z'},uploadedLater]).discharge,'2024-02-14');
   assert.equal(chooseReadOnlyPlan([{...p,nameDate:'2024-02-05'},{...p,nameDate:'2024-02-06',discharge:'2024-02-16'}]).discharge,'2024-02-16');
   const matcher=createDoctorNameMatcher([{baseKey:'софия',preferredName:'София',variants:['Соня','Софья']}]);
   const parts=doctorNameParts('Тестова София');

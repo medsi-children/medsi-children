@@ -1,97 +1,70 @@
 #screenChoose .medsi-bot-launcher {cursor: default}
 #screenChoose .medsi-bot-launcher:active {transform:none}
-#screenPatients, #screenTherapy {display:grid;gap:14px}
-#screenPatients {gap:11px}
 #screenPhones input {margin:8px 0;min-width:0}
 #screenPhones .soft-back-btn {margin-bottom:6px}
 .doctor-tools {display:flex;align-items:center;justify-content:space-between;gap:10px}
-body[data-screen="screenPatients"] #title {display:none}
-.patient-page-nav {display:flex;align-items:center;justify-content:space-between}
-.patient-nav-button {
-  display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 8px;
-  border:0;border-radius:8px;background:transparent;color:#21678d;font:inherit;font-size:.8rem;
-  font-weight:700;cursor:pointer;
+body[data-screen="screenPatients"] {overflow:hidden}
+#screenPatients:focus {outline:0}
+#screenPatients .patient-shell {width:min(100%,860px);gap:13px}
+#screenPatients .patient-header {grid-template-columns:auto minmax(0,1fr) auto}
+#screenPatients .patient-header h2 {text-align:left}
+#patientCount {margin:0;color:#5e818c;font-size:14px}
+.patient-search {position:relative;color:#5e818c}
+.patient-search svg {
+  position:absolute;top:50%;left:13px;transform:translateY(-50%);pointer-events:none;
+  width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;
 }
-#refreshPatients {width:40px;padding:0;font-size:21px}
-.patient-nav-button:hover {background:#e9f3fb}
-.patient-page-header {display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:9px}
-.patient-page-header h1 {margin:0;color:#183d43;font-size:clamp(1.25rem,3.3vw,1.65rem);line-height:1.2;letter-spacing:-.025em}
-#patientCount {margin:5px 0 0;color:#557178;font-size:.78rem;font-weight:600}
 #patientSearch {
-  width:min(100%,235px);min-width:0;min-height:44px;padding:9px 13px;
-  border:1px solid #d5e3ed;border-radius:9px;background:#fff;font-size:16px;
+  width:100%;min-height:46px;padding:10px 14px 10px 39px;
+  border:1px solid #e3edf1;border-radius:13px;background:#edf4f7;
 }
-#patientList {display:grid;gap:8px;list-style:none;margin:0;padding:0}
-.patient-row {
-  display:grid;grid-template-columns:minmax(0,1.5fr) minmax(85px,.58fr) minmax(114px,.7fr) minmax(100px,.6fr);
-  align-items:center;column-gap:18px;min-width:0;height:76px;padding:0 15px;
-  border:1px solid var(--row-edge);border-radius:11px;background:var(--row-fill);color:var(--row-ink);
-  --row-fill:#fff;--row-edge:#e1e9f0;--row-ink:#243f53;--row-meta:#506b80;
-  --row-accent:#21678d;--row-track:#dfebf3;--row-hover:#22678d12;
+#patientList {margin:0;list-style:none;gap:13px}
+#patientList .patient-card {grid-template-columns:minmax(0,1fr);gap:13px;padding:17px 18px}
+.patient-card .patient-info {gap:10px}
+.patient-card .medsi-roster-line-name {
+  cursor:default;font-size:clamp(19px,3vw,24px);font-weight:790;overflow-wrap:anywhere;
 }
-.patient-row[data-status="later"] {
-  --row-fill:#f3f9fd;--row-edge:#dcebf5;--row-track:#d8e9f5;
+.patient-card .medsi-roster-line-name:hover {text-decoration:none}
+.patient-contacts {display:grid;gap:8px}
+.patient-contact {display:grid;justify-items:start;gap:2px;color:#5e7681;font-size:14px;line-height:1.32}
+.patient-contact a {color:#325b68;font-weight:650;text-decoration:none;font-variant-numeric:tabular-nums}
+.patient-contact a:hover {text-decoration:underline;text-underline-offset:3px}
+.patient-no-contact {margin:0;color:#5e7681;font-size:13px}
+.patient-dates {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  padding:11px 12px;border-radius:11px;background:#eef4f7;
 }
-.patient-row[data-status="week"] {
-  --row-fill:#e9f5ff;--row-edge:#d3e9fa;--row-track:#cbe3f6;
+.patient-date {
+  position:relative;display:grid;align-content:center;gap:5px;min-width:0;min-height:46px;
 }
-.patient-row[data-status="soon"] {
-  --row-fill:#d8efff;--row-edge:#c0e0f6;--row-ink:#143d5a;--row-meta:#3c607b;
-  --row-accent:#155a85;--row-track:#b5d8f0;
+.patient-field-label {color:#5e7681;font-size:12px;font-weight:550;line-height:1.2}
+.patient-date-value {color:#325b68;font-size:clamp(16px,3vw,20px);font-weight:765;font-variant-numeric:tabular-nums;white-space:nowrap}
+.patient-date-value[aria-label] {color:#5e7681}
+.patient-edit {position:absolute;top:50%;right:0;transform:translateY(-50%);color:#397984}
+.patient-edit:hover {background:#e4f2f4}
+.patient-edit:focus-visible,.patient-deadline-label:focus-visible,.patient-contact a:focus-visible {
+  outline:2px solid #55bdc6;outline-offset:2px;
 }
-.patient-row[data-status="today"] {
-  --row-fill:#086d9d;--row-edge:#086d9d;--row-ink:#fff;--row-meta:#edf8ff;
-  --row-accent:#fff;--row-track:#ffffff50;--row-hover:#ffffff24;
+.patient-deadline {display:grid;justify-items:start;gap:8px;color:#237764;--patient-progress-track:#e4efec}
+.patient-deadline-label {
+  display:inline-flex;align-items:center;gap:7px;padding:0;border:0;background:transparent;
+  color:inherit;font-family:inherit;font-size:14px;font-weight:680;line-height:1.3;text-align:left;
 }
-.patient-row[data-status="overdue"] {
-  --row-fill:#fff0f1;--row-edge:#f6dadd;--row-ink:#4d3440;--row-meta:#74515b;
-  --row-accent:#a62f44;--row-track:#f3cbd0;--row-hover:#b6405812;
+button.patient-deadline-label {cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.patient-deadline-label svg {
+  width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
+  stroke-linecap:round;stroke-linejoin:round;
 }
-.patient-row[data-status="conflict"] {
-  --row-fill:#f6f8fb;--row-edge:#e4eaf2;--row-accent:#526987;
+.patient-deadline[data-tone="warning"] {color:#886220;--patient-progress-track:#fff3d9}
+.patient-deadline[data-tone="overdue"] {color:#a0526d;--patient-progress-track:#ffedf2}
+.patient-deadline[data-tone="muted"] {color:#5e7681}
+.patient-deadline progress {
+  display:block;width:100%;height:5px;appearance:none;border:0;border-radius:6px;overflow:hidden;
+  background:var(--patient-progress-track);
 }
-.patient-identity,.patient-date,.patient-timeline {min-width:0}
-.patient-identity {position:relative;display:grid;gap:3px;align-content:center;padding-right:42px}
-.patient-name,.patient-conflict {
-  display:block;max-width:100%;padding:0;border:0;background:transparent;color:inherit;
-  text-align:left;font:inherit;cursor:pointer;
-}
-.patient-name {
-  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;
-  font-size:.96rem;font-weight:750;line-height:1.2;
-}
-.patient-name:hover,.patient-conflict:hover {text-decoration:underline;text-underline-offset:3px}
-.patient-contact-name {
-  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
-  color:var(--row-meta);font-size:.74rem;line-height:1.3;
-}
-.patient-phone,.patient-edit {
-  position:absolute;display:inline-flex;align-items:center;justify-content:center;
-  width:40px;height:40px;padding:0;border:0;border-radius:9px;
-  background:transparent;color:var(--row-accent);cursor:pointer;
-}
-.patient-phone {top:50%;right:0;transform:translateY(-50%);font-size:0}
-.patient-phone::after {
-  content:'';width:16px;height:16px;background:currentColor;
-  mask:url('/chat-overlay/assets/twemoji/1f4de.svg') center/contain no-repeat;
-}
-.patient-phone:hover,.patient-row .patient-edit:hover {background:var(--row-hover)}
-.patient-muted {color:var(--row-meta)}
-.patient-date,.patient-timeline {position:relative;display:grid;align-content:start;min-height:46px;gap:3px;padding-top:3px}
-.patient-field-label {color:var(--row-meta);font-size:.68rem;font-weight:620;line-height:1.2;white-space:nowrap}
-.patient-date-value {white-space:nowrap;font-size:.83rem;font-weight:690;font-variant-numeric:tabular-nums;line-height:1.25}
-.patient-edit {right:0;top:0;font-size:19px;line-height:1}
-#screenPatients button:focus-visible,#screenPatients a:focus-visible {outline:2px solid #248e90;outline-offset:2px}
-#screenPatients .patient-row :is(button,a):focus-visible {outline-color:var(--row-accent)}
-.patient-status {color:var(--row-accent);font-size:.78rem;line-height:1.25;font-weight:720;white-space:nowrap}
-.patient-status.patient-muted {color:var(--row-meta)}
-.patient-timeline progress {
-  width:56px;height:3px;appearance:none;border:0;border-radius:4px;
-  background:var(--row-track);overflow:hidden;
-}
-.patient-timeline progress::-webkit-progress-bar {background:var(--row-track)}
-.patient-timeline progress::-webkit-progress-value {background:var(--row-accent)}
-.patient-timeline progress::-moz-progress-bar {background:var(--row-accent)}
+.patient-deadline progress::-webkit-progress-bar {background:var(--patient-progress-track)}
+.patient-deadline progress::-webkit-progress-value {background:currentColor;border-radius:6px}
+.patient-deadline progress::-moz-progress-bar {background:currentColor;border-radius:6px}
 .patient-detail-dialog h2 {margin:0;font-size:1.1rem;line-height:1.35;overflow-wrap:anywhere}
 .patient-detail-dialog p {margin:12px 0;color:#557178;font-size:.85rem}
 .patient-detail-dialog .patient-detail-conflict {color:#984e5c}
@@ -99,44 +72,21 @@ body[data-screen="screenPatients"] #title {display:none}
 .patient-detail-contacts {display:grid;gap:8px;list-style:none;padding:0;margin:12px 0;font-size:.85rem}
 .patient-detail-contacts li {display:grid;gap:2px;overflow-wrap:anywhere}
 .patient-detail-contacts a {color:#217b80}
-@media(max-width:740px) {
-  .patient-page-header {display:grid;justify-content:stretch;gap:12px;margin-bottom:2px}
-  #patientSearch {width:100%}
-  .patient-row {
-    grid-template-columns:minmax(0,1fr) minmax(0,1.02fr) minmax(0,.94fr);
-    grid-template-rows:49px 42px;column-gap:7px;row-gap:3px;height:112px;padding:7px 12px;
-  }
-  .patient-identity {grid-column:1 / -1;align-self:center;padding-right:44px}
-  .patient-name {font-size:.91rem}
-  .patient-contact-name {font-size:.72rem}
-  .patient-date,.patient-timeline {min-height:42px}
-  .patient-date-value {font-size:.76rem}
-  .patient-field-label {font-size:.61rem}
-  .patient-edit {width:31px;height:34px;font-size:16px;top:-3px}
-  .patient-status {font-size:.69rem}
+@media(max-width:650px) {
+  #screenPatients .patient-shell {gap:11px}
+  #patientList .patient-card {gap:11px;padding:14px}
+  .patient-dates {padding:9px 10px}
 }
 @media(max-width:360px) {
-  .patient-row {padding-right:9px;padding-left:9px;column-gap:5px}
-  .patient-edit {right:-3px;width:25px}
-  .patient-date-value {font-size:.72rem}
+  #patientList .patient-card {padding:12px}
+  .patient-dates {gap:5px}
+  .patient-edit {width:27px;height:30px;right:-3px}
+  .patient-edit svg {width:17px;height:17px}
+  .patient-field-label {font-size:11px}
 }
-#therapyForm {display:grid;gap:12px}
-body[data-screen="screenPatients"] {height:auto;min-height:100dvh;background:#f3f7fb}
-body[data-screen="screenPatients"]::before {background:#f3f7fb}
-body[data-screen="screenPatients"] .wrap {align-items:start;padding-top:calc(14px + env(safe-area-inset-top))}
-body[data-screen="screenPatients"] .frame, body[data-screen="screenTherapy"] .frame {
-  width:min(100%,860px);aspect-ratio:auto;min-height:0;
-}
-body[data-screen="screenPatients"] .frame {
-  background:#fafcfe;border-color:#e3edf5;box-shadow:0 10px 32px #3557770d;
-}
-body[data-screen="screenPatients"] .scene {padding:12px 20px 20px}
-@media(max-width:740px) {
-  body[data-screen="screenPatients"] .scene {padding:10px 12px 14px}
-}
-body[data-screen="screenPatients"] .scene, body[data-screen="screenTherapy"] .scene{
-  position:relative;inset:auto;overflow:visible;
-}
+#screenTherapy,#therapyForm {display:grid;gap:12px}
+body[data-screen="screenTherapy"] .frame {width:min(100%,860px);aspect-ratio:auto;min-height:0}
+body[data-screen="screenTherapy"] .scene {position:relative;inset:auto;overflow:visible}
 .doctor-date-editor {
   padding:20px;border:1px solid var(--stroke2);border-radius:20px;color:var(--fg);
   width:min(90vw,380px);box-shadow:0 14px 46px #11424a26;

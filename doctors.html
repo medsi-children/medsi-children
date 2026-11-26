@@ -113,21 +113,6 @@
           </div>
         </section>
 
-        <section id="screenPatients" class="hidden">
-          <div class="patient-page-nav">
-            <button type="button" class="patient-nav-button" data-home>← В меню</button>
-            <button id="refreshPatients" class="patient-nav-button" type="button" aria-label="Обновить список" title="Обновить список">↻</button>
-          </div>
-          <div class="patient-page-header">
-            <div>
-              <h1>Список пациентов</h1>
-              <p id="patientCount" role="status"></p>
-            </div>
-            <input id="patientSearch" type="search" placeholder="Имя или фамилия" aria-label="Поиск пациентов">
-          </div>
-          <p id="patientError" class="status error hidden" role="alert"></p>
-          <ul id="patientList" aria-label="Пациенты"></ul>
-        </section>
         <section id="screenPhones" class="hidden">
           <button type="button" class="btn soft-back-btn" data-home>← В меню</button>
           <input id="phoneSearch" type="search" placeholder="Поиск по имени или телефону" aria-label="Поиск телефонов">
@@ -149,5 +134,21 @@
       </div>
     </article>
   </div>
+  <section id="screenPatients" class="medsi-tutor-reports hidden" aria-labelledby="patientTitle" tabindex="-1">
+    <div class="medsi-reports-shell patient-shell">
+      <header class="medsi-reports-header patient-header">
+        <button class="medsi-reports-back" type="button" data-home aria-label="В меню">←</button>
+        <h2 id="patientTitle">Список пациентов</h2>
+        <button id="refreshPatients" class="medsi-reports-refresh" type="button" aria-label="Обновить список">↻</button>
+      </header>
+      <p id="patientCount" role="status"></p>
+      <div class="patient-search">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
+        <input id="patientSearch" type="search" placeholder="Поиск пациента" aria-label="Поиск пациентов">
+      </div>
+      <p id="patientError" class="medsi-reports-feedback hidden" role="alert"></p>
+      <ul id="patientList" class="medsi-reports-content" aria-label="Пациенты"></ul>
+    </div>
+  </section>
 </body>
 </html>

@@ -203,7 +203,7 @@
       edit.setAttribute('aria-label','Изменить дату выписки');
       edit.dataset.tooltip='Изменить дату выписки';
       edit.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m14.5 5.5 4 4M4 20l4.5-1 11-11a2.8 2.8 0 0 0-4-4l-11 11L4 20Z"/></svg>';
-      edit.onclick=()=>openDateEditor(patient);
+      edit.onclick=()=>openDateEditor(patients.find(item=>item.id===patient.id)||patient);
       discharge.append(edit);
     }
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
@@ -315,15 +315,18 @@
     listing=fetchPatients(silent,refresh);
     try{await listing;}finally{listing=null;}
   }
+  function patientPresentation(rows){
+    return JSON.stringify(rows.map(({revision,planStatus,unverifiedPlans,...visible})=>visible));
+  }
   async function fetchPatients(silent,refresh){
     if(!silent)id('patientCount').textContent='Загружаем список…';
     try{
       const next=(await request('/patients?includeHidden=1'+(refresh?'&refresh=1':''))).patients;
       next.sort((a,b)=>(a.discharge||'9999').localeCompare(b.discharge||'9999') ||
         String(a.childName||'').localeCompare(String(b.childName||''),'ru'));
-      if(!silent || renderedDay!==today() || JSON.stringify(next)!==JSON.stringify(patients)){
-        patients=next;renderPatients();
-      }
+      const changed=patientPresentation(next)!==patientPresentation(patients);
+      patients=next;
+      if(!silent||renderedDay!==today()||changed)renderPatients();
       setStatus('patientError','');
     }catch(error){if(!silent){id('patientCount').textContent='';setStatus('patientError',error.message);}}
   }

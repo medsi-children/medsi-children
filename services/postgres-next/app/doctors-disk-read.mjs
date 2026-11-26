@@ -2,6 +2,7 @@ import {createDoctorsDisk,validDiskRoot,directDiskChild,diskVersion,verifyDiskBy
 import {readPlanDates,validIsoDate} from './doctors-xlsx.mjs';
 import {doctorNameOptions,createDoctorNameMatcher} from './doctors-names.mjs';
 import {fullName} from './doctors-roster.mjs';
+import {createDoctorsDiskSnapshot,doctorRosterKey} from './doctors-disk-snapshot.mjs';
 import {smartWritePolicy,createDoctorsSmartWrite} from './doctors-smart-write.mjs';
 
 const increment=(counts,key)=>{counts[key]=(counts[key]||0)+1;};
@@ -84,23 +85,28 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
   const writer=sql?createDoctorsSmartWrite({sql,policy,storage,source,root}):null;
   const enabled=Boolean(source&&env.DOCTORS_GREENWOOD_SHEET_ID);
   const interval=Math.max(60000,Number(env.DOCTORS_DISK_INTERVAL_MS)||300000);
-  let results=new Map(),cache=new Map(),running=false,stopped=false,timer,lastComplete=null,failed=false,issues={},counters={};
-  const get=(id,episode)=>{
+  const snapshot=enabled?createDoctorsDiskSnapshot({sql,env,now}):null;
+  let results=new Map(),cache=new Map(),running=false,stopped=false,timer,lastComplete=null,currentRosterKey=null,failed=false,issues={},counters={};
+  const get=(id,episode,rosterKey)=>{
+    if(rosterKey!==undefined&&rosterKey!==currentRosterKey)return null;
     const result=results.get(id);
     if(!result||result.episode!==episode)return null;
-    if(failed||now()-result.checkedAt>interval*3)return {status:'stale',discharge:null};
+    if(failed||now()-result.checkedAt>interval*3)return null;
     return result;
   };
   async function cycle(){
     if(!enabled||stopped||running)return;
     running=true;
+    const scanStarted=now();
     const next=new Map(),nextCache=new Map(),counts={},stats={patients:0,matched:0,withDischarge:0};
     try{
       const patients=await listPatients({fresh:true});
+      const rosterKey=doctorRosterKey(patients);
+      const previous=await snapshot.read(rosterKey);
+      const display=Object.create(null);
       const variants=await nameVariants?.list()||{items:[],revision:''};
       const matcher=createDoctorNameMatcher(variants.items);
       const identities=patients.map(p=>({p,options:doctorNameOptions(p.childName)}));
-      const fingerprint=rows=>JSON.stringify(rows.map(p=>[p.id,p.childName,p.episode]).sort((a,b)=>a[0].localeCompare(b[0])));
       const rootItems=await source.list(root);
       const folders=rootItems.filter(x=>x.type==='dir'&&directDiskChild(root,x)&&
         x.path!=='disk:/medsi-doctors-test'&&!excluded(x.name));
@@ -111,6 +117,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
       for(const {p,options} of identities){
         if(stopped)return;
         let result={status:'noCurrentPlan',discharge:null};
+        let incomplete=false;
         const candidates=options.length&&p.episode?folders.filter(f=>candidateFolder(f.name,options,matcher)):[];
         const rootCandidates=rootPlans.filter(f=>candidateRootPlan(f.name,options));
         if(!options.length||!p.episode)result.status=!options.length?'nameUnrecognized':'missingAdmission';
@@ -119,7 +126,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
         else{
           stats.matched++;
           const plans=[],near=[];
-          let incomplete=false,unverified=0;
+          let unverified=0;
           const owns=name=>{
             const owners=identities.filter(x=>x.p.episode===p.episode&&matcher.matchesOptions(name,x.options));
             return owners.length===1&&owners[0].p.id===p.id;
@@ -166,7 +173,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
             }
           }
           result=chooseReadOnlyPlan(plans);
-          if(incomplete&&!result.discharge)result={status:'incomplete',discharge:null};
+          if(incomplete)result={status:'incomplete',discharge:null};
           // Never override a verified exact-stay date or an exact-stay conflict.
           // Near-stay dates are usable for display only.
           if(!result.discharge&&!incomplete&&result.status!=='conflict'&&near.length){
@@ -182,7 +189,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
                 if(stopped)return false;
                 const fresh=await listPatients({fresh:true});
                 const freshVariants=await nameVariants?.list()||{revision:''};
-                return fingerprint(fresh)===fingerprint(patients)&&freshVariants.revision===variants.revision;
+                return doctorRosterKey(fresh)===rosterKey&&freshVariants.revision===variants.revision;
               };
               await writer.run(p,result,owns,stillCurrent);
             }catch{increment(counts,'writeFailed');}
@@ -191,12 +198,20 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
         increment(counts,result.status);
         if(result.discharge)stats.withDischarge++;
         if(result.candidateDischarge)stats.withCandidateDischarge++;
-        next.set(p.id,{...result,episode:p.episode,checkedAt:now()});
+        const checkedAt=now();
+        next.set(p.id,{...result,episode:p.episode,checkedAt});
+        if(incomplete){
+          if(Object.hasOwn(previous,p.id))display[p.id]=previous[p.id];
+        }else if(result.discharge||result.candidateDischarge){
+          const {status,discharge,candidateDischarge,kind}=result;
+          display[p.id]={status,discharge,candidateDischarge,kind,checkedAt};
+        }
       }
       try{await writer?.cleanup();}catch{increment(counts,'cleanupFailed');}
-      results=next;cache=nextCache;issues=counts;counters=stats;lastComplete=new Date(now()).toISOString();failed=false;
+      try{await snapshot.publish(rosterKey,scanStarted,display);}catch{increment(counts,'snapshotFailed');}
+      results=next;currentRosterKey=rosterKey;cache=nextCache;issues=counts;counters=stats;lastComplete=new Date(now()).toISOString();failed=false;
     }catch{failed=true;issues={cycleFailed:1};}
     finally{running=false;if(!stopped){timer=setTimeout(cycle,interval);timer.unref?.();}}
   }
-  return {get,writer,start:cycle,stop(){stopped=true;clearTimeout(timer);},diagnostics:()=>({enabled,writeEnabled:Boolean(writer?.enabled),running,lastComplete,failed,counters,issues})};
+  return {get,readDisplay:patients=>snapshot?.forRoster(patients),writer,start:cycle,stop(){stopped=true;clearTimeout(timer);},diagnostics:()=>({enabled,writeEnabled:Boolean(writer?.enabled),running,lastComplete,failed,counters,issues})};
 }

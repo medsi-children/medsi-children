@@ -78,6 +78,7 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
 
   async function list(options) {
     let patients=await current(options);
+    const diskDisplay=await plans?.readDiskDisplay?.(patients);
     let hidden=new Set();
     if(greenwood?.configured&&patients.length){
       await prepareVisibility();
@@ -91,7 +92,7 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
       // A row without a verified start date is visible but cannot be assigned
       // contacts or a plan from a possibly different stay.
       if(registry && !episode)return {...patient,admission:null,discharge:null,editable:false};
-      const clinical=await plans?.dates(patient.id,{episode,registry,registryDischarge});
+      const clinical=await plans?.dates(patient.id,{episode,registry,registryDischarge},diskDisplay);
       return {...patient,...clinical,admission:clinical?.admission || episode || null,discharge:clinical?.discharge || registryDischarge || null};
     }));
   }

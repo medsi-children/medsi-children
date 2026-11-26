@@ -55,6 +55,19 @@ export function chooseReadOnlyPlan(plans){
   return {status:'verified',discharge:[...dates][0],kind:priority===3?'final':priority===2?'ordinary':'preliminary'};
 }
 
+// A discrepancy is evidence for review, not a verified hospitalization.
+// Require a literal name pair, unique among the active registry, plus a
+// one-calendar-day difference and unanimous explicit candidate dates.
+export function nearAdmission(plan,patient,parts,identities,matcher){
+  if(!validIsoDate(plan.admission)||!validIsoDate(patient.episode)||!validIsoDate(plan.discharge)||
+    plan.discharge<patient.episode||Math.abs(Date.parse(plan.admission)-Date.parse(patient.episode))!==86400000)return false;
+  const words=doctorNameParts(plan.patient);
+  if(!words||!parts||words.length>3||parts.length>3)return false;
+  const literal=(words[0]===parts[0]&&words[1]===parts[1])||(words[0]===parts[1]&&words[1]===parts[0]);
+  if(!literal||parts[2]&&words[2]&&parts[2]!==words[2])return false;
+  const owners=identities.filter(x=>matcher.matches(plan.patient,x.parts));
+  return owners.length===1&&owners[0].p.id===patient.id;
+}
 export function candidateRootPlan(name,parts){
   const tokens=fullName(name).match(/\p{L}+(?:-\p{L}+)*/gu)||[];
   return Boolean(parts&&parts.slice(0,2).some(word=>word.length>=4&&tokens.includes(word)));
@@ -89,6 +102,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
         x.path!=='disk:/medsi-doctors-test'&&!excluded(x.name));
       const rootPlans=rootItems.filter(x=>isPlan(x)&&directDiskChild(root,x)&&!/образец|шаблон/iu.test(x.name));
       stats.patients=patients.length;
+      stats.withCandidateDischarge=0;
       const folderCache=new Map();
       for(const {p,parts} of identities){
         if(stopped)return;
@@ -100,7 +114,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
         else if(candidates.length>12)result.status='ambiguousFolder';
         else{
           stats.matched++;
-          const plans=[];
+          const plans=[],near=[];
           let incomplete=false,unverified=0;
           const owns=name=>{
             const owners=identities.filter(x=>x.p.episode===p.episode&&matcher.matches(name,x.parts));
@@ -132,7 +146,12 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
               nextCache.set(file.path,parsed);
               if(parsed.invalid){increment(counts,'invalidPlan');unverified++;continue;}
               const d=parsed.dates;
-              if(d.admission!==p.episode){increment(counts,'otherEpisode');continue;}
+              if(d.admission!==p.episode){
+                if(nearAdmission(d,p,parts,identities,matcher)){
+                  near.push(d.discharge);increment(counts,'admissionOffOneDay');
+                }else increment(counts,'otherEpisode');
+                continue;
+              }
               const owners=identities.filter(x=>x.p.episode===d.admission&&matcher.matches(d.patient,x.parts));
               if(owners.length!==1||owners[0].p.id!==p.id){
                 increment(counts,owners.length>1?'ambiguousIdentity':'patientMismatch');unverified++;continue;
@@ -142,9 +161,16 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
             }
           }
           result=incomplete?{status:'incomplete',discharge:null}:chooseReadOnlyPlan(plans);
-          if(!result.discharge&&unverified&&!incomplete)result.status='unverified';
+          // Never override a verified exact-stay date or an exact-stay conflict.
+          // Show agreeing near-stay dates as explicitly unconfirmed candidates.
+          if(!result.discharge&&!incomplete&&result.status!=='conflict'&&near.length){
+            const values=new Set(near);
+            result=values.size===1?{status:'admissionMismatch',discharge:null,candidateDischarge:near[0]}:
+              {status:'conflict',discharge:null};
+          }
+          if(!result.discharge&&!result.candidateDischarge&&unverified&&!incomplete&&result.status!=='conflict')result.status='unverified';
           result={...result,targets:plans.map(({path,version,discharge})=>({path,version,discharge})).sort((a,b)=>a.path.localeCompare(b.path)),
-            writeReady:!incomplete,unverified};
+            writeReady:!incomplete&&!near.length,unverified};
           if(writer?.enabled){
             try{
               const stillCurrent=async()=>{
@@ -159,6 +185,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
         }
         increment(counts,result.status);
         if(result.discharge)stats.withDischarge++;
+        if(result.candidateDischarge)stats.withCandidateDischarge++;
         next.set(p.id,{...result,episode:p.episode,checkedAt:now()});
       }
       try{await writer?.cleanup();}catch{increment(counts,'cleanupFailed');}

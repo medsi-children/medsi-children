@@ -13,7 +13,7 @@ import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
 import {createDoctorsLocalDates} from '../app/doctors-local-dates.mjs';
 import {createDoctorsDiskRead,candidateFolder,candidateRootPlan,chooseReadOnlyPlan,nearAdmission} from '../app/doctors-disk-read.mjs';
 import {smartWritePolicy} from '../app/doctors-smart-write.mjs';
-import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
+import {doctorNameParts,doctorNameOptions,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
@@ -686,7 +686,7 @@ test('read-only selector prefers explicit final date, detects contradictory dupl
   assert.equal(chooseReadOnlyPlan([{...p,created:'2024-02-06T00:00:00Z'},uploadedLater]).discharge,'2024-02-14');
   assert.equal(chooseReadOnlyPlan([{...p,nameDate:'2024-02-05'},{...p,nameDate:'2024-02-06',discharge:'2024-02-16'}]).discharge,'2024-02-16');
   const matcher=createDoctorNameMatcher([{baseKey:'софия',preferredName:'София',variants:['Соня','Софья']}]);
-  const parts=doctorNameParts('Тестова София');
+  const parts=doctorNameOptions('Тестова София');
   assert.ok(candidateFolder('Тестова Соня сентябрь 2026',parts,matcher));
   assert.ok(candidateFolder('София Тестова 15.02.2010',parts,matcher));
   assert.ok(candidateFolder('Тестовва София',parts,matcher));
@@ -714,6 +714,37 @@ test('read-only scanner checks duplicate folders, plan identity and episode with
   assert.equal(scanner.diagnostics().issues.otherEpisode,1);
 });
 
+test('an explicit alternative surname matches a unique current patient and verifies the file for writing',async()=>{
+  const root='disk:/',folder=root+'Образцова';
+  const folderPath=folder+'/План.xlsx',rootPath=root+'План итог Примерова.xlsx';
+  const files=new Map([
+    [folderPath,book('01.02.2024-18.02.2024','Образцова София Сергеевна')],
+    [rootPath,book('01.02.2024-20.02.2024','София Примерова Сергеевна')]
+  ]);
+  const stat=path=>({type:'file',name:path.split('/').at(-1),path,sha256:hash(files.get(path))});
+  const disk={async list(path){return path===root?[{type:'dir',path:folder,name:'Образцова'},stat(rootPath)]:[stat(folderPath)];},
+    async stat(path){return stat(path);},async download(path){return files.get(path);}};
+  const patient={id:'a',childName:'Примерова (Образцова) София Сергеевна',episode:'2024-02-01'};
+  const scan=async patients=>{
+    const scanner=createDoctorsDiskRead({env:{DOCTORS_DISK_ROOT:root,DOCTORS_GREENWOOD_SHEET_ID:'synthetic'},
+      disk,listPatients:async()=>patients});
+    await scanner.start();scanner.stop();
+    return scanner.get(patient.id,patient.episode);
+  };
+  const unique=await scan([patient]);
+  assert.equal(unique.discharge,'2024-02-20');
+  assert.equal(unique.writeReady,true);
+  assert.deepEqual(new Set(unique.targets.map(plan=>plan.path)),new Set([folderPath,rootPath]));
+  const namesake={...patient,id:'b',childName:'Образцова София Сергеевна'};
+  const ambiguous=await scan([patient,namesake]);
+  assert.deepEqual(ambiguous.targets.map(plan=>plan.path),[rootPath]);
+  const matcher=createDoctorNameMatcher([{baseKey:'софия',preferredName:'София',variants:['Соня']}]);
+  const options=doctorNameOptions(patient.childName);
+  assert.ok(!matcher.matchesOptions('Образцова Соня Сергеевна',options));
+  assert.ok(!matcher.matchesOptions('Образцова София Ивановна',options));
+  assert.ok(!matcher.matchesOptions('Другая София Сергеевна',options));
+});
+
 test('smart writer expands date-only numeric cells only on explicit opt-in',()=>{
   const zip=modifySyntheticBook(book('01.02.2024'),s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" s="1"><v>45323</v></c>'));
   zip.addFile('xl/styles.xml',Buffer.from('<styleSheet xmlns="'+SHEET+'"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>'));
@@ -734,7 +765,7 @@ test('smart write requires a separate generation and root file name remains a hi
   assert.equal(smartWritePolicy(env,storage),null);
   assert.ok(smartWritePolicy({...env,DOCTORS_DISK_SMART_WRITE_ENABLED:'1'},storage));
   assert.equal(smartWritePolicy({...env,DOCTORS_DISK_SMART_WRITE_ENABLED:'1',DOCTORS_DISK_CONCURRENT_EDIT_ACK:'0'},storage),null);
-  const parts=doctorNameParts('Тестов Пациент');
+  const parts=doctorNameOptions('Тестов Пациент');
   assert.ok(candidateRootPlan('План итог Тестов.xlsx',parts));
   assert.ok(!candidateRootPlan('План итог Тестович.xlsx',parts));
 });
@@ -805,11 +836,11 @@ test('one-day admission mismatch is only an unconfirmed read candidate, never a 
   assert.deepEqual(result.targets,[]);
   assert.equal(result.writeReady,false);
   const matcher=createDoctorNameMatcher([]);
-  const parts=doctorNameParts(patient.childName);
-  const identities=[{p:patient,parts}];
+  const parts=doctorNameOptions(patient.childName);
+  const identities=[{p:patient,options:parts}];
   const plan={patient:'Тестов Пациент',admission:'2024-02-02',discharge:'2024-02-20'};
   assert.ok(nearAdmission(plan,patient,parts,identities,matcher));
   assert.ok(!nearAdmission({...plan,admission:'2024-02-03'},patient,parts,identities,matcher));
   assert.ok(!nearAdmission({...plan,patient:'Тестов Другой'},patient,parts,identities,matcher));
-  assert.ok(!nearAdmission(plan,patient,parts,[...identities,{p:{...patient,id:'duplicate'},parts}],matcher));
+  assert.ok(!nearAdmission(plan,patient,parts,[...identities,{p:{...patient,id:'duplicate'},options:parts}],matcher));
 });

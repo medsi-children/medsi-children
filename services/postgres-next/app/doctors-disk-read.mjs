@@ -1,6 +1,6 @@
 import {createDoctorsDisk,validDiskRoot,directDiskChild,diskVersion,verifyDiskBytes,isPlan} from './doctors-disk.mjs';
 import {readPlanDates,validIsoDate} from './doctors-xlsx.mjs';
-import {doctorNameParts,createDoctorNameMatcher} from './doctors-names.mjs';
+import {doctorNameOptions,createDoctorNameMatcher} from './doctors-names.mjs';
 import {fullName} from './doctors-roster.mjs';
 import {smartWritePolicy,createDoctorsSmartWrite} from './doctors-smart-write.mjs';
 
@@ -26,14 +26,15 @@ function oneEdit(a,b){
   }
   return edits+(b.length-j)===1;
 }
-export function candidateFolder(name,parts,matcher){
-  if(matcher.matches(name,parts))return true;
-  if(parts&&parts.slice(0,2).some(word=>word.length>=4&&fullName(name)===word))return true;
-  const words=doctorNameParts(name);
-  if(!parts||!words||parts.length>3||words.length>3)return false;
-  if(parts[2]&&words[2]&&parts[2]!==words[2])return false;
-  return [[words[0],words[1]],[words[1],words[0]]].some(([a,b])=>
-    (a===parts[0]&&oneEdit(b,parts[1]))||(b===parts[1]&&oneEdit(a,parts[0])));
+export function candidateFolder(name,options,matcher){
+  if(matcher.matchesOptions(name,options))return true;
+  if(options.some(parts=>parts.slice(0,2).some(word=>word.length>=4&&fullName(name)===word)))return true;
+  const source=doctorNameOptions(name);
+  return source.some(words=>options.some(parts=>{
+    if(parts.length>3||words.length>3||parts[2]&&words[2]&&parts[2]!==words[2])return false;
+    return [[words[0],words[1]],[words[1],words[0]]].some(([a,b])=>
+      (a===parts[0]&&oneEdit(b,parts[1]))||(b===parts[1]&&oneEdit(a,parts[0])));
+  }));
 }
 
 // Never invent a discharge from a single admission date, and never pick
@@ -64,19 +65,16 @@ export function chooseReadOnlyPlan(plans){
 // A discrepancy is evidence for review, not a verified hospitalization.
 // Require a literal name pair, unique among the active registry, plus a
 // one-calendar-day difference and an explicit discharge.
-export function nearAdmission(plan,patient,parts,identities,matcher){
+export function nearAdmission(plan,patient,options,identities,matcher){
   if(!validIsoDate(plan.admission)||!validIsoDate(patient.episode)||!validIsoDate(plan.discharge)||
     plan.discharge<patient.episode||Math.abs(Date.parse(plan.admission)-Date.parse(patient.episode))!==86400000)return false;
-  const words=doctorNameParts(plan.patient);
-  if(!words||!parts||words.length>3||parts.length>3)return false;
-  const literal=(words[0]===parts[0]&&words[1]===parts[1])||(words[0]===parts[1]&&words[1]===parts[0]);
-  if(!literal||parts[2]&&words[2]&&parts[2]!==words[2])return false;
-  const owners=identities.filter(x=>matcher.matches(plan.patient,x.parts));
+  if(!matcher.matchesOptions(plan.patient,options,{literal:true}))return false;
+  const owners=identities.filter(x=>matcher.matchesOptions(plan.patient,x.options));
   return owners.length===1&&owners[0].p.id===patient.id;
 }
-export function candidateRootPlan(name,parts){
+export function candidateRootPlan(name,options){
   const tokens=fullName(name).match(/\p{L}+(?:-\p{L}+)*/gu)||[];
-  return Boolean(parts&&parts.slice(0,2).some(word=>word.length>=4&&tokens.includes(word)));
+  return options.some(parts=>parts.slice(0,2).some(word=>word.length>=4&&tokens.includes(word)));
 }
 export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,storage,now=Date.now}){
   const root=env.DOCTORS_DISK_ROOT;
@@ -101,7 +99,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
       const patients=await listPatients({fresh:true});
       const variants=await nameVariants?.list()||{items:[],revision:''};
       const matcher=createDoctorNameMatcher(variants.items);
-      const identities=patients.map(p=>({p,parts:doctorNameParts(p.childName)}));
+      const identities=patients.map(p=>({p,options:doctorNameOptions(p.childName)}));
       const fingerprint=rows=>JSON.stringify(rows.map(p=>[p.id,p.childName,p.episode]).sort((a,b)=>a[0].localeCompare(b[0])));
       const rootItems=await source.list(root);
       const folders=rootItems.filter(x=>x.type==='dir'&&directDiskChild(root,x)&&
@@ -110,12 +108,12 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
       stats.patients=patients.length;
       stats.withCandidateDischarge=0;
       const folderCache=new Map();
-      for(const {p,parts} of identities){
+      for(const {p,options} of identities){
         if(stopped)return;
         let result={status:'noCurrentPlan',discharge:null};
-        const candidates=parts&&p.episode?folders.filter(f=>candidateFolder(f.name,parts,matcher)):[];
-        const rootCandidates=rootPlans.filter(f=>candidateRootPlan(f.name,parts));
-        if(!parts||!p.episode)result.status=!parts?'nameUnrecognized':'missingAdmission';
+        const candidates=options.length&&p.episode?folders.filter(f=>candidateFolder(f.name,options,matcher)):[];
+        const rootCandidates=rootPlans.filter(f=>candidateRootPlan(f.name,options));
+        if(!options.length||!p.episode)result.status=!options.length?'nameUnrecognized':'missingAdmission';
         else if(!candidates.length&&!rootCandidates.length)result.status='noFolder';
         else if(candidates.length>12)result.status='ambiguousFolder';
         else{
@@ -123,7 +121,7 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
           const plans=[],near=[];
           let incomplete=false,unverified=0;
           const owns=name=>{
-            const owners=identities.filter(x=>x.p.episode===p.episode&&matcher.matches(name,x.parts));
+            const owners=identities.filter(x=>x.p.episode===p.episode&&matcher.matchesOptions(name,x.options));
             return owners.length===1&&owners[0].p.id===p.id;
           };
           for(const folder of [...candidates,...(rootCandidates.length?[{path:root,root:true}]:[])]){
@@ -155,12 +153,12 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
               const plan={...d,path:file.path,version,rank:rank(file.name),created:file.created,
                 modified:file.modified,nameDate:fileDate(file.name)};
               if(d.admission!==p.episode){
-                if(nearAdmission(d,p,parts,identities,matcher)){
+                if(nearAdmission(d,p,options,identities,matcher)){
                   near.push(plan);increment(counts,'admissionOffOneDay');
                 }else increment(counts,'otherEpisode');
                 continue;
               }
-              const owners=identities.filter(x=>x.p.episode===d.admission&&matcher.matches(d.patient,x.parts));
+              const owners=identities.filter(x=>x.p.episode===d.admission&&matcher.matchesOptions(d.patient,x.options));
               if(owners.length!==1||owners[0].p.id!==p.id){
                 increment(counts,owners.length>1?'ambiguousIdentity':'patientMismatch');unverified++;continue;
               }

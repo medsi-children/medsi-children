@@ -154,8 +154,7 @@
       contact.append(node('span','',parentLabel(parent)),phoneLink(parent.phone));
       contacts.append(contact);
     }
-    if(!patient.parents.length)contacts.append(node('p','patient-no-contact','Контакт не указан'));
-    identity.append(contacts);
+    if(patient.parents.length)identity.append(contacts);
 
     const dates=node('div','patient-dates');
     const discharge=patientDate('Выписка',patient.discharge);

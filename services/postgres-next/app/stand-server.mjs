@@ -21,7 +21,7 @@ async function closeDatabaseDriver(driver) {
 }
 import {createDoctorsRoster} from './doctors-roster.mjs';
 import {createGreenwoodSource} from './doctors-greenwood.mjs';
-import {createDoctorsPlans} from './doctors-plans.mjs';
+import {createDoctorsLocalDates} from './doctors-local-dates.mjs';
 import {createDoctorsRouter} from './doctors-router.mjs';
 import {createSessionService} from './session-auth.mjs';
 import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
@@ -148,9 +148,9 @@ export function createNextServices({sql,env=process.env}) {
   const storage=require('../../../lib/s3-storage.js');
   const doctors = {};
   if(env.DOCTORS_ENABLED==='1'){
-    const greenwood=createGreenwoodSource(env);
+    const greenwood=createGreenwoodSource({...env,DOCTORS_GREENWOOD_DISCHARGE_COLUMN:'I'});
     const source=createDoctorsRoster(sql,env,{greenwood});
-    doctors.doctorsPlans=createDoctorsPlans({sql,env,storage,listPatients:source.current,nameVariants});
+    doctors.doctorsPlans=createDoctorsLocalDates({sql,greenwood,listPatients:source.current});
     doctors.doctorsRoster=createDoctorsRoster(sql,env,{greenwood,plans:doctors.doctorsPlans});
   }
   const parentDeletion=createParentDeletionService({sql,currentChildMode:true,

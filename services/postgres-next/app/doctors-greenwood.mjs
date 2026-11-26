@@ -2,7 +2,7 @@ import {fullName} from './doctors-roster.mjs';
 import {validIsoDate} from './doctors-xlsx.mjs';
 
 const SHEET='5 этаж';
-const RANGE='C1:G1000';
+const RANGE='C2:G1007';
 const ROSTER_CACHE_MS=25000;
 
 // Only the explicitly configured discharge column may be projected.
@@ -50,11 +50,11 @@ export function decodeGreenwood(text, configuredColumn='') {
 
 export function createGreenwoodSource(env, request=fetch, now=Date.now) {
   const id=env.DOCTORS_GREENWOOD_SHEET_ID;
-  let latest=null,expires=0,reading,stale=false;
+  let latest=null,expires=0,reading,stale=false,lastComplete=null;
   const refresh=async()=>{
     if(!/^[\w-]+$/.test(id))throw new Error('Invalid Greenwood ID');
     const column=dischargeColumn(env.DOCTORS_GREENWOOD_DISCHARGE_COLUMN);
-    const params=new URLSearchParams({sheet:SHEET,range:column?'A1:Z1000':RANGE,headers:'1',tqx:'out:json',
+    const params=new URLSearchParams({sheet:SHEET,range:column?'A2:Z1007':RANGE,headers:'1',tqx:'out:json',
       tq:'select C,G'+(column?','+column:'')+' where C is not null'});
     const response=await request('https://docs.google.com/spreadsheets/d/'+id+'/gviz/tq?'+params,{
       redirect:'error',signal:AbortSignal.timeout(8000),headers:{Accept:'text/plain'}
@@ -63,8 +63,9 @@ export function createGreenwoodSource(env, request=fetch, now=Date.now) {
     const body=await response.text();
     if(body.length>1024*1024)throw new Error('Oversized Greenwood response');
     latest=decodeGreenwood(body,column);
+    lastComplete=new Date().toISOString();
   };
-  return {configured:Boolean(id),async read({fresh=false,refresh:force=false}={}){
+  return {configured:Boolean(id),diagnostics:()=>({lastComplete,stale,counters:{patients:latest?.length||0,withAdmission:latest?.filter(r=>r.episode).length||0,withDischarge:latest?.filter(r=>r.discharge).length||0}}),async read({fresh=false,refresh:force=false}={}){
     if(!id)return [];
     if(!reading && (fresh || force || now()>=expires)){
       reading=refresh().then(()=>{stale=false;},()=>{

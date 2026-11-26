@@ -151,7 +151,7 @@ export function createNextServices({sql,env=process.env}) {
   if(env.DOCTORS_ENABLED==='1'){
     const greenwood=createGreenwoodSource({...env,DOCTORS_GREENWOOD_DISCHARGE_COLUMN:'I'});
     const source=createDoctorsRoster(sql,env,{greenwood});
-    doctors.doctorsDiskRead=createDoctorsDiskRead({env,listPatients:source.current,nameVariants});
+    doctors.doctorsDiskRead=createDoctorsDiskRead({env,listPatients:source.current,nameVariants,sql,storage});
     doctors.doctorsPlans=createDoctorsLocalDates({sql,greenwood,listPatients:source.current,diskRead:doctors.doctorsDiskRead});
     doctors.doctorsRoster=createDoctorsRoster(sql,env,{greenwood,plans:doctors.doctorsPlans});
   }

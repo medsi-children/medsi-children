@@ -131,13 +131,17 @@ export function readPlanDates(bytes) {
   return {admission, discharge, patient};
 }
 
-export function updatePlanDischarge(bytes, date) {
+export function updatePlanDischarge(bytes, date, {allowNative=false}={}) {
   const plan = inspect(bytes);
   if (!validIsoDate(date) || date < plan.admission) throw new Error('Invalid discharge date');
   if (date === plan.discharge) return bytes;
   // Reading a native date is safe; do not replace its numeric/date representation with text.
-  if(!plan.match)throw new Error('Native plan date cell is read-only');
-  const [, prefix, start, startTime, separator, , endTime, suffix] = plan.match;
+  if(!plan.match&&!allowNative)throw new Error('Native plan date cell is read-only');
+  const raw=list(plan.dates,'v')[0]?.textContent||'';
+  if(!plan.match && !(/^\d+$/.test(raw)||/^\d{4}-\d{2}-\d{2}$/.test(raw)))
+    throw new Error('Native date with time is not supported for writing');
+  const [, prefix, start, startTime, separator, , endTime, suffix] = plan.match||
+    ['', '',plan.admission.split('-').reverse().join('.'),'','–','','',''];
   const replacement = prefix+start+startTime+(separator || '–')+date.split('-').reverse().join('.')+(endTime || '')+suffix;
   // Own the replacement string in this cell. The original shared string may be used elsewhere.
   const inline = plan.document.createElementNS(SHEET, 'is');

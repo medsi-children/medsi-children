@@ -1,8 +1,32 @@
+import {createHash} from 'node:crypto';
+
 const API = 'https://cloud-api.yandex.net/v1/disk/resources';
 const FILE_LIMIT = 16*1024*1024;
 export const isPlan = item => item.type==='file' && /план/iu.test(item.name) &&
   /\.xlsx$/iu.test(item.name) && !item.name.startsWith('~$');
-export const diskVersion = item => item.sha256 || item.md5 || '';
+// Fixed sandbox namespace, not an arbitrary path relabelled as a test root.
+export const DOCTORS_TEST_ROOT='disk:/medsi-doctors-test';
+const safeSegment=name=>typeof name==='string' && name.length>0 && name!=='.' && name!=='..' &&
+  !/[\/\\\x00-\x1f\x7f]/u.test(name);
+export function validDiskRoot(path){
+  return typeof path==='string' && path.startsWith('disk:/') &&
+    path.slice(6).split('/').every(safeSegment);
+}
+export function directDiskChild(parent,item){
+  return validDiskRoot(parent) && safeSegment(item?.name) && item.path===parent+'/'+item.name;
+}
+export const diskVersion = item => {
+  const sha=String(item?.sha256||'').toLowerCase(),md5=String(item?.md5||'').toLowerCase();
+  return /^[a-f0-9]{64}$/.test(sha)?sha:/^[a-f0-9]{32}$/.test(md5)?md5:'';
+};
+export function verifyDiskBytes(bytes,version){
+  const algorithm=/^[a-f0-9]{64}$/.test(version)?'sha256':/^[a-f0-9]{32}$/.test(version)?'md5':null;
+  return Boolean(algorithm && Buffer.isBuffer(bytes) && createHash(algorithm).update(bytes).digest('hex')===version);
+}
+export function testDiskWriteEnabled(env,storage){
+  return env.DOCTORS_DISK_TEST_WRITE==='1' && env.DOCTORS_DISK_ROOT===DOCTORS_TEST_ROOT &&
+    env.DOCTORS_DISK_WRITE_TEST_ROOT===DOCTORS_TEST_ROOT && storage?.configured===true;
+}
 
 async function bodyBytes(response) {
   if (!response.ok || !response.body) throw new Error('Disk download failed');
@@ -50,6 +74,8 @@ export function createDoctorsDisk(token, request=fetch) {
       return bodyBytes(await request(url,{redirect:'error',signal:AbortSignal.timeout(15000)}));
     },
     async upload(path,bytes){
+      if(!validDiskRoot(path) || !path.startsWith(DOCTORS_TEST_ROOT+'/') || path.slice(DOCTORS_TEST_ROOT.length+1).split('/').length!==2)
+        throw new Error('Disk upload outside test sandbox');
       const url=await link('/upload',{path,overwrite:'true'});
       const response=await request(url,{method:'PUT',body:bytes,redirect:'error',signal:AbortSignal.timeout(15000)});
       if (!response.ok)throw new Error('Disk upload failed');

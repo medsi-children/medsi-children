@@ -8,6 +8,7 @@ import pg from 'pg';
 import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
+import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
 import {readPlanDates,updatePlanDischarge} from '../app/doctors-xlsx.mjs';
@@ -25,6 +26,26 @@ function book(dates,patient='Тестов Пациент 15 лет'){
   add('xl/worksheets/sheet1.xml',`<worksheet xmlns="${SHEET}"><sheetData><row r="4"><c r="B4" t="inlineStr"><is><t>Дата, время:</t></is></c><c r="C4" s="1" t="s"><v>0</v></c><c r="G4" t="s"><v>0</v></c></row><row r="5"><c r="B5" t="inlineStr"><is><t>Ф.И.О. пациента, возраст:</t></is></c><c r="C5" t="inlineStr"><is><t>${patient}</t></is></c></row><row r="6"><c r="F6"><f>C6*D6</f><v>123</v></c></row></sheetData><mergeCells><mergeCell ref="C4:F4"/></mergeCells></worksheet>`);
   return zip.toBuffer();
 }
+test('Disk sandbox cannot be redirected to a clinical folder and verifies downloaded bytes',async()=>{
+  const env={DOCTORS_DISK_ROOT:DOCTORS_TEST_ROOT,DOCTORS_DISK_WRITE_TEST_ROOT:DOCTORS_TEST_ROOT,DOCTORS_DISK_TEST_WRITE:'1'};
+  assert.equal(testDiskWriteEnabled(env,{configured:true}),true);
+  assert.equal(testDiskWriteEnabled({...env,DOCTORS_DISK_ROOT:'disk:/work',DOCTORS_DISK_WRITE_TEST_ROOT:'disk:/work'},{configured:true}),false);
+  assert.equal(testDiskWriteEnabled(env,{configured:false}),false);
+  assert.equal(validDiskRoot('disk:/'),false);
+  assert.equal(validDiskRoot('disk:/test/../work'),false);
+  assert.equal(directDiskChild(DOCTORS_TEST_ROOT,{name:'work',path:'disk:/work'}),false);
+  assert.equal(directDiskChild(DOCTORS_TEST_ROOT,{name:'..',path:DOCTORS_TEST_ROOT+'/..'}),false);
+  assert.equal(directDiskChild(DOCTORS_TEST_ROOT,{name:'Тестов Пациент',path:DOCTORS_TEST_ROOT+'/Тестов Пациент'}),true);
+  const bytes=Buffer.from('synthetic');
+  assert.equal(verifyDiskBytes(bytes,diskVersion({sha256:hash(bytes)})),true);
+  assert.equal(verifyDiskBytes(Buffer.from('wrong'),hash(bytes)),false);
+  assert.equal(diskVersion({sha256:'invalid'}),'');
+  let calls=0;
+  const disk=createDoctorsDisk('synthetic',async()=>{calls++;throw Error('Unexpected request');});
+  await assert.rejects(disk.upload('disk:/work/child/plan.xlsx',bytes));
+  await assert.rejects(disk.upload(DOCTORS_TEST_ROOT+'/../plan.xlsx',bytes));
+  assert.equal(calls,0);
+});
 test('writes only the selected XLSX cell and preserves time, shared references and formulas',()=>{
   const source=book('29.02.2024 12:30 – 01.03.2024 14:00');
   assert.equal(readPlanDates(source).discharge,'2024-03-01');
@@ -157,7 +178,7 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   t.after(()=>pool.end());
   const sql=createPostgresSql(pool);
   const patientId='synthetic-'+randomUUID();
-  const testRoot='disk:/synthetic-doctor-plan-copies';
+  const testRoot=DOCTORS_TEST_ROOT;
   const folder=testRoot+'/Тестов Пациент 15';
   const records=new Map([
     [folder+'/План итог дополнительный.xlsx',book('01.02.2024-16.02.2024')],
@@ -239,7 +260,7 @@ test('one broken folder cannot starve other patients, and removed registry rows 
     database:process.env.PGDATABASE||'postgres',max:2});
   t.after(()=>pool.end());
   const sql=createPostgresSql(pool);
-  const root='disk:/synthetic-isolation';
+  const root=DOCTORS_TEST_ROOT;
   const bad={id:'synthetic-'+randomUUID(),childName:'Тестов Пациент',episode:'2024-02-01'};
   const good={id:'synthetic-'+randomUUID(),childName:'Другой Пациент',episode:'2024-02-01'};
   const badPath=root+'/Тестов Пациент';

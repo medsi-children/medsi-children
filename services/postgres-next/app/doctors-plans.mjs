@@ -1,5 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {createDoctorsDisk,diskVersion,isPlan} from './doctors-disk.mjs';
+import {createDoctorsDisk,diskVersion,isPlan,validDiskRoot,directDiskChild,verifyDiskBytes,testDiskWriteEnabled} from './doctors-disk.mjs';
 import {readPlanDates,updatePlanDischarge,validIsoDate} from './doctors-xlsx.mjs';
 import {fullName} from './doctors-roster.mjs';
 
@@ -32,10 +32,9 @@ export function selectCurrentPlans(documents, today){
 
 export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
   const root=env.DOCTORS_DISK_ROOT;
-  const source=disk || (env.DOCTORS_DISK_TOKEN && root ? createDoctorsDisk(env.DOCTORS_DISK_TOKEN) : null);
-  // Only an explicitly configured test root can be written.
-  const write=Boolean(source && root && root===env.DOCTORS_DISK_WRITE_TEST_ROOT &&
-    env.DOCTORS_DISK_TEST_WRITE==='1' && storage.configured);
+  const source=validDiskRoot(root) ? (disk || (env.DOCTORS_DISK_TOKEN ? createDoctorsDisk(env.DOCTORS_DISK_TOKEN) : null)) : null;
+  const write=Boolean(source && testDiskWriteEnabled(env,storage));
+  if(env.DOCTORS_DISK_TEST_WRITE==='1' && !write)console.warn('MEDSI_DOCTORS_TEST_WRITE_DISABLED');
   let prepared;
   const prepare=()=>prepared ||= (async()=>{
     await sql`CREATE TABLE IF NOT EXISTS doctor_plan_snapshots (
@@ -102,6 +101,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     const documents=[];
     let unsafe=false;
     for(const item of (await source.list(folder.path)).filter(isPlan)){
+      if(!directDiskChild(folder.path,item)){unsafe=true;continue;}
       const version=diskVersion(item);
       if(!version){unsafe=true;continue;}
       const old=cached.get(item.path);
@@ -109,7 +109,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       if(!dates){
         const bytes=await source.download(item.path);
         const stable=await source.stat(item.path);
-        if(diskVersion(stable)!==version)throw new Error('Plan changed during scan');
+        if(diskVersion(stable)!==version || !verifyDiskBytes(bytes,version))throw new Error('Plan changed during scan');
         try {dates=readPlanDates(bytes);}
         catch{dates={invalid:true};}
       }
@@ -130,7 +130,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     return snapshot;
   }
 
-  async function writeAll(snapshot, operation, parts) {
+  async function writeAll(snapshot, operation, parts, stillCurrent) {
     if(snapshot.unsafe)return 'conflict';
     if(!snapshot.current.length)return 'pending';
     if(operation.desired<snapshot.admission ||
@@ -143,7 +143,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
         !snapshot.folder.startsWith(root.replace(/\/$/,'')+'/'))return 'conflict';
       const bytes=await source.download(plan.path);
       const version=diskVersion(await source.stat(plan.path));
-      if(version!==plan.version)return 'pending';
+      if(version!==plan.version || !verifyDiskBytes(bytes,version))return 'pending';
       const dates=readPlanDates(bytes);
       if(!matches(dates.patient,parts) || dates.admission!==snapshot.admission)return 'conflict';
       if(dates.discharge===operation.desired)continue;
@@ -161,7 +161,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       if(await storage.sha256Object(key)!==digest(entry.bytes))throw new Error('Plan backup verification failed');
     }
     for(const entry of staged){
-      if(stopped)return 'pending';
+      if(stopped || !await stillCurrent())return 'pending';
       if (diskVersion(await source.stat(entry.plan.path))!==entry.plan.version)return 'pending';
       await source.upload(entry.plan.path,entry.next);
       const verified=await source.download(entry.plan.path);
@@ -180,7 +180,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     try{
       await prepare();
       const patients=await listPatients({fresh:true});
-      const folders=(await source.list(root)).filter(item=>item.type==='dir');
+      const folders=(await source.list(root)).filter(item=>item.type==='dir' && directDiskChild(root,item));
       const today=moscowDay();
       let patientFailed=false;
       for(const patient of patients) {
@@ -208,14 +208,19 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
             if(operation?.status==='pending'){
               // Recheck membership just before writing. A patient may have
               // left the roster during a long cycle.
-              const fresh=await listPatients({fresh:true});
-              if(!fresh.some(p=>p.id===patient.id && p.episode===patient.episode &&
-                fullName(p.childName)===fullName(patient.childName)) ||
-                fresh.some(p=>p.id!==patient.id && matches(p.childName,parts)))return;
-              const status=await writeAll(snapshot,operation,parts);
+              const stillCurrent=async()=>{
+                const fresh=await listPatients({fresh:true});
+                return fresh.some(p=>p.id===patient.id && p.episode===patient.episode &&
+                  fullName(p.childName)===fullName(patient.childName)) &&
+                  !fresh.some(p=>p.id!==patient.id && matches(p.childName,parts));
+              };
+              if(!await stillCurrent())return;
+              const status=await writeAll(snapshot,operation,parts,stillCurrent);
               if(status==='synced'){
                 const refreshed=await scan(folder,parts,snapshot,today,patient.episode);
-                if(refreshed.current.some(plan=>plan.discharge!==operation.desired))throw new Error('Plan verification changed');
+                if(refreshed.unsafe || refreshed.admission!==snapshot.admission ||
+                  snapshot.current.some(plan=>!refreshed.current.some(next=>next.path===plan.path)) ||
+                  refreshed.current.some(plan=>plan.discharge!==operation.desired))throw new Error('Plan verification changed');
                 Object.assign(snapshot,refreshed);
               }
               if(status!=='pending')await tx`UPDATE doctor_discharge_changes SET status=${status} WHERE id=${operation.id}`;

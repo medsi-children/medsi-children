@@ -22,6 +22,7 @@ async function closeDatabaseDriver(driver) {
 import {createDoctorsRoster} from './doctors-roster.mjs';
 import {createGreenwoodSource} from './doctors-greenwood.mjs';
 import {createDoctorsLocalDates} from './doctors-local-dates.mjs';
+import {createDoctorsDiskRead} from './doctors-disk-read.mjs';
 import {createDoctorsRouter} from './doctors-router.mjs';
 import {createSessionService} from './session-auth.mjs';
 import {createCurrentParentReportReader} from './current-parent-report-reader.mjs';
@@ -150,7 +151,8 @@ export function createNextServices({sql,env=process.env}) {
   if(env.DOCTORS_ENABLED==='1'){
     const greenwood=createGreenwoodSource({...env,DOCTORS_GREENWOOD_DISCHARGE_COLUMN:'I'});
     const source=createDoctorsRoster(sql,env,{greenwood});
-    doctors.doctorsPlans=createDoctorsLocalDates({sql,greenwood,listPatients:source.current});
+    doctors.doctorsDiskRead=createDoctorsDiskRead({env,listPatients:source.current,nameVariants});
+    doctors.doctorsPlans=createDoctorsLocalDates({sql,greenwood,listPatients:source.current,diskRead:doctors.doctorsDiskRead});
     doctors.doctorsRoster=createDoctorsRoster(sql,env,{greenwood,plans:doctors.doctorsPlans});
   }
   const parentDeletion=createParentDeletionService({sql,currentChildMode:true,
@@ -391,8 +393,10 @@ export async function startIsolatedStand(env=process.env,{
     console.log('MEDSI_NEXT_STAND_HTTP_LISTENING');
   });
   if(externalServer)installHandler(app);
+  let doctorsDiskRead;
   const shutdown=async()=>{
     stopped=true;
+    doctorsDiskRead?.stop();
     if(ticker)clearInterval(ticker);
     await new Promise(resolve=>server.close(resolve));
     await closeDatabaseDriver(driver);
@@ -429,6 +433,8 @@ export async function startIsolatedStand(env=process.env,{
       state.phase='ready';
       state.code='READY';
       console.log('MEDSI_NEXT_STAND_READY');
+      doctorsDiskRead=services.doctorsDiskRead;
+      void doctorsDiskRead?.start();
       // Report the catalog-only schema check even if the public endpoint is unreachable.
       if(typeof services.dbSchemaHealth==='function'){
         void Promise.resolve().then(()=>services.dbSchemaHealth()).then(

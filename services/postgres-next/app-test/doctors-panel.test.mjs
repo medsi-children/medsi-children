@@ -11,6 +11,7 @@ import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
 import {createDoctorsLocalDates} from '../app/doctors-local-dates.mjs';
+import {createDoctorsDiskRead,candidateFolder,chooseReadOnlyPlan} from '../app/doctors-disk-read.mjs';
 import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
@@ -647,4 +648,50 @@ test('Greenwood excludes room labels and punctuation while retaining undated pat
   assert.equal(result[0].discharge,null);
   assert.equal(result[1].episode,null);
   assert.equal(result[2].discharge,'2024-02-15');
+});
+
+test('synthetic copies of the observed C2/C3 layout read ranges and single numeric dates',()=>{
+  // Use callback instead of ambiguous replacement-group numbers.
+  const zip=modifySyntheticBook(book('09.02.2024-23.02.2024'),s=>s.replace(/([BCG])4"/g,(_m,c)=>c+'2"').replace(/([BC])5"/g,(_m,c)=>c+'3"').replace('r="4"','r="2"').replace('r="5"','r="3"').replace('C4:F4','C2:F2'));
+  assert.equal(readPlanDates(zip.toBuffer()).discharge,'2024-02-23');
+  const numeric=modifySyntheticBook(book('01.02.2024'),s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" s="1"><v>45323</v></c>'));
+  numeric.addFile('xl/styles.xml',Buffer.from('<styleSheet xmlns="'+SHEET+'"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd\\\\.mm\\\\.yyyy"/></numFmts><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="164"/></cellXfs></styleSheet>'));
+  assert.deepEqual(readPlanDates(numeric.toBuffer()),{admission:'2024-02-01',discharge:null,patient:'Тестов Пациент 15 лет'});
+  assert.throws(()=>readPlanDates(book('00.02.2024-00.02.2024')));
+  assert.throws(()=>readPlanDates(book('21.02.2024-12.02.2024')));
+});
+test('read-only selector prefers explicit final date, detects contradictory duplicates, never infers a discharge',()=>{
+  const p={admission:'2024-02-01',discharge:'2024-02-15',rank:2,modifiedDay:'2024-02-05'};
+  assert.equal(chooseReadOnlyPlan([p,{...p,rank:3,discharge:'2024-02-18'}]).discharge,'2024-02-18');
+  assert.equal(chooseReadOnlyPlan([{...p,rank:3,discharge:null}]).status,'noDischarge');
+  assert.equal(chooseReadOnlyPlan([p,{...p,discharge:'2024-02-16'}]).status,'conflict');
+  assert.equal(chooseReadOnlyPlan([p,{...p,discharge:'2024-02-16',modifiedDay:'2024-02-06'}]).discharge,'2024-02-16');
+  assert.equal(chooseReadOnlyPlan([{...p,nameDate:'2024-02-05'},{...p,nameDate:'2024-02-06',discharge:'2024-02-16'}]).discharge,'2024-02-16');
+  const matcher=createDoctorNameMatcher([{baseKey:'софия',preferredName:'София',variants:['Соня','Софья']}]);
+  const parts=doctorNameParts('Тестова София');
+  assert.ok(candidateFolder('Тестова Соня сентябрь 2026',parts,matcher));
+  assert.ok(candidateFolder('София Тестова 15.02.2010',parts,matcher));
+  assert.ok(candidateFolder('Тестовва София',parts,matcher));
+  assert.ok(!matcher.matches('Тестовва София',parts),'typo hints never establish ownership');
+});
+test('read-only scanner checks duplicate folders, plan identity and episode without writes',async()=>{
+  const root='disk:/',folder=root+'Тестов Пациент',other=root+'Пациент Тестов 15 лет',typo=root+'Тестова Пациент';
+  const records=new Map([
+    [folder+'/План.xlsx',book('01.02.2024-16.02.2024')],
+    [other+'/План итог.xlsx',book('01.02.2024-20.02.2024')],
+    [other+'/Старый итоговый план.xlsx',book('01.01.2024-16.01.2024')],
+    [typo+'/План итог.xlsx',book('01.02.2024-28.02.2024','Другой Пациент')]
+  ]);
+  const stat=path=>({type:'file',name:path.split('/').at(-1),path,sha256:hash(records.get(path)),modified:'2024-02-05T00:00:00Z'});
+  const disk={async list(path){return path===root?[folder,other,typo].map(path=>({type:'dir',path,name:path.slice(root.length)})):
+    [...records.keys()].filter(p=>p.startsWith(path+'/')).map(stat);},
+    async stat(path){return stat(path);},async download(path){return records.get(path);},
+    async upload(){assert.fail('Read-only scanner cannot upload');}};
+  const scanner=createDoctorsDiskRead({env:{DOCTORS_DISK_ROOT:root,DOCTORS_GREENWOOD_SHEET_ID:'synthetic',DOCTORS_DISK_WRITE_ENABLED:'1'},disk,
+    listPatients:async()=>[{id:'a',childName:'Тестов Пациент',episode:'2024-02-01'}]});
+  await scanner.start();scanner.stop();
+  assert.equal(scanner.get('a','2024-02-01').discharge,'2024-02-20');
+  assert.equal(scanner.get('a','2024-03-01'),null);
+  assert.equal(scanner.diagnostics().issues.patientMismatch,1);
+  assert.equal(scanner.diagnostics().issues.otherEpisode,1);
 });

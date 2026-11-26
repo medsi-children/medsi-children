@@ -157,7 +157,8 @@
 
     const dates=node('div','patient-dates');
     const discharge=patientDate('Выписка',patient.discharge);
-    if(patient.dischargeSource==='doctor')discharge.append(node('span','patient-date-source','Установлено врачом'));
+    const sourceLabel={doctor:'Установлено врачом',disk:'Из плана Яндекс.Диска','disk-preliminary':'Предварительный план',google:'Ориентировочно · реестр'};
+    if(sourceLabel[patient.dischargeSource])discharge.append(node('span','patient-date-source',sourceLabel[patient.dischargeSource]));
     if(patient.editable){
       const edit=node('button','medsi-roster-status-icon patient-edit');
       edit.type='button';
@@ -170,6 +171,8 @@
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
     row.append(identity,dates,patientDeadline(patient,day));
     if(patient.syncConflict)row.append(node('p','status error','Требуется проверить актуальный план перед повторным сохранением даты.'));
+    if(patient.dischargeSource!=='doctor'&&['conflict','incomplete','stale'].includes(patient.planStatus))
+      row.append(node('p','status error',patient.planStatus==='conflict'?'В планах разные даты. Требуется проверка.':'Не удалось подтвердить актуальный план.'));
     return row;
   }
   function openDateEditor(patient){

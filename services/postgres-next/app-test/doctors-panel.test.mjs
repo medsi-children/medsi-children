@@ -344,6 +344,8 @@ test('one broken folder cannot starve other patients, and removed registry rows 
     DOCTORS_DISK_ROOT:root,DOCTORS_DISK_WRITE_TEST_ROOT:root,DOCTORS_DISK_TEST_WRITE:'1'
   },listPatients:async()=>removeDuringWrite && ++reads>=2?[bad]:[bad,good]});
   const first=create();await first.start();first.stop();
+  assert.equal(first.diagnostics().issues.folderList_failed,1);
+  assert.equal(first.diagnostics().counters.matched,2);
   const before=await first.dates(good.id);
   assert.equal(before.discharge,'2024-02-16','a preceding broken folder must not stop a good scan');
   assert.equal((await first.enqueue(good.id,'2024-02-19',before.revision)).ok,true);
@@ -478,4 +480,29 @@ test('shared swipe gesture resolves doctor screens and modal close buttons',()=>
   }
   visible.set('dialog.doctor-date-editor[open]',{close(){clicked.push('date')}});
   action()();assert.equal(clicked.at(-1),'date');
+});
+
+test('Disk follows only bounded trusted download redirects without sending OAuth to transfer hosts',async()=>{
+  const calls=[];
+  const bytes=Buffer.from('synthetic');
+  const disk=createDoctorsDisk('synthetic-secret',async(url,options)=>{
+    calls.push({url:String(url),options});
+    if(calls.length===1)return Response.json({href:'https://downloader.disk.yandex.ru/file'});
+    if(calls.length===2)return new Response(null,{status:302,headers:{location:'https://storage.yandex.net/file'}});
+    return new Response(bytes);
+  });
+  assert.deepEqual(await disk.download('disk:/synthetic.xlsx'),bytes);
+  assert.equal(calls[0].options.headers.Authorization,'OAuth synthetic-secret');
+  assert.equal(calls[1].options.headers,undefined);
+  assert.equal(calls[2].options.headers,undefined);
+  const untrusted=createDoctorsDisk('synthetic',async(url)=>String(url).includes('cloud-api.')
+    ?Response.json({href:'https://downloader.disk.yandex.ru/file'})
+    :new Response(null,{status:302,headers:{location:'https://example.invalid/file'}}));
+  await assert.rejects(untrusted.download('disk:/synthetic.xlsx'),error=>error.doctorDiskCode==='unexpectedTransferHost');
+});
+test('XLSX dates accept unpadded day and month without losing validation',()=>{
+  const bytes=book('1.2.2024-6.2.2024');
+  assert.equal(readPlanDates(bytes).admission,'2024-02-01');
+  assert.equal(readPlanDates(updatePlanDischarge(bytes,'2024-02-09')).discharge,'2024-02-09');
+  assert.throws(()=>readPlanDates(book('30.2.2024')));
 });

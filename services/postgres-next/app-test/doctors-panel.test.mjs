@@ -11,7 +11,8 @@ import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
 import {createDoctorsLocalDates} from '../app/doctors-local-dates.mjs';
-import {createDoctorsDiskRead,candidateFolder,chooseReadOnlyPlan} from '../app/doctors-disk-read.mjs';
+import {createDoctorsDiskRead,candidateFolder,candidateRootPlan,chooseReadOnlyPlan} from '../app/doctors-disk-read.mjs';
+import {smartWritePolicy} from '../app/doctors-smart-write.mjs';
 import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
@@ -694,4 +695,80 @@ test('read-only scanner checks duplicate folders, plan identity and episode with
   assert.equal(scanner.get('a','2024-03-01'),null);
   assert.equal(scanner.diagnostics().issues.patientMismatch,1);
   assert.equal(scanner.diagnostics().issues.otherEpisode,1);
+});
+
+test('smart writer expands date-only numeric cells only on explicit opt-in',()=>{
+  const zip=modifySyntheticBook(book('01.02.2024'),s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" s="1"><v>45323</v></c>'));
+  zip.addFile('xl/styles.xml',Buffer.from('<styleSheet xmlns="'+SHEET+'"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>'));
+  const original=zip.toBuffer();
+  assert.throws(()=>updatePlanDischarge(original,'2024-02-20'));
+  const next=updatePlanDischarge(original,'2024-02-20',{allowNative:true});
+  assert.equal(readPlanDates(next).admission,'2024-02-01');
+  assert.equal(readPlanDates(next).discharge,'2024-02-20');
+  assert.match(new AdmZip(next).readAsText('xl/worksheets/sheet1.xml'),/<f>C6\*D6<\/f>/);
+  assert.deepEqual(new AdmZip(next).readFile('xl/styles.xml'),zip.readFile('xl/styles.xml'));
+  const withTime=modifySyntheticBook(original,s=>s.replace('45323','45323.5')).toBuffer();
+  assert.throws(()=>updatePlanDischarge(withTime,'2024-02-20',{allowNative:true}),/time/);
+});
+test('smart write requires a separate generation and root file name remains a hint',()=>{
+  const env={DOCTORS_DISK_ROOT:'disk:/',DOCTORS_DISK_TOKEN:'synthetic',DOCTORS_GREENWOOD_SHEET_ID:'synthetic',
+    DOCTORS_DISK_CONCURRENT_EDIT_ACK:'1',DOCTORS_DISK_WRITE_EPOCH:'smart-synthetic-1',DOCTORS_DISK_WRITE_ENABLED:'1'};
+  const storage={configured:true,removeObject(){}};
+  assert.equal(smartWritePolicy(env,storage),null);
+  assert.ok(smartWritePolicy({...env,DOCTORS_DISK_SMART_WRITE_ENABLED:'1'},storage));
+  assert.equal(smartWritePolicy({...env,DOCTORS_DISK_SMART_WRITE_ENABLED:'1',DOCTORS_DISK_CONCURRENT_EDIT_ACK:'0'},storage),null);
+  const parts=doctorNameParts('Тестов Пациент');
+  assert.ok(candidateRootPlan('План итог Тестов.xlsx',parts));
+  assert.ok(!candidateRootPlan('План итог Тестович.xlsx',parts));
+});
+test('doctor edit writes verified folder and root plans, ignores older and unrelated stays, cleans temporary copies',{
+  skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
+},async t=>{
+  const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
+    database:process.env.PGDATABASE||'postgres',max:2});
+  t.after(()=>pool.end());
+  const sql=createPostgresSql(pool),root='disk:/',folder=root+'Тестов Пациент',id='synthetic-'+randomUUID();
+  const patient={id,childName:'Тестов Пациент',episode:'2024-02-01',registry:true,registryDischarge:'2024-02-10'};
+  const ordinary=folder+'/План.xlsx',final=folder+'/План итог.xlsx',named=root+'План Тестов.xlsx',
+    old=folder+'/План старый.xlsx',wrong=folder+'/План чужой.xlsx';
+  const records=new Map([[ordinary,book('01.02.2024')],[final,book('01.02.2024-16.02.2024')],
+    [named,book('01.02.2024-14.02.2024')],[old,book('01.01.2024-16.01.2024')],
+    [wrong,book('01.02.2024-18.02.2024','Другой Пациент')]]);
+  const stat=path=>({type:'file',name:path.split('/').at(-1),path,sha256:hash(records.get(path)),modified:'2024-02-05T00:00:00Z'});
+  const writes=[],backups=new Map();
+  const disk={async list(path){return path===root?[{type:'dir',name:'Тестов Пациент',path:folder},stat(named)]:
+    [...records.keys()].filter(p=>p.startsWith(path+'/')).map(stat);},
+    async stat(path){return stat(path);},async download(path){return records.get(path);},
+    async upload(path,bytes){assert.ok(backups.size>=6);writes.push(path);records.set(path,bytes);}};
+  const storage={configured:true,async hasObject(key){return backups.has(key);},
+    async putBuffer(key,bytes){backups.set(key,bytes);},async sha256Object(key){return hash(backups.get(key));},
+    async removeObject(key){backups.delete(key);return true;}};
+  const env={DOCTORS_DISK_ROOT:root,DOCTORS_DISK_TOKEN:'synthetic',DOCTORS_GREENWOOD_SHEET_ID:'synthetic',
+    DOCTORS_DISK_SMART_WRITE_ENABLED:'1',DOCTORS_DISK_CONCURRENT_EDIT_ACK:'1',DOCTORS_DISK_WRITE_EPOCH:'smart-synthetic-'+randomUUID()};
+  const listPatients=async()=>[patient],greenwood={configured:true,diagnostics:()=>({})};
+  const create=()=>{
+    const scanner=createDoctorsDiskRead({env,sql,storage,disk,listPatients});
+    const local=createDoctorsLocalDates({sql,greenwood,listPatients,diskRead:scanner});
+    return {scanner,local};
+  };
+  const first=create();await first.scanner.start();first.scanner.stop();
+  const before=await first.local.dates(id,patient);
+  assert.equal(before.discharge,'2024-02-16');
+  assert.equal(before.dischargeSource,'disk');
+  assert.equal((await first.local.enqueue(id,'2024-02-21',before.revision)).ok,true);
+  assert.equal((await first.local.dates(id,patient)).diskWriteStatus,'pending');
+  const second=create();await second.scanner.start();second.scanner.stop();
+  assert.deepEqual(new Set(writes),new Set([ordinary,final,named]));
+  for(const path of writes)assert.equal(readPlanDates(records.get(path)).discharge,'2024-02-21');
+  assert.equal(readPlanDates(records.get(old)).discharge,'2024-01-16');
+  assert.equal(readPlanDates(records.get(wrong)).discharge,'2024-02-18');
+  assert.equal(backups.size,0);
+  assert.equal((await second.local.dates(id,patient)).diskWriteStatus,'synced');
+  const third=create();await third.scanner.start();third.scanner.stop();
+  const current=await third.local.dates(id,patient);
+  assert.equal((await third.local.enqueue(id,'2024-02-25',current.revision)).ok,true);
+  records.set(final,book('01.02.2024-24.02.2024'));
+  const fourth=create();await fourth.scanner.start();fourth.scanner.stop();
+  assert.equal(writes.length,3,'independent edit prevents all further writes');
+  assert.equal((await fourth.local.dates(id,patient)).diskWriteStatus,'conflict');
 });

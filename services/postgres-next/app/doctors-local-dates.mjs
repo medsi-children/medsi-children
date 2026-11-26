@@ -26,12 +26,14 @@ export function createDoctorsLocalDates({sql,greenwood,listPatients,diskRead}){
       ['local','pending','conflict','synced'].includes(row.status)?row.desired:null;
     const plan=diskRead?.get(patient.id,admission);
     const verified=plan?.status==='verified'&&validIsoDate(plan.discharge)&&plan.discharge>=admission?plan.discharge:null;
-    return {admission,discharge:override||verified||registry,
-      dischargeSource:override?'doctor':verified?(plan.kind==='preliminary'?'disk-preliminary':'disk'):registry?'google':null,
+    const candidate=plan?.status==='admissionMismatch'&&admission&&validIsoDate(plan.candidateDischarge)&&plan.candidateDischarge>=admission
+      ?plan.candidateDischarge:null;
+    return {admission,discharge:override||verified||candidate||registry,
+      dischargeSource:override?'doctor':verified?(plan.kind==='preliminary'?'disk-preliminary':'disk'):candidate?'disk-candidate':registry?'google':null,
       planStatus:plan?.status||(diskRead?'checking':null),
       diskWriteStatus:override?(writeStatus||(writer?.enabled?'notQueued':null)):null,
       unverifiedPlans:plan?.unverified||0,
-      revision:createHash('sha256').update(JSON.stringify([patient.id,admission,registry,verified,plan?.status||null,plan?.targets||[],row?.id||null,writeStatus])).digest('hex'),
+      revision:createHash('sha256').update(JSON.stringify([patient.id,admission,registry,verified,candidate,plan?.status||null,plan?.targets||[],row?.id||null,writeStatus])).digest('hex'),
       syncConflict:false,editable:Boolean(patient.registry&&admission)};
   }
   async function dates(id,patient){

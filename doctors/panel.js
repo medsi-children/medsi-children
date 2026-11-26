@@ -126,14 +126,14 @@
     const left=Math.max(0,remaining);
     const absentLabel=!patient.admission?'Проверьте дату поступления':patient.planStatus==='noDischarge'?'Дата выписки не указана ни в плане, ни в реестре':
       patient.planStatus==='checking'?'Проверяем планы':patient.planStatus==='conflict'?'Дата выписки требует проверки':'Дата выписки не подтверждена';
-    const label=remaining===null?absentLabel:remaining<0?'Плановая дата выписки прошла':remaining===0?'Выписка сегодня':
+    const label=patient.dischargeSource==='disk-candidate'?'Дата из плана требует подтверждения':remaining===null?absentLabel:remaining<0?'Плановая дата выписки прошла':remaining===0?'Выписка сегодня':
       (plural.select(left)==='one'?'Остался ':'Осталось ')+countDays(left);
-    footer.dataset.tone=remaining===null?'muted':remaining<0?'overdue':remaining>0&&remaining<=3?'warning':'scheduled';
+    footer.dataset.tone=patient.dischargeSource==='disk-candidate'?'warning':remaining===null?'muted':remaining<0?'overdue':remaining>0&&remaining<=3?'warning':'scheduled';
     const status=node('span','patient-deadline-label');
     status.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4m9-4v4M3 10h11m-5 11H6a3 3 0 0 1-3-3V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><circle cx="16.5" cy="16.5" r="4.5"/><path d="M16.5 14v2.5l1.5 1"/></svg>';
     status.append(document.createTextNode(label));
     footer.append(status);
-    if(patient.admission&&patient.discharge){
+    if(patient.admission&&patient.discharge&&patient.dischargeSource!=='disk-candidate'){
       const bar=node('progress');
       bar.max=Math.max(1,days(patient.discharge,patient.admission));
       bar.value=Math.max(0,Math.min(bar.max,days(day,patient.admission)));
@@ -158,7 +158,7 @@
 
     const dates=node('div','patient-dates');
     const discharge=patientDate('Выписка',patient.discharge);
-    const sourceLabel={doctor:'Установлено врачом',disk:'Из плана Яндекс.Диска','disk-preliminary':'Предварительный план',google:'Ориентировочно · реестр'};
+    const sourceLabel={doctor:'Установлено врачом',disk:'Из плана Яндекс.Диска','disk-preliminary':'Предварительный план','disk-candidate':'Из плана · требует проверки',google:'Ориентировочно · реестр'};
     if(sourceLabel[patient.dischargeSource])discharge.append(node('span','patient-date-source',sourceLabel[patient.dischargeSource]));
     if(patient.editable){
       const edit=node('button','medsi-roster-status-icon patient-edit');
@@ -172,6 +172,7 @@
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
     row.append(identity,dates,patientDeadline(patient,day));
     if(patient.syncConflict)row.append(node('p','status error','Требуется проверить актуальный план перед повторным сохранением даты.'));
+    if(patient.dischargeSource==='disk-candidate')row.append(node('p','status error','Поступление в плане отличается от реестра на 1 день. Подтвердите дату выписки вручную.'));
     if(patient.dischargeSource!=='doctor'&&['conflict','incomplete','stale','unverified'].includes(patient.planStatus))
       row.append(node('p','status error',patient.planStatus==='conflict'?'В планах разные даты. Требуется проверка.':'Не удалось подтвердить актуальный план.'));
     const writeLabels={pending:'Дата сохранена в боте. Ожидает записи в планы.',synced:'Дата записана в проверенные планы.',conflict:'Планы изменились или не поддерживают запись. Проверьте и сохраните дату снова.',needsReview:'Планы пока не подтверждены. Проверьте и сохраните дату снова.',notQueued:'Дата сохранена только в боте. Сохраните повторно для отправки в планы.'};

@@ -11,7 +11,7 @@ import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
 import {createDoctorsLocalDates} from '../app/doctors-local-dates.mjs';
-import {createDoctorsDiskRead,candidateFolder,candidateRootPlan,chooseReadOnlyPlan} from '../app/doctors-disk-read.mjs';
+import {createDoctorsDiskRead,candidateFolder,candidateRootPlan,chooseReadOnlyPlan,nearAdmission} from '../app/doctors-disk-read.mjs';
 import {smartWritePolicy} from '../app/doctors-smart-write.mjs';
 import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
@@ -771,4 +771,28 @@ test('doctor edit writes verified folder and root plans, ignores older and unrel
   const fourth=create();await fourth.scanner.start();fourth.scanner.stop();
   assert.equal(writes.length,3,'independent edit prevents all further writes');
   assert.equal((await fourth.local.dates(id,patient)).diskWriteStatus,'conflict');
+});
+
+test('one-day admission mismatch is only an unconfirmed read candidate, never a write target',async()=>{
+  const root='disk:/',folder=root+'Тестов Пациент',path=folder+'/План итог.xlsx';
+  const bytes=book('02.02.2024-20.02.2024');
+  const item={type:'file',path,name:'План итог.xlsx',sha256:hash(bytes),modified:'2024-02-04T00:00:00Z'};
+  const patient={id:'synthetic',childName:'Тестов Пациент Отчество',episode:'2024-02-01'};
+  const disk={async list(p){return p===root?[{type:'dir',path:folder,name:'Тестов Пациент'}]:[item];},async stat(){return item;},async download(){return bytes;},async upload(){assert.fail('must not write');}};
+  const scanner=createDoctorsDiskRead({env:{DOCTORS_DISK_ROOT:root,DOCTORS_GREENWOOD_SHEET_ID:'synthetic'},disk,listPatients:async()=>[patient]});
+  await scanner.start();scanner.stop();
+  const result=scanner.get(patient.id,patient.episode);
+  assert.equal(result.status,'admissionMismatch');
+  assert.equal(result.discharge,null);
+  assert.equal(result.candidateDischarge,'2024-02-20');
+  assert.deepEqual(result.targets,[]);
+  assert.equal(result.writeReady,false);
+  const matcher=createDoctorNameMatcher([]);
+  const parts=doctorNameParts(patient.childName);
+  const identities=[{p:patient,parts}];
+  const plan={patient:'Тестов Пациент',admission:'2024-02-02',discharge:'2024-02-20'};
+  assert.ok(nearAdmission(plan,patient,parts,identities,matcher));
+  assert.ok(!nearAdmission({...plan,admission:'2024-02-03'},patient,parts,identities,matcher));
+  assert.ok(!nearAdmission({...plan,patient:'Тестов Другой'},patient,parts,identities,matcher));
+  assert.ok(!nearAdmission(plan,patient,parts,[...identities,{p:{...patient,id:'duplicate'},parts}],matcher));
 });

@@ -76,7 +76,15 @@ async function bodyBytes(response) {
   return Buffer.concat(chunks,size);
 }
 
-export function createDoctorsDisk(token, request=fetch, {writeRoot=null}={}) {
+export function allowedSmartPlanWritePath(root,path){
+  if(allowedPlanWritePath(root,path))return !/образец|шаблон/iu.test(path.split('/').at(-1));
+  if(!validDiskRoot(root)||!validDiskRoot(path))return false;
+  const prefix=root==='disk:/'?root:root+'/';
+  if(!path.startsWith(prefix))return false;
+  const name=path.slice(prefix.length);
+  return safeSegment(name)&&isPlan({type:'file',name})&&!/образец|шаблон/iu.test(name);
+}
+export function createDoctorsDisk(token, request=fetch, {writeRoot=null,allowRootPlans=false}={}) {
   async function api(endpoint, params) {
     let response;
     try{response=await request(API+endpoint+'?'+new URLSearchParams(params),{
@@ -122,7 +130,7 @@ export function createDoctorsDisk(token, request=fetch, {writeRoot=null}={}) {
       throw transferError('downloadRedirectLimit');
     },
     async upload(path,bytes){
-      if(!allowedPlanWritePath(writeRoot,path))throw new Error('Disk upload outside authorized plan root');
+      if(!(allowRootPlans?allowedSmartPlanWritePath(writeRoot,path):allowedPlanWritePath(writeRoot,path)))throw new Error('Disk upload outside authorized plan root');
       const url=await link('/upload',{path,overwrite:'true'});
       const response=await request(url,{method:'PUT',body:bytes,redirect:'error',signal:AbortSignal.timeout(15000)});
       if (!response.ok)throw new Error('Disk upload failed');

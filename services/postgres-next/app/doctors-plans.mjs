@@ -2,6 +2,7 @@ import {createHash,randomUUID} from 'node:crypto';
 import {createDoctorsDisk,diskVersion,isPlan,validDiskRoot,directDiskChild,verifyDiskBytes,diskWritePolicy,allowedPlanWritePath} from './doctors-disk.mjs';
 import {readPlanDates,updatePlanDischarge,validIsoDate} from './doctors-xlsx.mjs';
 import {fullName} from './doctors-roster.mjs';
+import {doctorNameParts as identity,createDoctorNameMatcher,resolveDoctorFolder} from './doctors-names.mjs';
 
 // Diagnostic keys are fixed, never derived from names, remote bodies or raw exception text.
 const diskCodes=new Set(['invalidTransferUrl','unexpectedTransferHost','apiNetwork','apiInvalidJson',
@@ -21,18 +22,6 @@ const xlsxCodes=new Map([
 const increment=(counts,key)=>{counts[key]=(counts[key]||0)+1;};
 const diskIssue=(issues,stage,error)=>increment(issues,stage+(diskCodes.has(error?.doctorDiskCode)?'_'+error.doctorDiskCode:'_failed'));
 const digest=bytes=>createHash('sha256').update(bytes).digest('hex');
-const noAge=value=>fullName(value).replace(/[, ]+\d{1,2}(?:\s*(?:год|года|лет))?$/u,'').trim();
-const identity=name=>{
-  const words=noAge(name).split(' ');
-  return (words.length===2 || words.length===3) &&
-    words.every(word=>/^\p{L}{2,}(?:-\p{L}{2,})?$/u.test(word)) ? words : null;
-};
-function matches(name,parts){
-  const words=identity(name);
-  if(!words || (parts[2] && words[2] && parts[2]!==words[2]))return false;
-  return (words[0]===parts[0] && words[1]===parts[1]) ||
-    (words[0]===parts[1] && words[1]===parts[0]);
-}
 const moscowDay=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'Europe/Moscow',
   day:'2-digit',month:'2-digit',year:'numeric'}).format(new Date());
 
@@ -47,7 +36,7 @@ export function selectCurrentPlans(documents, today){
   return {admission,discharge:current[0]?.discharge||null,current};
 }
 
-export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
+export function createDoctorsPlans({sql,env,storage,listPatients,disk,nameVariants}) {
   const root=env.DOCTORS_DISK_ROOT;
   const policy=diskWritePolicy(env,storage);
   const source=validDiskRoot(root) ? (disk || (env.DOCTORS_DISK_TOKEN ?
@@ -119,7 +108,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     });
   }
 
-  async function scan(folder, parts, previous, today, episode, issues) {
+  async function scan(folder, owns, previous, today, episode, issues, matchVersion) {
     const cached=new Map((previous?.documents||[]).map(doc=>[doc.path,doc]));
     const documents=[];
     let unsafe=false;
@@ -134,7 +123,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       if(!version){unsafe=true;increment(issues,'missingHash');continue;}
       const old=cached.get(item.path);
       // Retry invalid or previously unowned files after parser improvements.
-      const reuse=old?.version===version && old.owned && !old.invalid;
+      const reuse=previous?.matchVersion===matchVersion && old?.version===version && old.owned && !old.invalid;
       let dates=reuse ? old : null;
       if(!dates){
         let bytes,stable;
@@ -148,13 +137,13 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
         catch(error){increment(issues,xlsxCodes.get(error?.message)||'xlsxUnreadable');dates={invalid:true};}
       }
       if(!dates.invalid && !reuse && !dates.patient)increment(issues,'missingPatientField');
-      if(!dates.invalid && !reuse && dates.patient && !matches(dates.patient,parts))increment(issues,'patientFieldMismatch');
-      if(dates.invalid || !(reuse ? old.owned : dates.patient && matches(dates.patient,parts)))unsafe=true;
+      if(!dates.invalid && !reuse && dates.patient && !owns(dates.patient))increment(issues,'patientFieldMismatch');
+      if(dates.invalid || !(reuse ? old.owned : dates.patient && owns(dates.patient)))unsafe=true;
       const compactDate=/\b(\d{2})\.(\d{2})\.(\d{4})\b/u.exec(item.name);
       const nameDate=compactDate ? [compactDate[3],compactDate[2],compactDate[1]].join('-') : '';
       documents.push({path:item.path,version,modified:item.modified||'',nameDate:validIsoDate(nameDate)?nameDate:'',
         final:/итог/iu.test(item.name),admission:dates.admission||null,discharge:dates.discharge||null,
-        owned:Boolean(dates.patient && matches(dates.patient,parts)),invalid:Boolean(dates.invalid)});
+        owned:Boolean(dates.patient && owns(dates.patient)),invalid:Boolean(dates.invalid)});
       // Retain only the fields needed for date synchronization.
       if(reuse)documents.at(-1).owned=old.owned;
     }
@@ -162,13 +151,13 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     const selected=selectCurrentPlans(documents.filter(doc=>doc.owned && (!episode || doc.admission===episode)),today);
     if(episode && documents.some(doc=>doc.owned && doc.admission!==episode) && !selected.current.length)increment(issues,'episodeMismatch');
     if(incomplete && !selected.current.length)throw new Error('Incomplete plan scan');
-    const snapshot={...selected,documents,unsafe,
+    const snapshot={...selected,documents,unsafe,matchVersion,
       folder:folder.path};
     snapshot.version=digest(JSON.stringify(snapshot));
     return snapshot;
   }
 
-  async function writeAll(snapshot, operation, parts, stillCurrent) {
+  async function writeAll(snapshot, operation, owns, stillCurrent) {
     if(snapshot.unsafe)return 'conflict';
     if(!snapshot.current.length)return 'pending';
     if(operation.desired<snapshot.admission ||
@@ -184,7 +173,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       const version=diskVersion(await source.stat(plan.path));
       if(version!==plan.version || !verifyDiskBytes(bytes,version))return 'pending';
       const dates=readPlanDates(bytes);
-      if(!matches(dates.patient,parts) || dates.admission!==snapshot.admission)return 'conflict';
+      if(!owns(dates.patient) || dates.admission!==snapshot.admission)return 'conflict';
       if(dates.discharge===operation.desired)continue;
       // An independent date edit must never be overwritten by a retry. A
       // newly discovered plan may be filled only when its discharge is blank.
@@ -237,6 +226,10 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       phase='registry';
       const patients=await listPatients({fresh:true});
       counts.patients=patients.length;
+      phase='nameVariants';
+      const variants=await nameVariants?.list()||{items:[],revision:''};
+      const matcher=createDoctorNameMatcher(variants.items);
+      const matchVersion=digest(JSON.stringify([variants.revision,patients.map(p=>[p.id,p.childName,p.episode]).sort((a,b)=>a[0].localeCompare(b[0]))]));
       phase='rootList';
       const rootItems=await source.list(root);
       const folders=rootItems.filter(item=>item.type==='dir' && directDiskChild(root,item) && item.path!=='disk:/medsi-doctors-test');
@@ -247,19 +240,19 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
         if(stopped)break;
         const parts=identity(patient.childName);
         if(!parts || (patient.registry && !patient.episode)){counts.skipped++;increment(issues,!parts?'unrecognizedPatientName':'missingRegistryAdmission');continue;}
-        const matchesForPatient=folders.filter(folder=>matches(folder.name,parts));
-        const duplicate=patients.some(other=>other.id!==patient.id && matches(other.childName,parts));
+        const {folder,ambiguous}=resolveDoctorFolder(patient,patients,folders,matcher);
+        const owns=name=>matcher.matches(name,parts) && !patients.some(other=>other.id!==patient.id &&
+          matcher.matches(name,identity(other.childName)));
         const issuesBefore=Object.values(issues).reduce((a,b)=>a+b,0);
         try{await sql.begin({isolation:'serializableReadWrite'},async tx=>{
           const [[lock]]=await tx`SELECT pg_try_advisory_xact_lock(hashtext(${patient.id})) AS owned`;
           if(!lock.owned){counts.skipped++;return;}
           const [[row]]=await tx`SELECT snapshot FROM doctor_plan_snapshots WHERE patient_id=${patient.id}`;
           const previous=row?.snapshot;
-          const folder=matchesForPatient.length===1&&!duplicate?matchesForPatient[0]:null;
           if(folder)counts.matched++;
-          else increment(issues,duplicate||matchesForPatient.length>1?'ambiguousFolder':'noMatchingFolder');
-          const snapshot=folder ? await scan(folder,parts,previous,today,patient.episode,issues) :
-            {documents:[],current:[],admission:null,discharge:null,unsafe:matchesForPatient.length>1||duplicate};
+          else increment(issues,ambiguous?'ambiguousFolder':'noMatchingFolder');
+          const snapshot=folder ? await scan(folder,owns,previous,today,patient.episode,issues,matchVersion) :
+            {documents:[],current:[],admission:null,discharge:null,unsafe:ambiguous};
           if(snapshot.current.length)counts.withPlans++;
           if(snapshot.unsafe)counts.unsafe++;
           snapshot.version ||= digest(JSON.stringify(snapshot));
@@ -275,14 +268,20 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
               // left the roster during a long cycle.
               const stillCurrent=async()=>{
                 const fresh=await listPatients({fresh:true});
-                return fresh.some(p=>p.id===patient.id && p.episode===patient.episode &&
-                  fullName(p.childName)===fullName(patient.childName)) &&
-                  !fresh.some(p=>p.id!==patient.id && matches(p.childName,parts));
+                const updatedVariants=await nameVariants?.list()||{revision:''};
+                if(updatedVariants.revision!==variants.revision)return false;
+                const current=fresh.find(p=>p.id===patient.id && p.episode===patient.episode &&
+                  fullName(p.childName)===fullName(patient.childName));
+                if(!current)return false;
+                const refreshedFolders=(await source.list(root)).filter(item=>item.type==='dir' &&
+                  directDiskChild(root,item) && item.path!=='disk:/medsi-doctors-test');
+                if(resolveDoctorFolder(current,fresh,refreshedFolders,matcher).folder?.path!==folder.path)return false;
+                return digest(JSON.stringify([variants.revision,fresh.map(p=>[p.id,p.childName,p.episode]).sort((a,b)=>a[0].localeCompare(b[0]))]))===matchVersion;
               };
               if(!await stillCurrent())return;
-              const status=await writeAll(snapshot,operation,parts,stillCurrent);
+              const status=await writeAll(snapshot,operation,owns,stillCurrent);
               if(status==='synced'){
-                const refreshed=await scan(folder,parts,snapshot,today,patient.episode,issues);
+                const refreshed=await scan(folder,owns,snapshot,today,patient.episode,issues,matchVersion);
                 if(refreshed.unsafe || refreshed.admission!==snapshot.admission ||
                   snapshot.current.some(plan=>!refreshed.current.some(next=>next.path===plan.path)) ||
                   refreshed.current.some(plan=>plan.discharge!==operation.desired))throw new Error('Plan verification changed');

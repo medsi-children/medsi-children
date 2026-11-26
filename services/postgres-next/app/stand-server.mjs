@@ -150,7 +150,7 @@ export function createNextServices({sql,env=process.env}) {
   if(env.DOCTORS_ENABLED==='1'){
     const greenwood=createGreenwoodSource(env);
     const source=createDoctorsRoster(sql,env,{greenwood});
-    doctors.doctorsPlans=createDoctorsPlans({sql,env,storage,listPatients:source.current});
+    doctors.doctorsPlans=createDoctorsPlans({sql,env,storage,listPatients:source.current,nameVariants});
     doctors.doctorsRoster=createDoctorsRoster(sql,env,{greenwood,plans:doctors.doctorsPlans});
   }
   const parentDeletion=createParentDeletionService({sql,currentChildMode:true,

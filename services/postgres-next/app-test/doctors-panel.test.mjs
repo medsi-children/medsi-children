@@ -10,6 +10,7 @@ import pg from 'pg';
 import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
+import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
@@ -535,4 +536,23 @@ test('date field follows the explicit merged label, never arbitrary neighboring 
   assert.equal(readPlanDates(updatePlanDischarge(bytes,'2024-02-20')).discharge,'2024-02-20');
   const absent=modifySyntheticBook(book('01.02.2024'),s=>s.replace('r="C4" s="1"','r="D4" s="1"')).toBuffer();
   assert.throws(()=>readPlanDates(absent),/Missing plan date cell/);
+});
+
+test('doctor matching uses Medsi given-name variants, exact surname and unique folder ownership',()=>{
+  const matcher=createDoctorNameMatcher([{baseKey:'софия',preferredName:'София',variants:['Соня','Софья']},
+    {baseKey:'александр',preferredName:'Александр',variants:['Саша']},
+    {baseKey:'александра',preferredName:'Александра',variants:['Саша']}]);
+  const parts=doctorNameParts('Тестова София (15 лет)');
+  assert.deepEqual(parts,['тестова','софия']);
+  assert.ok(matcher.matches('Соня Тестова, 15 л.',parts));
+  assert.ok(matcher.matches('Тестова, Софья',parts));
+  assert.ok(!matcher.matches('Тестоваа Соня',parts));
+  assert.ok(!matcher.matches('Соня',parts));
+  assert.ok(!matcher.matches('Тестов Саша',doctorNameParts('Тестов Александр')));
+  assert.ok(!matcher.matches('Тестова Соня Ивановна',doctorNameParts('Тестова София Петровна')));
+  const patient={id:'a',childName:'Тестова София'},other={id:'b',childName:'Тестова Софья'};
+  const folder={name:'Соня Тестова 15',path:'disk:/synthetic'};
+  assert.equal(resolveDoctorFolder(patient,[patient],[folder],matcher).folder,folder);
+  assert.equal(resolveDoctorFolder(patient,[patient,other],[folder],matcher).folder,null);
+  assert.equal(resolveDoctorFolder(patient,[patient],[folder,{name:'Тестова София'}],matcher).ambiguous,true);
 });

@@ -34,6 +34,45 @@ function readXml(zip, name) {
   return new DOMParser().parseFromString(xml, 'application/xml');
 }
 
+const colNumber=column=>[...column].reduce((n,c)=>n*26+c.charCodeAt(0)-64,0);
+function colName(number){
+  let result='';
+  for(;number>0;number=Math.floor((number-1)/26))result=String.fromCharCode(65+(number-1)%26)+result;
+  return result;
+}
+function cellAddress(ref){
+  const match=/^([A-Z]{1,3})([1-9]\d*)$/.exec(ref);
+  return match ? {column:colNumber(match[1]),row:Number(match[2])}:null;
+}
+function nativeDate(zip,workbook,cell,raw){
+  const type=cell.getAttribute('t');
+  if(type==='d'){
+    const match=/^(\d{4}-\d{2}-\d{2})(?:T(?:[01]\d|2[0-3]):[0-5]\d(?::[0-5]\d(?:\.\d+)?)?Z?)?$/.exec(raw);
+    if(!match || !validIsoDate(match[1]))throw new Error('Invalid native Excel date');
+    return match[1];
+  }
+  if(type && type!=='n')throw new Error('Unsupported plan date cell');
+  if(!/^\d+(?:\.\d+)?$/.test(raw))throw new Error('Invalid native Excel date');
+  if(!zip.getEntry('xl/styles.xml'))throw new Error('Numeric date without calendar style');
+  const styles=readXml(zip,'xl/styles.xml');
+  const xf=list(list(styles,'cellXfs')[0]||styles,'xf')[Number(cell.getAttribute('s')||0)];
+  const format=Number(xf?.getAttribute('numFmtId')||0);
+  const custom=list(styles,'numFmt').find(n=>Number(n.getAttribute('numFmtId'))===format)?.getAttribute('formatCode')||'';
+  // Only accept explicit calendar formats. Never turn a general number into a date.
+  const tokens=custom.replace(/"[^"]*"|\\.|_.|\*.|\[[^\]]*\]/g,'').toLowerCase();
+  if(![14,15,16,17,22].includes(format) && !(format>=164 && /y/.test(tokens) && /m/.test(tokens) && /d/.test(tokens) && !tokens.includes(';')))
+    throw new Error('Numeric date without calendar style');
+  const number=Number(raw);
+  const serial=Math.floor(number);
+  const epoch1904=['1','true'].includes(list(workbook,'workbookPr')[0]?.getAttribute('date1904'));
+  if(!Number.isFinite(number) || serial>2958465 || serial<(epoch1904?0:61))throw new Error('Invalid native Excel date');
+  const date=new Date(Date.UTC(epoch1904?1904:1899,epoch1904?0:11,epoch1904?1:30)+serial*86400000);
+  if(!Number.isFinite(+date))throw new Error('Invalid native Excel date');
+  const iso=date.toISOString().slice(0,10);
+  if(!validIsoDate(iso))throw new Error('Invalid native Excel date');
+  return iso;
+}
+
 function inspect(bytes) {
   if (bytes.length > 16 * 1024 * 1024) throw new Error('Oversized XLSX');
   const zip = new AdmZip(bytes);
@@ -60,19 +99,29 @@ function inspect(bytes) {
     const labels = cells.filter(cell => pattern.test(value(cell).trim()));
     if (labels.length > 1) throw new Error('Ambiguous plan field');
     if (!labels.length) return null;
-    const [, column, row] = /^([A-Z]+)(\d+)$/.exec(labels[0].getAttribute('r')) || [];
-    if (!column || column.length !== 1 || column === 'Z') throw new Error('Unsupported plan field position');
-    const ref = String.fromCharCode(column.charCodeAt(0)+1)+row;
-    return cells.find(cell => cell.getAttribute('r') === ref);
+    const address=cellAddress(labels[0].getAttribute('r'));
+    if(!address)throw new Error('Unsupported plan field position');
+    const merges=list(document,'mergeCell').map(node=>node.getAttribute('ref').split(':').map(cellAddress))
+      .filter(([start,end])=>start && end && address.column>=start.column && address.column<=end.column &&
+        address.row>=start.row && address.row<=end.row);
+    if(merges.length>1 || merges.some(([start])=>start.column!==address.column || start.row!==address.row))
+      throw new Error('Ambiguous plan field');
+    const column=(merges[0]?.[1]?.column||address.column)+1;
+    if(column>16384)throw new Error('Unsupported plan field position');
+    const ref=colName(column)+address.row;
+    return cells.find(cell=>cell.getAttribute('r')===ref);
   }
   const dates = adjacent(/^Дата\s*,\s*время\s*:?$/iu);
   const patient = adjacent(/^Ф\.\s*И\.\s*О\.\s*пациента\s*,\s*возраст\s*:?$/iu);
-  if (!dates || list(dates, 'f').length || !['s','inlineStr','str'].includes(dates.getAttribute('t'))) {
-    throw new Error('Unsupported plan date cell');
-  }
-  const match = RANGE.exec(value(dates));
-  if (!match) throw new Error('Unsupported plan date range');
-  const admission = toIso(match[2]), discharge = toIso(match[5]);
+  if (!dates) throw new Error('Missing plan date cell');
+  if (list(dates,'f').length) throw new Error('Formula plan date cell');
+  const raw=value(dates).trim();
+  if(!raw)throw new Error('Empty plan date cell');
+  const match=['s','inlineStr','str'].includes(dates.getAttribute('t')) ? RANGE.exec(value(dates)) : null;
+  const textDate=['s','inlineStr','str'].includes(dates.getAttribute('t'));
+  if(textDate && !match)throw new Error('Unsupported plan date range');
+  const admission=match?toIso(match[2]):nativeDate(zip,workbook,dates,raw);
+  const discharge=match?toIso(match[5]):null;
   if (discharge && discharge < admission) throw new Error('Invalid plan date order');
   return {zip, document, path, dates, match, admission, discharge, patient:patient ? value(patient).trim() : ''};
 }
@@ -86,6 +135,8 @@ export function updatePlanDischarge(bytes, date) {
   const plan = inspect(bytes);
   if (!validIsoDate(date) || date < plan.admission) throw new Error('Invalid discharge date');
   if (date === plan.discharge) return bytes;
+  // Reading a native date is safe; do not replace its numeric/date representation with text.
+  if(!plan.match)throw new Error('Native plan date cell is read-only');
   const [, prefix, start, startTime, separator, , endTime, suffix] = plan.match;
   const replacement = prefix+start+startTime+(separator || '–')+date.split('-').reverse().join('.')+(endTime || '')+suffix;
   // Own the replacement string in this cell. The original shared string may be used elsewhere.

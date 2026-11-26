@@ -10,6 +10,7 @@ import pg from 'pg';
 import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
+import {doctorNameParts,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
 import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
@@ -405,7 +406,7 @@ test('production write requires a newly confirmed operation and saves a recovery
   const sql=createPostgresSql(pool);
   const id='synthetic-'+randomUUID(),root='disk:/',folder=root+'Тестов Пациент',path=folder+'/План.xlsx';
   const original=book('01.02.2024-16.02.2024');
-  let bytes=original,writes=0;
+  let bytes=original,writes=0,cleanupAllowed=false;
   const stat=()=>({type:'file',path,name:'План.xlsx',sha256:hash(bytes),modified:'2024-02-05T00:00:00Z'});
   const disk={
     async list(p){return p===root?[{type:'dir',name:'Тестов Пациент',path:folder}]:[stat()];},
@@ -414,7 +415,8 @@ test('production write requires a newly confirmed operation and saves a recovery
   };
   const backups=new Map();
   const storage={configured:true,async hasObject(key){return backups.has(key);},
-    async putBuffer(key,body){backups.set(key,body);},async sha256Object(key){return hash(backups.get(key));}};
+    async putBuffer(key,body){backups.set(key,body);},async sha256Object(key){return hash(backups.get(key));},
+    async removeObject(key){if(!cleanupAllowed)throw new Error('Synthetic cleanup outage');backups.delete(key);return true;}};
   const env={DOCTORS_DISK_ROOT:root,DOCTORS_DISK_TOKEN:'synthetic',DOCTORS_GREENWOOD_SHEET_ID:'synthetic',
     DOCTORS_DISK_CONCURRENT_EDIT_ACK:'1',DOCTORS_DISK_WRITE_EPOCH:'synthetic-generation-1'};
   const create=enabled=>createDoctorsPlans({sql,disk,storage,env:{...env,DOCTORS_DISK_WRITE_ENABLED:enabled?'1':'0'},
@@ -436,6 +438,11 @@ test('production write requires a newly confirmed operation and saves a recovery
   assert.equal(manifest.originalSha256,hash(original));
   assert.equal(manifest.replacementSha256,hash(bytes));
   assert.deepEqual(backups.get(manifest.backupKey),original);
+  assert.equal(next.diagnostics().issues.backupCleanupFailed,2);
+  cleanupAllowed=true;
+  const cleanup=create(true);await cleanup.start();cleanup.stop();
+  assert.equal(backups.size,0,'successful operations clean up temporary objects after commit, including retries');
+  assert.equal(writes,1);
 });
 
 test('doctors share the exact educator QR card and modal, therapy hint and local child icon',()=>{
@@ -505,4 +512,65 @@ test('XLSX dates accept unpadded day and month without losing validation',()=>{
   assert.equal(readPlanDates(bytes).admission,'2024-02-01');
   assert.equal(readPlanDates(updatePlanDischarge(bytes,'2024-02-09')).discharge,'2024-02-09');
   assert.throws(()=>readPlanDates(book('30.2.2024')));
+});
+
+function modifySyntheticBook(bytes,change){
+  const zip=new AdmZip(bytes);
+  const path='xl/worksheets/sheet1.xml';
+  zip.updateFile(path,Buffer.from(change(zip.readAsText(path))));
+  return zip;
+}
+test('native Excel calendar cells can be read but not overwritten as text',()=>{
+  const original=book('01.02.2024');
+  const zip=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" s="1"><v>45323.5</v></c>'));
+  zip.addFile('xl/styles.xml',Buffer.from('<styleSheet xmlns="'+SHEET+'"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>'));
+  const numeric=zip.toBuffer();
+  assert.equal(readPlanDates(numeric).admission,'2024-02-01');
+  assert.equal(readPlanDates(numeric).discharge,null);
+  assert.throws(()=>updatePlanDischarge(numeric,'2024-02-19'),/read-only/);
+  const iso=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" t="d"><v>2024-02-01T12:30:00</v></c>')).toBuffer();
+  assert.equal(readPlanDates(iso).admission,'2024-02-01');
+  const general=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4"><v>45323</v></c>')).toBuffer();
+  assert.throws(()=>readPlanDates(general),/calendar style/);
+  const formula=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" t="str"><f>A1</f><v>01.02.2024</v></c>')).toBuffer();
+  assert.throws(()=>readPlanDates(formula),/Formula plan date cell/);
+});
+test('date field follows the explicit merged label, never arbitrary neighboring dates',()=>{
+  const zip=modifySyntheticBook(book('01.02.2024-19.02.2024'),s=>s.replace('r="C4" s="1"','r="D4" s="1"').replace('<mergeCell ref="C4:F4"/>','<mergeCell ref="B4:C4"/><mergeCell ref="D4:F4"/>'));
+  const bytes=zip.toBuffer();
+  assert.equal(readPlanDates(bytes).discharge,'2024-02-19');
+  assert.equal(readPlanDates(updatePlanDischarge(bytes,'2024-02-20')).discharge,'2024-02-20');
+  const absent=modifySyntheticBook(book('01.02.2024'),s=>s.replace('r="C4" s="1"','r="D4" s="1"')).toBuffer();
+  assert.throws(()=>readPlanDates(absent),/Missing plan date cell/);
+});
+
+test('doctor matching uses Medsi given-name variants, exact surname and unique folder ownership',()=>{
+  const matcher=createDoctorNameMatcher([{baseKey:'софия',preferredName:'София',variants:['Соня','Софья']},
+    {baseKey:'александр',preferredName:'Александр',variants:['Саша']},
+    {baseKey:'александра',preferredName:'Александра',variants:['Саша']}]);
+  const parts=doctorNameParts('Тестова София (15 лет)');
+  assert.deepEqual(parts,['тестова','софия']);
+  assert.ok(matcher.matches('Соня Тестова, 15 л.',parts));
+  assert.ok(matcher.matches('Тестова, Софья',parts));
+  assert.ok(!matcher.matches('Тестоваа Соня',parts));
+  assert.ok(!matcher.matches('Соня',parts));
+  assert.ok(!matcher.matches('Тестов Саша',doctorNameParts('Тестов Александр')));
+  assert.ok(!matcher.matches('Тестова Соня Ивановна',doctorNameParts('Тестова София Петровна')));
+  const patient={id:'a',childName:'Тестова София'},other={id:'b',childName:'Тестова Софья'};
+  const folder={name:'Соня Тестова 15',path:'disk:/synthetic'};
+  assert.equal(resolveDoctorFolder(patient,[patient],[folder],matcher).folder,folder);
+  assert.equal(resolveDoctorFolder(patient,[patient,other],[folder],matcher).folder,null);
+  assert.equal(resolveDoctorFolder(patient,[patient],[folder,{name:'Тестова София'}],matcher).ambiguous,true);
+});
+
+test('Greenwood parses calendar datetimes without guessing missing admission',()=>{
+  const encode=rows=>'google.visualization.Query.setResponse('+JSON.stringify({status:'ok',table:{cols:[{id:'C'},{id:'G'}],rows}})+');';
+  const rows=decodeGreenwood(encode([
+    {c:[{v:'Тестов Пациент'},{v:'Date(2024,1,29,12,30,0)'}]},
+    {c:[{v:'Другой Пациент'},{v:'01.03.2024 09:00'}]},
+    {c:[{v:'Третий Пациент'},{v:'31.02.2024 09:00'}]}
+  ]));
+  assert.equal(rows[0].episode,'2024-02-29');
+  assert.equal(rows[1].episode,'2024-03-01');
+  assert.equal(rows[2].episode,null);
 });

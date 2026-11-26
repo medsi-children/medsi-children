@@ -129,9 +129,14 @@
     return 'later';
   }
 
-  function patientDeadline(patient,day){
+  function remainingDays(patient,day){
+    const remaining=patient.discharge?days(patient.discharge,day):NaN;
+    return Number.isFinite(remaining)?remaining:null;
+  }
+
+  function patientDeadline(patient,day,scale){
     const footer=node('div','patient-deadline');
-    const remaining=patient.discharge?days(patient.discharge,day):null;
+    const remaining=remainingDays(patient,day);
     const left=Math.max(0,remaining);
     const label=remaining===null?'Дата выписки не указана':remaining===0?'Выписка сегодня':
       (plural.select(left)==='one'?'Остался ':'Осталось ')+countDays(left);
@@ -140,21 +145,48 @@
     status.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4m9-4v4M3 10h11m-5 11H6a3 3 0 0 1-3-3V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><circle cx="16.5" cy="16.5" r="4.5"/><path d="M16.5 14v2.5l1.5 1"/></svg>';
     status.append(document.createTextNode(label));
     footer.append(status);
-    if(patient.admission&&patient.discharge){
-      const bar=node('progress');
-      bar.max=Math.max(1,days(patient.discharge,patient.admission));
-      bar.value=remaining<=0?bar.max:Math.max(0,Math.min(bar.max,days(day,patient.admission)));
-      bar.setAttribute('aria-label','Срок госпитализации');
+    if(remaining!==null){
+      const bar=node('meter');
+      bar.max=scale;
+      bar.value=left;
+      bar.setAttribute('aria-label','Дни до выписки');
+      bar.setAttribute('aria-valuetext',countDays(left));
       footer.append(bar);
     }
     return footer;
   }
 
-  function patientRow(patient,day){
+  const dischargeSources={
+    doctor:'Дата установлена врачом',
+    disk:'Взято с Яндекс Диска',
+    'disk-preliminary':'Взято с Яндекс Диска · предварительный план',
+    'disk-candidate':'Взято с Яндекс Диска',
+    google:'Взято из Google Таблицы · ориентировочная дата'
+  };
+
+  function patientSource(source){
+    const info=node('details','patient-source');
+    const toggle=node('summary','patient-icon patient-source-toggle');
+    toggle.setAttribute('aria-label','Источник даты выписки');
+    toggle.title='Источник даты выписки';
+    toggle.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 11v6m0-10h.01"/></svg>';
+    info.append(toggle,node('p','patient-source-note',source));
+    info.onkeydown=event=>{
+      if(event.key==='Escape'&&info.open){info.open=false;toggle.focus();}
+    };
+    return info;
+  }
+
+  function patientRow(patient,day,scale){
     const row=node('li','medsi-roster-line patient-card');
     const name=patient.childName||'Имя ребёнка не указано';
     const identity=node('div','medsi-roster-line-info patient-info');
-    identity.append(node('h3','medsi-roster-line-name',name));
+    const heading=node('div','patient-card-heading');
+    const tools=node('div','patient-card-actions');
+    heading.append(node('h3','medsi-roster-line-name',name),tools);
+    identity.append(heading);
+    const source=dischargeSources[patient.dischargeSource];
+    if(source)tools.append(patientSource(source));
     const contacts=node('div','patient-contacts');
     for(const parent of patient.parents){
       const contact=node('div','patient-contact');
@@ -165,8 +197,6 @@
 
     const dates=node('div','patient-dates');
     const discharge=patientDate('Выписка',patient.discharge);
-    const sourceLabel={doctor:'Установлено врачом',disk:'Из плана Яндекс.Диска','disk-preliminary':'Предварительный план','disk-candidate':'Из плана Яндекс.Диска',google:'Ориентировочно · реестр'};
-    if(sourceLabel[patient.dischargeSource])discharge.append(node('span','patient-date-source',sourceLabel[patient.dischargeSource]));
     if(patient.editable&&!patient.hidden){
       const edit=node('button','medsi-roster-status-icon patient-edit');
       edit.type='button';
@@ -177,12 +207,19 @@
       discharge.append(edit);
     }
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
-    row.append(identity,dates,patientDeadline(patient,day));
+    row.append(identity,dates,patientDeadline(patient,day,scale));
     const writeLabels={pending:'Дата сохранена. Обновляем планы.',conflict:'Дата сохранена только в боте.',needsReview:'Дата сохранена только в боте.',notQueued:'Дата сохранена только в боте.'};
     if(writeLabels[patient.diskWriteStatus]&&!patient.hidden)row.append(node('p','status',writeLabels[patient.diskWriteStatus]));
     if(patient.hideable){
-      const visibility=node('button','patient-visibility',patient.hidden?'Вернуть в список':'Убрать из списка');
+      const visibility=node('button','patient-icon '+(patient.hidden?'patient-restore':'patient-remove'));
       visibility.type='button';
+      const actionLabel=patient.hidden?'Вернуть в список':'Убрать из списка';
+      visibility.title=actionLabel;
+      visibility.setAttribute('aria-label',actionLabel+': '+name);
+      visibility.innerHTML=patient.hidden
+        ?'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7 4 12l5 5m-5-5h11a4 4 0 0 1 4 4v2"/></svg>'
+        :'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m3 0v12a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7m4 4v5m4-5v5"/></svg>';
+
       visibility.onclick=async()=>{
         if(!patient.hidden&&!window.confirm('Убрать из списка: '+name+'? Карточку можно вернуть из раздела «Убранные».'))return;
         visibility.disabled=true;
@@ -195,7 +232,7 @@
         }catch(error){setStatus('patientError',error.message);}
         finally{visibility.disabled=false;}
       };
-      row.append(visibility);
+      tools.append(visibility);
     }
     return row;
   }
@@ -268,7 +305,8 @@
       (showHidden?'Убрано из списка: ':'Пациентов в отделении: ')+count;
     const scroll=id('screenPatients').scrollTop;
     renderedDay=today();
-    id('patientList').replaceChildren(...rows.map(patient=>patientRow(patient,renderedDay)));
+    const scale=patients.reduce((max,patient)=>Math.max(max,remainingDays(patient,renderedDay)??0),14);
+    id('patientList').replaceChildren(...rows.map(patient=>patientRow(patient,renderedDay,scale)));
     id('patientList').classList.toggle('hidden',!count);
     id('screenPatients').scrollTop=scroll;
   }

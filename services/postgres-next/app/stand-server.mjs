@@ -391,10 +391,8 @@ export async function startIsolatedStand(env=process.env,{
     console.log('MEDSI_NEXT_STAND_HTTP_LISTENING');
   });
   if(externalServer)installHandler(app);
-  let doctorsPlans;
   const shutdown=async()=>{
     stopped=true;
-    doctorsPlans?.stop();
     if(ticker)clearInterval(ticker);
     await new Promise(resolve=>server.close(resolve));
     await closeDatabaseDriver(driver);
@@ -431,8 +429,6 @@ export async function startIsolatedStand(env=process.env,{
       state.phase='ready';
       state.code='READY';
       console.log('MEDSI_NEXT_STAND_READY');
-      doctorsPlans=services.doctorsPlans;
-      doctorsPlans?.start();
       // Report the catalog-only schema check even if the public endpoint is unreachable.
       if(typeof services.dbSchemaHealth==='function'){
         void Promise.resolve().then(()=>services.dbSchemaHealth()).then(

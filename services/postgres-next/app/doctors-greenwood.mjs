@@ -42,7 +42,7 @@ export function createGreenwoodSource(env, request=fetch, now=Date.now) {
   };
   return {configured:Boolean(id),async read({fresh=false,refresh:force=false}={}){
     if(!id)return [];
-    if(!reading && (force || now()>=expires)){
+    if(!reading && (fresh || force || now()>=expires)){
       reading=refresh().then(()=>{stale=false;},()=>{
         stale=true;
         console.warn('MEDSI_DOCTORS_GREENWOOD_STALE');

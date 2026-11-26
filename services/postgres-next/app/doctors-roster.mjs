@@ -13,6 +13,18 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
   const excluded = new Set(String(env.DOCTORS_EXCLUDED_PHONES || '').split(/[,;\n]+/).map(normalizePhone).filter(Boolean));
   const ref = key => createHmac('sha256', env.NEXT_SESSION_SECRET).update('doctor-patient:'+key).digest('base64url');
 
+  // Explicit operator-verified links are episode-scoped opaque IDs. Never infer
+  // contact ownership from a similar or even identical name alone.
+  const verifiedLinks=(()=>{
+    if(!env.DOCTORS_VERIFIED_CONTACT_LINKS)return new Map();
+    try{
+      const entries=JSON.parse(env.DOCTORS_VERIFIED_CONTACT_LINKS);
+      const valid=id=>typeof id==='string' && /^[A-Za-z0-9_-]{43}$/.test(id);
+      if(!Array.isArray(entries) || entries.some(pair=>!Array.isArray(pair)||pair.length!==2||!pair.every(valid)))throw Error();
+      if(new Set(entries.map(pair=>pair[0])).size!==entries.length || new Set(entries.map(pair=>pair[1])).size!==entries.length)throw Error();
+      return new Map(entries);
+    }catch{console.warn('MEDSI_DOCTORS_CONTACT_LINKS_INVALID');return new Map();}
+  })();
   async function listBot() {
     const [rows] = await sql`SELECT p.phone10,p.parent_name,p.relationship,p.child_name,p.child_id,
       c.registered_first_name,c.surname
@@ -37,8 +49,16 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
     const rows = await greenwood.read(options);
     // The tab contains no verified contact identifier. Keep contacts in the
     // bot's phone directory and avoid assigning them to a possible namesake.
-    return rows.map(row=>({id:ref('greenwood:'+row.key),
+    const patients=rows.map(row=>({id:ref('greenwood:'+row.key),
       childName:row.childName,episode:row.episode,parents:[]}));
+    if(!verifiedLinks.size)return patients;
+    const botPatients=new Map((await listBot()).filter(p=>p.childId).map(p=>[p.id,p]));
+    const namePair=value=>fullName(value).split(' ').slice(0,2).sort().join(' ');
+    for(const patient of patients){
+      const bot=botPatients.get(verifiedLinks.get(patient.id));
+      if(bot && namePair(bot.childName)===namePair(patient.childName))patient.parents=bot.parents;
+    }
+    return patients;
   }
 
   async function list(options) {

@@ -64,6 +64,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       admission:snapshot.admission || null,
       discharge:(sameEpisode && ['pending','conflict'].includes(pending.status) ? pending.desired : snapshot.discharge)||null,
       revision:(snapshot.version || '')+':'+(pending?.id||''),
+      syncConflict:Boolean(sameEpisode && pending.status==='conflict'),
       editable:true
     };
   }
@@ -130,6 +131,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     if(!snapshot.current.length)return 'pending';
     if(operation.desired<snapshot.admission ||
       (operation.admission && operation.admission!==snapshot.admission))return 'conflict';
+    const expected=operation.expected || {};
     const staged=[];
     // Preflight all candidates before changing the first one.
     for(const plan of snapshot.current){
@@ -141,6 +143,10 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
       const dates=readPlanDates(bytes);
       if(!matches(dates.patient,parts) || dates.admission!==snapshot.admission)return 'conflict';
       if(dates.discharge===operation.desired)continue;
+      // An independent date edit must never be overwritten by a retry. A
+      // newly discovered plan may be filled only when its discharge is blank.
+      const known=Object.hasOwn(expected,plan.path);
+      if(known ? dates.discharge!==expected[plan.path] : dates.discharge!==null)return 'conflict';
       staged.push({plan,bytes,next:updatePlanDischarge(bytes,operation.desired)});
     }
     for(const entry of staged){
@@ -191,9 +197,9 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
               WHERE patient_id=${patient.id} AND status IN ('pending','conflict') AND admission IS NULL`;
           }
           if(write && folder){
-            const [[operation]]=await tx`SELECT id,admission,desired,status FROM doctor_discharge_changes
+            const [[operation]]=await tx`SELECT id,admission,desired,status,expected FROM doctor_discharge_changes
               WHERE patient_id=${patient.id} ORDER BY created_at DESC,id DESC LIMIT 1`;
-            if(['pending','conflict'].includes(operation?.status)){
+            if(operation?.status==='pending'){
               const status=await writeAll(snapshot,operation,parts);
               if(status==='synced'){
                 const refreshed=await scan(folder,parts,snapshot,today,patient.episode);

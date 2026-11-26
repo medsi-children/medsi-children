@@ -165,6 +165,7 @@
     }
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
     row.append(identity,dates,patientDeadline(patient,day));
+    if(patient.syncConflict)row.append(node('p','status error','Дата в плане изменилась. Проверьте документ перед повторным сохранением.'));
     return row;
   }
   function openDateEditor(patient){

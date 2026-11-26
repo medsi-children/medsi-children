@@ -83,6 +83,25 @@ test('a removed Greenwood row disappears from the roster after a refresh',async(
   now+=30000;
   assert.deepEqual(await roster.list(),[]);
 });
+test('Greenwood contacts require explicit episode-specific verified links',async()=>{
+  const env={NEXT_SESSION_SECRET:'synthetic-roster-secret'};
+  const row={key:'тестов пациент|2024-02-29',childName:'Тестов Пациент',episode:'2024-02-29'};
+  let rows=[row];
+  const greenwood={configured:true,read:async()=>rows};
+  const sql=async()=>[[{phone10:'9000000001',parent_name:'Тестовый родитель',
+    child_id:'child_synthetic',registered_first_name:'Пациент',surname:'Тестов'}]];
+  const roster=createDoctorsRoster(sql,env,{greenwood});
+  const [patient]=await roster.list();
+  const [bot]=await roster.listBot();
+  assert.deepEqual(patient.parents,[]);
+  const linked=createDoctorsRoster(sql,{...env,DOCTORS_VERIFIED_CONTACT_LINKS:JSON.stringify([[patient.id,bot.id]])},{greenwood});
+  assert.equal((await linked.list())[0].parents.length,1);
+  rows=[{...row,key:'тестов пациент|2024-03-29',episode:'2024-03-29'}];
+  assert.deepEqual((await linked.list())[0].parents,[]);
+  rows=[row];
+  const duplicate=createDoctorsRoster(sql,{...env,DOCTORS_VERIFIED_CONTACT_LINKS:JSON.stringify([[patient.id,bot.id],[patient.id,bot.id]])},{greenwood});
+  assert.deepEqual((await duplicate.list())[0].parents,[]);
+});
 test('doctor routes require their own cookie and only publish psychotherapy',async t=>{
   const calls=[];
   const service={doctorsRoster:{list:async()=>[]},reports:{submit:async opts=>calls.push(opts)}};
@@ -169,6 +188,18 @@ test('persists a change and syncs all three current plans across a PostgreSQL-ba
   independent.stop();
   const resolved=await independent.dates(patientId);
   assert.equal(resolved.discharge,'2024-02-25');
+  assert.equal(resolved.syncConflict,true);
+  assert.equal(readPlanDates(records.get(independentPath)).discharge,'2024-02-21');
+  assert.equal(writes.length,3);
+  const retry=create();
+  await retry.start();retry.stop();
+  assert.equal(writes.length,3,'a conflicting operation cannot resume automatically');
+  assert.equal((await retry.dates(patientId)).syncConflict,true);
+  // Explicitly saving after review creates a new operation against the latest snapshot.
+  assert.equal((await retry.enqueue(patientId,'2024-02-25',(await retry.dates(patientId)).revision)).ok,true);
+  const confirmed=create();
+  await confirmed.start();confirmed.stop();
+  assert.equal((await confirmed.dates(patientId)).syncConflict,false);
   assert.equal(readPlanDates(records.get(independentPath)).discharge,'2024-02-25');
   assert.ok([...backups.values()].some(bytes=>readPlanDates(bytes).discharge==='2024-02-21'));
   assert.equal(writes.length,6);

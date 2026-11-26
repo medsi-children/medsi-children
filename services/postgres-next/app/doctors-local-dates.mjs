@@ -1,9 +1,9 @@
 import {createHash,randomUUID} from 'node:crypto';
 import {validIsoDate} from './doctors-xlsx.mjs';
 
-// Only explicit doctor edits are used. Never read the old Disk snapshots,
-// create a Disk client, enqueue uploads or delete historic backup objects.
-export function createDoctorsLocalDates({sql,greenwood,listPatients}){
+// Explicit doctor edits override independently verified read-only Disk dates.
+// Never read legacy snapshots or enqueue uploads.
+export function createDoctorsLocalDates({sql,greenwood,listPatients,diskRead}){
   let prepared;
   const prepare=()=>prepared||=(async()=>{
     await sql`CREATE TABLE IF NOT EXISTS doctor_discharge_changes (
@@ -22,8 +22,12 @@ export function createDoctorsLocalDates({sql,greenwood,listPatients}){
       ?patient.registryDischarge:null;
     const override=admission&&row?.admission===admission&&validIsoDate(row.desired)&&row.desired>=admission&&
       ['local','pending','conflict','synced'].includes(row.status)?row.desired:null;
-    return {admission,discharge:override||registry,dischargeSource:override?'doctor':registry?'google':null,
-      revision:createHash('sha256').update(JSON.stringify([patient.id,admission,registry,row?.id||null])).digest('hex'),
+    const plan=diskRead?.get(patient.id,admission);
+    const verified=plan?.status==='verified'&&validIsoDate(plan.discharge)&&plan.discharge>=admission?plan.discharge:null;
+    return {admission,discharge:override||verified||registry,
+      dischargeSource:override?'doctor':verified?(plan.kind==='preliminary'?'disk-preliminary':'disk'):registry?'google':null,
+      planStatus:plan?.status||null,
+      revision:createHash('sha256').update(JSON.stringify([patient.id,admission,registry,verified,plan?.status||null,row?.id||null])).digest('hex'),
       syncConflict:false,editable:Boolean(patient.registry&&admission)};
   }
   async function dates(id,patient){
@@ -54,6 +58,7 @@ export function createDoctorsLocalDates({sql,greenwood,listPatients}){
       return {ok:true};
     });
   }
-  return {dates,enqueue,diagnostics:()=>({mode:'google-local',diskEnabled:false,registryConfigured:greenwood.configured,
-    ...greenwood.diagnostics()})};
+  return {dates,enqueue,diagnostics:()=>({mode:diskRead?'google-disk-read-local':'google-local',
+    diskEnabled:Boolean(diskRead?.diagnostics().enabled),registryConfigured:greenwood.configured,
+    ...greenwood.diagnostics(),...(diskRead?{disk:diskRead.diagnostics()}: {})})};
 }

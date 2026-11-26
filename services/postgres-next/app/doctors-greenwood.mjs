@@ -26,6 +26,13 @@ function sheetDate(cell){
   }
   return null;
 }
+// Column C contains room labels as well as patient names. Reject only
+// identifiable non-patient entries, not incomplete names or missing dates.
+function serviceRow(name){
+  if(!/\p{L}/u.test(name))return true;
+  const normalized=fullName(name).replace(/[.,;:]+$/u,'').trim();
+  return /^(?:кабинет(?:\s+.*)?|ординаторская|процедурная|манипуляционная|столовая|игровая|сестринская|пост(?:\s+.*)?|ф\s*\.?\s*и\s*\.?\s*о)$/u.test(normalized);
+}
 export function decodeGreenwood(text, configuredColumn='') {
   const column=dischargeColumn(configuredColumn);
   const columns=['C','G',...(column?[column]:[])];
@@ -40,7 +47,7 @@ export function decodeGreenwood(text, configuredColumn='') {
     const childName=String(row.c?.[0]?.v || '').trim().replace(/\s+/gu,' ');
     const episode=sheetDate(row.c?.[1]);
     const discharge=column ? sheetDate(row.c?.[2]) : null;
-    if(!childName)throw new Error('Invalid Greenwood row');
+    if(serviceRow(childName))continue;
     const key=fullName(childName)+'|'+(episode||'undated');
     if(byId.has(key))throw new Error('Ambiguous Greenwood row');
     byId.set(key,{key,childName,episode,discharge:episode && discharge>=episode ? discharge : null});

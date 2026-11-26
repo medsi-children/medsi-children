@@ -632,3 +632,19 @@ test('doctor local override survives restart and sheet changes but not a differe
   const [[saved]]=await sql`SELECT status FROM doctor_discharge_changes WHERE patient_id=${patient.id} ORDER BY created_at DESC,id DESC LIMIT 1`;
   assert.equal(saved.status,'local');
 });
+
+test('Greenwood excludes room labels and punctuation while retaining undated patients',()=>{
+  const encode=rows=>'google.visualization.Query.setResponse('+JSON.stringify({status:'ok',table:{
+    cols:[{id:'C'},{id:'G'},{id:'I'}],rows
+  }})+');';
+  const row=(name,admission=null,discharge=null)=>({c:[{v:name},admission,discharge]});
+  const result=decodeGreenwood(encode([
+    row('Кабинет Психологов'),row('ОРДИНАТОРСКАЯ'),row(','),row('   '),
+    row('ФИО'),row('Процедурная'),row('Тестов Пациент',{v:'Date(2024,1,1)'}),
+    row('Другой Пациент'),row('Третий',{v:'Date(2024,1,2)'},{v:'Date(2024,1,15)'})
+  ]),'I');
+  assert.deepEqual(result.map(r=>r.childName),['Тестов Пациент','Другой Пациент','Третий']);
+  assert.equal(result[0].discharge,null);
+  assert.equal(result[1].episode,null);
+  assert.equal(result[2].discharge,'2024-02-15');
+});

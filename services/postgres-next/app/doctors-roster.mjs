@@ -68,7 +68,7 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
       // contacts or a plan from a possibly different stay.
       if(registry && !episode)return {...patient,admission:null,discharge:null,editable:false};
       const clinical=await plans?.dates(patient.id);
-      return {...patient,...clinical,discharge:clinical?.discharge || registryDischarge || null};
+      return {...patient,...clinical,admission:clinical?.admission || episode || null,discharge:clinical?.discharge || registryDischarge || null};
     }));
   }
   return {list,listBot,current};

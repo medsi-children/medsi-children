@@ -88,8 +88,37 @@ body[data-screen="screenPatients"] {overflow:hidden}
   .patient-field-label {font-size:11px}
 }
 #screenTherapy,#therapyForm {display:grid;gap:12px}
-body[data-screen="screenTherapy"] .frame {width:min(100%,860px);aspect-ratio:auto;min-height:0}
-body[data-screen="screenTherapy"] .scene {position:relative;inset:auto;overflow:visible}
+body.doctor-panel:is([data-screen="screenPhones"],[data-screen="screenTherapy"]) .wrap {
+  display:flex;justify-content:center;align-items:flex-start;width:100%;min-height:100dvh;
+  padding:calc(12px + env(safe-area-inset-top)) 12px calc(12px + env(safe-area-inset-bottom));
+}
+body.doctor-panel:is([data-screen="screenPhones"],[data-screen="screenTherapy"]) .frame {
+  width:min(100%,860px)!important;max-width:860px!important;aspect-ratio:auto!important;
+  height:auto!important;min-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom))!important;
+  max-height:none!important;overflow:visible;
+}
+body.doctor-panel:is([data-screen="screenPhones"],[data-screen="screenTherapy"]) .scene {
+  position:relative;inset:auto;overflow:visible;min-width:0;
+}
+body.doctor-panel[data-screen="screenPhones"] .frame::after {display:none}
+#screenPhones #phoneSearch {width:100%;min-height:44px;font-size:16px}
+#screenTherapy #therapyText {width:100%;min-height:clamp(240px,48dvh,520px);resize:vertical;font-size:16px}
+#therapyForm .row>.btn {flex:1}
+#therapySend {
+  background:linear-gradient(135deg,#f5b8c8,#e98ba7 48%,#d97898)!important;
+  border:1px solid rgba(190,85,121,.18)!important;color:#fff!important;
+  box-shadow:0 10px 22px rgba(217,120,152,.18)!important;
+}
+body.doctor-panel[data-screen="screenChoose"] .frame.choose-mode {
+  height:auto!important;max-height:none!important;aspect-ratio:auto!important;
+}
+body.doctor-panel[data-screen="screenChoose"] .frame.choose-mode .scene {
+  position:relative;inset:auto;overflow:visible;
+}
+@media(max-width:560px){
+  body.doctor-panel:is([data-screen="screenPhones"],[data-screen="screenTherapy"]) .wrap {padding-left:8px;padding-right:8px}
+  body.doctor-panel:is([data-screen="screenPhones"],[data-screen="screenTherapy"]) .scene {padding:16px 12px}
+}
 .doctor-date-editor {
   padding:20px;border:1px solid var(--stroke2);border-radius:20px;color:var(--fg);
   width:min(90vw,380px);box-shadow:0 14px 46px #11424a26;

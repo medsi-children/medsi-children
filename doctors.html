@@ -36,14 +36,17 @@
     .auth-checking{text-align:center;color:var(--muted);line-height:1.45}
     .auth-checking p{margin:14px 0 0}
   </style>
-  <link rel="stylesheet" href="/doctors/panel.css">
-  <script defer src="/chat-overlay/menu-twemoji.js"></script>
+  <link rel="stylesheet" href="/tutors/qr-code.css?v=20261005-3">
+  <link rel="stylesheet" href="/doctors/panel.css?v=20261126-mobile-1">
+  <script defer src="/chat-overlay/menu-twemoji.js?v=20261126-doctors-1"></script>
+  <script defer src="/tutors/qr-code.js?v=20261005-1"></script>
+  <script defer src="/chat-overlay/gesture-navigation.js?v=20261126-doctors-1"></script>
   <script defer src="/tutors/phone-cards-ui.js"></script>
-  <script defer src="/doctors/panel.js"></script>
-  <script defer src="/tutors/parent-directory.js"></script>
+  <script defer src="/doctors/panel.js?v=20261126-mobile-1"></script>
+  <script defer src="/tutors/parent-directory.js?v=20261126-doctors-1"></script>
   <script defer src="/doctors/reports.js"></script>
 </head>
-<body data-screen="screenChoose">
+<body class="doctor-panel" data-screen="screenChoose">
   <div id="tutorAuthGate" class="auth-gate">
     <div class="auth-card">
       <div class="educator-start-brand">
@@ -75,13 +78,14 @@
       <div id="rim" class="rim"></div>
       <div class="scene">
         <h1 id="title" class="title">Медси Бот</h1>
+        <p id="meta" class="meta hidden"></p>
 
         <section id="screenChoose">
 
           <div class="educator-start-brand">
             <div id="medsiAssistantLogo" class="medsi-assistant-logo" aria-hidden="true"><div class="medsi-bot-dock medsi-bot-dock--brand"><div class="medsi-bot-launcher"><span class="medsi-bot-scale"><span class="medsi-character"><span class="medsi-character-glow"></span><img class="medsi-character-body" src="/parents/blob.webp" fetchpriority="high" alt=""><span class="medsi-character-eyes"><i class="medsi-character-eye"></i><i class="medsi-character-eye"></i></span></span></span></div></div></div>
             <h1 class="educator-start-title">Медси Бот</h1>
-            <p class="educator-start-subtitle">Панель врачей</p>
+            <p class="educator-start-subtitle">Панель врачей для даты выписки, телефонов родителей и базы данных</p>
           </div>
           <div class="educator-dashboard">
             <div class="educator-actions">
@@ -91,7 +95,7 @@
               </button>
               <div class="grid2 educator-report-grid">
                 <button id="doctorReports" class="btn menu-card menu-card-morning block start-cascade start-cascade-2">
-                  <span class="menu-card-title">📑 Отчёты и дети</span>
+                  <span class="menu-card-title">🧒 Отчёты и дети</span>
                   <span class="menu-card-text">Исходные отчёты и отчёты по детям.</span>
                 </button>
                 <button id="medsiParentDirectoryCard" class="btn menu-card menu-card-evening block start-cascade start-cascade-2">
@@ -111,24 +115,29 @@
               </div>
             </div>
           </div>
+          <section id="tutorQrCard" class="tutor-qr-card" aria-label="QR-код для подключения родителей">
+            <button id="tutorQrTrigger" class="tutor-qr-trigger" type="button">
+              <img src="/tutors/medsi-bot-qr.svg" alt="QR-код для подключения Медси Бота родителями" loading="eager">
+              <span class="tutor-qr-copy"><strong>QR-код для родителей</strong><small>Нажмите, чтобы открыть QR-код для подключения Медси Бота родителям.</small></span>
+            </button>
+          </section>
         </section>
 
         <section id="screenPhones" class="hidden">
-          <button type="button" class="btn soft-back-btn" data-home>← В меню</button>
+          <div class="row" style="margin-bottom:14px"><button type="button" class="btn soft-back-btn" data-home>← Назад в меню</button></div>
           <input id="phoneSearch" type="search" placeholder="Поиск по имени или телефону" aria-label="Поиск телефонов">
           <div id="phonesList" class="phones-list"></div>
           <p id="phonesError" class="status error hidden" role="alert"></p>
         </section>
         <section id="screenTherapy" class="hidden">
-          <button type="button" class="btn soft-back-btn" data-home>← В меню</button>
           <form id="therapyForm">
-            <textarea id="therapyText" class="report-area" required maxlength="240000" placeholder="Вставьте отчёт по групповой терапии" aria-label="Отчёт по групповой терапии"></textarea>
+            <textarea id="therapyText" class="report-area" required maxlength="240000" placeholder="Вставьте весь текст отчёта сюда…" aria-label="Отчёт по групповой терапии"></textarea>
             <p id="therapyError" class="status error hidden" role="alert"></p>
-            <button id="therapySend" class="btn btn-teal">Отправить</button>
+            <div class="row"><button type="button" class="btn" data-home>Назад</button><button id="therapySend" class="btn btn-teal">Отправить</button></div>
           </form>
           <div id="therapyDone" class="hidden">
-            <p class="status success">Отчёт отправлен.</p>
-            <button id="therapyAgain" class="btn soft-back-btn" type="button">Следующий отчёт</button>
+            <p class="status success">Готово.</p>
+            <div class="row" style="margin-top:14px"><button id="therapyAgain" class="btn soft-back-btn" type="button">← Назад в меню</button></div>
           </div>
         </section>
       </div>
@@ -150,5 +159,9 @@
       <ul id="patientList" class="medsi-reports-content" aria-label="Пациенты"></ul>
     </div>
   </section>
+  <div id="tutorQrModal" class="tutor-qr-modal hidden" role="dialog" aria-modal="true" aria-label="QR-код для родителей">
+    <button id="tutorQrClose" class="tutor-qr-close" type="button" aria-label="Закрыть QR-код">×</button>
+    <img src="/tutors/medsi-bot-qr.svg" alt="QR-код для подключения Медси Бота родителями">
+  </div>
 </body>
 </html>

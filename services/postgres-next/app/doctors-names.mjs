@@ -5,9 +5,11 @@ const WORD=/^\p{L}{2,}(?:-\p{L}{2,})*$/u;
 export function doctorNameParts(value){
   const cleaned=fullName(value).replace(/[\u2010\u2011\u2013]/gu,'-')
     .replace(/(?:\s*[,;]\s*|\s+|\s*\(\s*)\d{1,2}\s*(?:год(?:а)?|лет|л\.?)?\s*\)?$/u,'')
+    .replace(/(?:\s*[,;]\s*|\s+|\s*\(\s*)\d{1,2}[./-]\d{1,2}[./-]\d{4}\s*\)?$/u,'')
+    .replace(/\s+(?:январь|февраль|март|апрель|май|июнь|июль|август|сентябрь|октябрь|ноябрь|декабрь)(?:\s+\d{4})?$/u,'')
     .replace(/[,;]+/gu,' ').trim().replace(/\s+/gu,' ');
   const words=cleaned.split(' ');
-  return (words.length===2||words.length===3)&&words.every(word=>WORD.test(word))?words:null;
+  return (words.length>=2&&words.length<=4)&&words.every(word=>WORD.test(word))?words:null;
 }
 
 // Existing Medsi name groups are the authoritative alias dictionary. Do not
@@ -29,7 +31,9 @@ export function createDoctorNameMatcher(items=[]){
       [...groups.get(a)][0]===[...groups.get(b)][0]);
   function matches(value,parts){
     const words=doctorNameParts(value);
-    if(!parts||!words||(parts[2]&&words[2]&&parts[2]!==words[2]))return false;
+    if(!parts||!words)return false;
+    if(parts.length===4||words.length===4)return parts.join(' ')===words.join(' ');
+    if(parts[2]&&words[2]&&parts[2]!==words[2])return false;
     // Require one literal matching surname, and allow the given-name alias.
     return [[words[0],words[1]],[words[1],words[0]]].some(([a,b])=>
       (a===parts[0]&&equivalent(b,parts[1])) ||

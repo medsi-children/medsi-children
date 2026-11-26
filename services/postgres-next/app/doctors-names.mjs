@@ -2,14 +2,29 @@ import {fullName} from './doctors-roster.mjs';
 
 // Never use edit-distance surname guesses or first-name-only matching.
 const WORD=/^\p{L}{2,}(?:-\p{L}{2,})*$/u;
-export function doctorNameParts(value){
-  const cleaned=fullName(value).replace(/[\u2010\u2011\u2013]/gu,'-')
+function normalizeDoctorName(value){
+  return fullName(value).replace(/[\u2010\u2011\u2013]/gu,'-')
     .replace(/(?:\s*[,;]\s*|\s+|\s*\(\s*)\d{1,2}\s*(?:год(?:а)?|лет|л\.?)?\s*\)?$/u,'')
     .replace(/(?:\s*[,;]\s*|\s+|\s*\(\s*)\d{1,2}[./-]\d{1,2}[./-]\d{4}\s*\)?$/u,'')
     .replace(/\s+(?:январь|февраль|март|апрель|май|июнь|июль|август|сентябрь|октябрь|ноябрь|декабрь)(?:\s+\d{4})?$/u,'')
     .replace(/[,;]+/gu,' ').trim().replace(/\s+/gu,' ');
-  const words=cleaned.split(' ');
+}
+export function doctorNameParts(value){
+  const words=normalizeDoctorName(value).split(' ');
   return (words.length>=2&&words.length<=4)&&words.every(word=>WORD.test(word))?words:null;
+}
+
+// A surname explicitly written in parentheses is a second literal surname.
+export function doctorNameOptions(value){
+  const cleaned=normalizeDoctorName(value);
+  const alternate=/^(\S+)\s*\(\s*([^\s()]+)\s*\)\s+(\S+)(?: (\S+))?$/u.exec(cleaned);
+  if(alternate){
+    const [,surname,second,given,patronymic]=alternate;
+    const rest=patronymic?[given,patronymic]:[given];
+    if([surname,second,...rest].every(word=>WORD.test(word)))return [[surname,...rest],[second,...rest]];
+  }
+  const parts=doctorNameParts(cleaned);
+  return parts?[parts]:[];
 }
 
 // Existing Medsi name groups are the authoritative alias dictionary. Do not
@@ -39,7 +54,18 @@ export function createDoctorNameMatcher(items=[]){
       (a===parts[0]&&equivalent(b,parts[1])) ||
       (b===parts[1]&&equivalent(a,parts[0])));
   }
-  return {matches};
+  function matchesOptions(value,options,{literal=false}={}){
+    if(!options.length)return false;
+    const source=doctorNameOptions(value);
+    if(!source.length)return false;
+    if(!literal&&source.length===1&&options.length===1)return matches(value,options[0]);
+    return source.some(words=>options.some(parts=>{
+      if(words.length>3||parts.length>3||parts[2]&&words[2]&&parts[2]!==words[2])return false;
+      if(words[0]===parts[0]&&words[1]===parts[1])return true;
+      return (source.length===1||options.length===1)&&words[0]===parts[1]&&words[1]===parts[0];
+    }));
+  }
+  return {matches,matchesOptions};
 }
 
 export function resolveDoctorFolder(patient,patients,folders,matcher){

@@ -180,7 +180,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk}) {
     try{
       await prepare();
       const patients=await listPatients({fresh:true});
-      const folders=(await source.list(root)).filter(item=>item.type==='dir' && directDiskChild(root,item));
+      const folders=(await source.list(root)).filter(item=>item.type==='dir' && directDiskChild(root,item) && item.path!=='disk:/medsi-doctors-test');
       const today=moscowDay();
       let patientFailed=false;
       for(const patient of patients) {

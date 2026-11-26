@@ -32,7 +32,13 @@ test('Disk sandbox cannot be redirected to a clinical folder and verifies downlo
   assert.equal(testDiskWriteEnabled(env,{configured:true}),true);
   assert.equal(testDiskWriteEnabled({...env,DOCTORS_DISK_ROOT:'disk:/work',DOCTORS_DISK_WRITE_TEST_ROOT:'disk:/work'},{configured:true}),false);
   assert.equal(testDiskWriteEnabled(env,{configured:false}),false);
-  assert.equal(validDiskRoot('disk:/'),false);
+  assert.equal(validDiskRoot('disk:/'),true);
+  assert.equal(validDiskRoot('disk://'),false);
+  assert.equal(validDiskRoot('disk:/folder/'),false);
+  assert.equal(directDiskChild('disk:/',{name:'Тестов Пациент',path:'disk:/Тестов Пациент'}),true);
+  assert.equal(directDiskChild('disk:/',{name:'Тестов Пациент',path:'disk://Тестов Пациент'}),false);
+  assert.equal(directDiskChild('disk:/',{name:'Тестов Пациент',path:'disk:/other/Тестов Пациент'}),false);
+  assert.equal(testDiskWriteEnabled({...env,DOCTORS_DISK_ROOT:'disk:/',DOCTORS_DISK_WRITE_TEST_ROOT:'disk:/'},{configured:true}),false);
   assert.equal(validDiskRoot('disk:/test/../work'),false);
   assert.equal(directDiskChild(DOCTORS_TEST_ROOT,{name:'work',path:'disk:/work'}),false);
   assert.equal(directDiskChild(DOCTORS_TEST_ROOT,{name:'..',path:DOCTORS_TEST_ROOT+'/..'}),false);
@@ -44,6 +50,7 @@ test('Disk sandbox cannot be redirected to a clinical folder and verifies downlo
   let calls=0;
   const disk=createDoctorsDisk('synthetic',async()=>{calls++;throw Error('Unexpected request');});
   await assert.rejects(disk.upload('disk:/work/child/plan.xlsx',bytes));
+  await assert.rejects(disk.upload('disk:/child/plan.xlsx',bytes));
   await assert.rejects(disk.upload(DOCTORS_TEST_ROOT+'/../plan.xlsx',bytes));
   assert.equal(calls,0);
 });
@@ -59,6 +66,12 @@ test('read-only OAuth probe reports counts without leaking names, dates or paths
     async upload(){assert.fail('Read-only probe must never upload');}
   };
   assert.deepEqual(await probeDoctorsDisk({root,disk}),{ok:true,readOnly:true,folders:1,sampleVerified:false});
+  assert.equal(downloads,0);
+  const rootDisk={...disk,async stat(){return {type:'dir',path:'disk:/'};},
+    async list(){return [{type:'dir',name:'Тестов Пациент',path:'disk:/Тестов Пациент'},
+      {type:'file',name:'notes.txt',path:'disk:/notes.txt'}];}};
+  assert.deepEqual(await probeDoctorsDisk({root:'disk:/',disk:rootDisk}),{ok:true,readOnly:true,folders:1,sampleVerified:false});
+  await assert.rejects(probeDoctorsDisk({root:'disk:/',disk:rootDisk,sample:true}));
   assert.equal(downloads,0);
   assert.deepEqual(await probeDoctorsDisk({root,disk,sample:true}),{ok:true,readOnly:true,folders:1,sampleVerified:true});
   assert.equal(downloads,1);
@@ -315,4 +328,41 @@ test('one broken folder cannot starve other patients, and removed registry rows 
   assert.equal(backups.size,0);
   assert.equal(readPlanDates(bytes).discharge,'2024-02-16');
   assert.equal((await second.dates(good.id)).discharge,'2024-02-19','pending intent is retained without overwriting source');
+});
+
+test('root of Disk discovers active patient plans read-only and ignores unrelated folders',{
+  skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
+},async t=>{
+  const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
+    database:process.env.PGDATABASE||'postgres',max:2});
+  t.after(()=>pool.end());
+  const sql=createPostgresSql(pool);
+  const id='synthetic-'+randomUUID(),root='disk:/',folder=root+'Тестов Пациент',path=folder+'/План.xlsx';
+  const bytes=book('01.02.2024-16.02.2024');
+  const plan={type:'file',path,name:'План.xlsx',sha256:hash(bytes),modified:'2024-02-05T00:00:00Z'};
+  const visited=[];
+  const disk={
+    async list(p){visited.push(p);
+      if(p===root)return [{type:'dir',name:'Тестов Пациент',path:folder},
+        {type:'dir',name:'Scan',path:root+'Scan'},
+        {type:'dir',name:'Другой Пациент',path:root+'Другой Пациент'}];
+      assert.equal(p,folder);return [plan];
+    },
+    async stat(p){assert.equal(p,path);return plan;},
+    async download(p){assert.equal(p,path);return bytes;},
+    async upload(){assert.fail('Root must remain read-only');}
+  };
+  const create=()=>createDoctorsPlans({sql,disk,storage:{configured:true},env:{
+    DOCTORS_DISK_ROOT:root,DOCTORS_DISK_TEST_WRITE:'1',DOCTORS_DISK_WRITE_TEST_ROOT:root
+  },listPatients:async()=>[{id,childName:'Тестов Пациент',episode:'2024-02-01',registry:true}]});
+  const first=create();await first.start();first.stop();
+  const initial=await first.dates(id);
+  assert.equal(initial.admission,'2024-02-01');
+  assert.equal(initial.discharge,'2024-02-16');
+  assert.deepEqual(visited,[root,folder]);
+  assert.equal((await first.enqueue(id,'2024-02-19',initial.revision)).ok,true);
+  const second=create();await second.start();second.stop();
+  assert.equal((await second.dates(id)).discharge,'2024-02-19');
+  assert.equal(readPlanDates(bytes).discharge,'2024-02-16');
+  assert.deepEqual(visited,[root,folder,root,folder]);
 });

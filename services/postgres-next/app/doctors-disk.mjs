@@ -10,10 +10,10 @@ const safeSegment=name=>typeof name==='string' && name.length>0 && name!=='.' &&
   !/[\/\\\x00-\x1f\x7f]/u.test(name);
 export function validDiskRoot(path){
   return typeof path==='string' && path.startsWith('disk:/') &&
-    path.slice(6).split('/').every(safeSegment);
+    (path==='disk:/' || path.slice(6).split('/').every(safeSegment));
 }
 export function directDiskChild(parent,item){
-  return validDiskRoot(parent) && safeSegment(item?.name) && item.path===parent+'/'+item.name;
+  return validDiskRoot(parent) && safeSegment(item?.name) && item.path===parent+(parent==='disk:/'?'':'/')+item.name;
 }
 export const diskVersion = item => {
   const sha=String(item?.sha256||'').toLowerCase(),md5=String(item?.md5||'').toLowerCase();

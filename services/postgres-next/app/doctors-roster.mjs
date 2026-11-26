@@ -61,9 +61,33 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
     return patients;
   }
 
+  let visibilitySchema;
+  const prepareVisibility=()=>visibilitySchema||=(sql`CREATE TABLE IF NOT EXISTS doctor_hidden_patients (
+    patient_id text PRIMARY KEY, hidden_at timestamptz NOT NULL DEFAULT now())`
+    .catch(error=>{visibilitySchema=null;throw error;}));
+  async function setHidden(id,hidden){
+    if(typeof id!=='string'||!/^[A-Za-z0-9_-]{43}$/.test(id)||typeof hidden!=='boolean')
+      return {ok:false,status:400,message:'Не удалось изменить список.'};
+    if(!greenwood?.configured||!(await current({fresh:true})).some(patient=>patient.id===id))
+      return {ok:false,status:404,message:'Пациент больше не в реестре.'};
+    await prepareVisibility();
+    if(hidden)await sql`INSERT INTO doctor_hidden_patients(patient_id) VALUES(${id}) ON CONFLICT DO NOTHING`;
+    else await sql`DELETE FROM doctor_hidden_patients WHERE patient_id=${id}`;
+    return {ok:true};
+  }
+
   async function list(options) {
-    const patients=await current(options);
-    return Promise.all(patients.map(async({childId,episode,registry,registryDischarge,...patient})=>{
+    let patients=await current(options);
+    let hidden=new Set();
+    if(greenwood?.configured&&patients.length){
+      await prepareVisibility();
+      const [rows]=await sql`SELECT patient_id FROM doctor_hidden_patients
+        WHERE patient_id=ANY(${patients.map(patient=>patient.id)}::text[])`;
+      hidden=new Set(rows.map(row=>row.patient_id));
+      if(!options?.includeHidden)patients=patients.filter(patient=>!hidden.has(patient.id));
+    }
+    return Promise.all(patients.map(async({childId,episode,registry,registryDischarge,...details})=>{
+      const patient={...details,...(registry?{hideable:true,hidden:hidden.has(details.id)}:{})};
       // A row without a verified start date is visible but cannot be assigned
       // contacts or a plan from a possibly different stay.
       if(registry && !episode)return {...patient,admission:null,discharge:null,editable:false};
@@ -71,5 +95,5 @@ export function createDoctorsRoster(sql, env, {greenwood, plans} = {}) {
       return {...patient,...clinical,admission:clinical?.admission || episode || null,discharge:clinical?.discharge || registryDischarge || null};
     }));
   }
-  return {list,listBot,current};
+  return {list,listBot,current,setHidden};
 }

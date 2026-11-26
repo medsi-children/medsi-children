@@ -38,14 +38,20 @@ export function candidateFolder(name,parts,matcher){
 
 // Never invent a discharge from a single admission date, and never pick
 // the largest date merely because it is largest. Resolve duplicates by
-// document class, then a distinguishable revision day or full filename date.
+// document class, then the full Disk timestamp or the date in the filename.
 export function chooseReadOnlyPlan(plans){
   const dated=plans.filter(p=>validIsoDate(p.discharge)&&p.discharge>=p.admission);
   if(!dated.length)return {status:plans.length?'noDischarge':'noCurrentPlan',discharge:null};
   const priority=Math.max(...dated.map(p=>p.rank));
   let top=dated.filter(p=>p.rank===priority);
-  const newest=top.map(p=>p.modifiedDay||'').sort().at(-1);
-  if(newest&&top.every(p=>p.modifiedDay))top=top.filter(p=>p.modifiedDay===newest);
+  // Compare creation times only when every candidate exposes one.
+  for(const field of ['created','modified']){
+    const times=top.map(p=>Date.parse(p[field]));
+    if(times.every(Number.isFinite)){
+      const newest=Math.max(...times);
+      top=top.filter((_,index)=>times[index]===newest);
+    }
+  }
   if(top.length>1&&top.every(p=>p.nameDate)){
     const latest=top.map(p=>p.nameDate).sort().at(-1);
     top=top.filter(p=>p.nameDate===latest);
@@ -57,7 +63,7 @@ export function chooseReadOnlyPlan(plans){
 
 // A discrepancy is evidence for review, not a verified hospitalization.
 // Require a literal name pair, unique among the active registry, plus a
-// one-calendar-day difference and unanimous explicit candidate dates.
+// one-calendar-day difference and an explicit discharge.
 export function nearAdmission(plan,patient,parts,identities,matcher){
   if(!validIsoDate(plan.admission)||!validIsoDate(patient.episode)||!validIsoDate(plan.discharge)||
     plan.discharge<patient.episode||Math.abs(Date.parse(plan.admission)-Date.parse(patient.episode))!==86400000)return false;
@@ -146,9 +152,11 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
               nextCache.set(file.path,parsed);
               if(parsed.invalid){increment(counts,'invalidPlan');unverified++;continue;}
               const d=parsed.dates;
+              const plan={...d,path:file.path,version,rank:rank(file.name),created:file.created,
+                modified:file.modified,nameDate:fileDate(file.name)};
               if(d.admission!==p.episode){
                 if(nearAdmission(d,p,parts,identities,matcher)){
-                  near.push(d.discharge);increment(counts,'admissionOffOneDay');
+                  near.push(plan);increment(counts,'admissionOffOneDay');
                 }else increment(counts,'otherEpisode');
                 continue;
               }
@@ -156,17 +164,16 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
               if(owners.length!==1||owners[0].p.id!==p.id){
                 increment(counts,owners.length>1?'ambiguousIdentity':'patientMismatch');unverified++;continue;
               }
-              const modifiedDay=String(file.modified||'').slice(0,10);
-              plans.push({...d,path:file.path,version,rank:rank(file.name),modifiedDay:validIsoDate(modifiedDay)?modifiedDay:null,nameDate:fileDate(file.name)});
+              plans.push(plan);
             }
           }
-          result=incomplete?{status:'incomplete',discharge:null}:chooseReadOnlyPlan(plans);
+          result=chooseReadOnlyPlan(plans);
+          if(incomplete&&!result.discharge)result={status:'incomplete',discharge:null};
           // Never override a verified exact-stay date or an exact-stay conflict.
-          // Show agreeing near-stay dates as explicitly unconfirmed candidates.
+          // Near-stay dates are usable for display only.
           if(!result.discharge&&!incomplete&&result.status!=='conflict'&&near.length){
-            const values=new Set(near);
-            result=values.size===1?{status:'admissionMismatch',discharge:null,candidateDischarge:near[0]}:
-              {status:'conflict',discharge:null};
+            const selected=chooseReadOnlyPlan(near);
+            result=selected.discharge?{status:'admissionMismatch',discharge:null,candidateDischarge:selected.discharge,kind:selected.kind}:selected;
           }
           if(!result.discharge&&!result.candidateDischarge&&unverified&&!incomplete&&result.status!=='conflict')result.status='unverified';
           result={...result,targets:plans.map(({path,version,discharge})=>({path,version,discharge})).sort((a,b)=>a.path.localeCompare(b.path)),

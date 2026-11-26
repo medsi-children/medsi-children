@@ -107,7 +107,7 @@
   const plural=new Intl.PluralRules('ru');
   const countDays=count=>count+' '+({one:'день',few:'дня',many:'дней'}[plural.select(count)]||'дня');
 
-  let patients=[],phones=[],listing=false,renderedDay='';
+  let patients=[],phones=[],listing=null,renderedDay='',showHidden=false;
   const parentLabel=parent=>[parent.parentName,parent.relationship].filter(Boolean).join(' · ')||'Родитель';
 
   function patientDate(label,value){
@@ -124,16 +124,14 @@
     const footer=node('div','patient-deadline');
     const remaining=patient.discharge?days(patient.discharge,day):null;
     const left=Math.max(0,remaining);
-    const absentLabel=!patient.admission?'Проверьте дату поступления':patient.planStatus==='noDischarge'?'Дата выписки не указана ни в плане, ни в реестре':
-      patient.planStatus==='checking'?'Проверяем планы':patient.planStatus==='conflict'?'Дата выписки требует проверки':'Дата выписки не подтверждена';
-    const label=patient.dischargeSource==='disk-candidate'?'Дата из плана требует подтверждения':remaining===null?absentLabel:remaining<0?'Плановая дата выписки прошла':remaining===0?'Выписка сегодня':
+    const label=remaining===null?'Дата выписки не указана':remaining===0?'Выписка сегодня':
       (plural.select(left)==='one'?'Остался ':'Осталось ')+countDays(left);
-    footer.dataset.tone=patient.dischargeSource==='disk-candidate'?'warning':remaining===null?'muted':remaining<0?'overdue':remaining>0&&remaining<=3?'warning':'scheduled';
+    footer.dataset.tone=remaining===null?'muted':remaining>0&&remaining<=3?'warning':'scheduled';
     const status=node('span','patient-deadline-label');
     status.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4m9-4v4M3 10h11m-5 11H6a3 3 0 0 1-3-3V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><circle cx="16.5" cy="16.5" r="4.5"/><path d="M16.5 14v2.5l1.5 1"/></svg>';
     status.append(document.createTextNode(label));
     footer.append(status);
-    if(patient.admission&&patient.discharge&&patient.dischargeSource!=='disk-candidate'){
+    if(patient.admission&&patient.discharge){
       const bar=node('progress');
       bar.max=Math.max(1,days(patient.discharge,patient.admission));
       bar.value=Math.max(0,Math.min(bar.max,days(day,patient.admission)));
@@ -158,9 +156,9 @@
 
     const dates=node('div','patient-dates');
     const discharge=patientDate('Выписка',patient.discharge);
-    const sourceLabel={doctor:'Установлено врачом',disk:'Из плана Яндекс.Диска','disk-preliminary':'Предварительный план','disk-candidate':'Из плана · требует проверки',google:'Ориентировочно · реестр'};
+    const sourceLabel={doctor:'Установлено врачом',disk:'Из плана Яндекс.Диска','disk-preliminary':'Предварительный план','disk-candidate':'Из плана Яндекс.Диска',google:'Ориентировочно · реестр'};
     if(sourceLabel[patient.dischargeSource])discharge.append(node('span','patient-date-source',sourceLabel[patient.dischargeSource]));
-    if(patient.editable){
+    if(patient.editable&&!patient.hidden){
       const edit=node('button','medsi-roster-status-icon patient-edit');
       edit.type='button';
       edit.setAttribute('aria-label','Изменить дату выписки');
@@ -171,13 +169,25 @@
     }
     dates.append(patientDate('Госпитализация',patient.admission),discharge);
     row.append(identity,dates,patientDeadline(patient,day));
-    if(patient.syncConflict)row.append(node('p','status error','Требуется проверить актуальный план перед повторным сохранением даты.'));
-    if(patient.dischargeSource==='disk-candidate')row.append(node('p','status error','Поступление в плане отличается от реестра на 1 день. Подтвердите дату выписки вручную.'));
-    if(patient.dischargeSource!=='doctor'&&['conflict','incomplete','stale','unverified'].includes(patient.planStatus))
-      row.append(node('p','status error',patient.planStatus==='conflict'?'В планах разные даты. Требуется проверка.':'Не удалось подтвердить актуальный план.'));
-    const writeLabels={pending:'Дата сохранена в боте. Ожидает записи в планы.',synced:'Дата записана в проверенные планы.',conflict:'Планы изменились или не поддерживают запись. Проверьте и сохраните дату снова.',needsReview:'Планы пока не подтверждены. Проверьте и сохраните дату снова.',notQueued:'Дата сохранена только в боте. Сохраните повторно для отправки в планы.'};
-    if(writeLabels[patient.diskWriteStatus])row.append(node('p','status '+(['conflict','needsReview'].includes(patient.diskWriteStatus)?'error':''),writeLabels[patient.diskWriteStatus]));
-    if(patient.unverifiedPlans>0&&patient.dischargeSource==='doctor')row.append(node('p','status','Есть непроверенные планы: '+patient.unverifiedPlans+'. Они не изменяются автоматически.'));
+    const writeLabels={pending:'Дата сохранена. Обновляем планы.',conflict:'Дата сохранена только в боте.',needsReview:'Дата сохранена только в боте.',notQueued:'Дата сохранена только в боте.'};
+    if(writeLabels[patient.diskWriteStatus]&&!patient.hidden)row.append(node('p','status',writeLabels[patient.diskWriteStatus]));
+    if(patient.hideable){
+      const visibility=node('button','patient-visibility',patient.hidden?'Вернуть в список':'Убрать из списка');
+      visibility.type='button';
+      visibility.onclick=async()=>{
+        if(!patient.hidden&&!window.confirm('Убрать из списка: '+name+'? Карточку можно вернуть из раздела «Убранные».'))return;
+        visibility.disabled=true;
+        try{
+          await request('/patient-visibility',{body:{patientId:patient.id,hidden:!patient.hidden}});
+          if(listing)await listing;
+          patients=patients.map(item=>item.id===patient.id?{...item,hidden:!patient.hidden}:item);
+          renderPatients();
+          await loadPatients(true);
+        }catch(error){setStatus('patientError',error.message);}
+        finally{visibility.disabled=false;}
+      };
+      row.append(visibility);
+    }
     return row;
   }
   function openDateEditor(patient){
@@ -238,9 +248,15 @@
   }
   function renderPatients(){
     const value=normalize(id('patientSearch').value);
-    const rows=patients.filter(patient=>normalize(patient.childName).includes(value));
+    const visible=patients.filter(patient=>Boolean(patient.hidden)===showHidden);
+    const hiddenCount=patients.filter(patient=>patient.hidden).length;
+    const toggle=id('patientHiddenToggle');
+    toggle.textContent=showHidden?'К списку пациентов':'Убранные · '+hiddenCount;
+    toggle.classList.toggle('hidden',!showHidden&&!hiddenCount);
+    const rows=visible.filter(patient=>normalize(patient.childName).includes(value));
     const count=rows.length;
-    id('patientCount').textContent=value?'Найдено: '+count+' из '+patients.length:'Пациентов в отделении: '+count;
+    id('patientCount').textContent=value?'Найдено: '+count+' из '+visible.length:
+      (showHidden?'Убрано из списка: ':'Пациентов в отделении: ')+count;
     const scroll=id('screenPatients').scrollTop;
     renderedDay=today();
     id('patientList').replaceChildren(...rows.map(patient=>patientRow(patient,renderedDay)));
@@ -248,11 +264,14 @@
     id('screenPatients').scrollTop=scroll;
   }
   async function loadPatients(silent=false,refresh=false){
-    if(listing)return;
-    listing=true;
+    if(listing)return listing;
+    listing=fetchPatients(silent,refresh);
+    try{await listing;}finally{listing=null;}
+  }
+  async function fetchPatients(silent,refresh){
     if(!silent)id('patientCount').textContent='Загружаем список…';
     try{
-      const next=(await request(refresh?'/patients?refresh=1':'/patients')).patients;
+      const next=(await request('/patients?includeHidden=1'+(refresh?'&refresh=1':''))).patients;
       next.sort((a,b)=>(a.discharge||'9999').localeCompare(b.discharge||'9999') ||
         String(a.childName||'').localeCompare(String(b.childName||''),'ru'));
       if(!silent || renderedDay!==today() || JSON.stringify(next)!==JSON.stringify(patients)){
@@ -260,7 +279,6 @@
       }
       setStatus('patientError','');
     }catch(error){if(!silent){id('patientCount').textContent='';setStatus('patientError',error.message);}}
-    finally{listing=false;}
   }
   function renderPhones(){
     const value=normalize(id('phoneSearch').value);
@@ -281,6 +299,7 @@
   id('doctorPatients').onclick=()=>{show('screenPatients');loadPatients();};
   id('refreshPatients').onclick=()=>loadPatients(false,true);
   id('patientSearch').oninput=renderPatients;
+  id('patientHiddenToggle').onclick=()=>{showHidden=!showHidden;renderPatients();};
   setInterval(()=>{
     if(screen==='screenPatients')loadPatients(true);
   },30000);

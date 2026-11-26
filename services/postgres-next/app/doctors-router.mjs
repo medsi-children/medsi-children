@@ -58,8 +58,14 @@ export function createDoctorsRouter(services, env) {
   router.get('/session',run(()=>({ok:true})));
   router.get('/diagnostics',run(()=>({ok:true,sync:services.doctorsPlans?.diagnostics()||null})));
   router.get('/patients',run(async(req)=>({ok:true,
-    patients:await roster.list({refresh:req.query.refresh==='1'})
+    patients:await roster.list({refresh:req.query.refresh==='1',includeHidden:req.query.includeHidden==='1'})
   })));
+  router.post('/patient-visibility',async(req,res)=>{
+    try{
+      const result=await roster.setHidden(req.body?.patientId,req.body?.hidden);
+      return result.ok?res.json({ok:true}):fail(res,result.status,result.message);
+    }catch{return fail(res,503,'Не удалось изменить список. Попробуйте ещё раз.');}
+  });
   router.get('/phones',run(async()=>({ok:true,patients:(await roster.listBot()).map(({childId,...patient})=>patient)})));
   router.get('/reports',run(()=>services.dashboard.readForEducator()));
   router.get('/parent-directory',run(()=>services.parentDirectory.list()));

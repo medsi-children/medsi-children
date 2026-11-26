@@ -37,12 +37,12 @@
     .auth-checking p{margin:14px 0 0}
   </style>
   <link rel="stylesheet" href="/tutors/qr-code.css?v=20261005-3">
-  <link rel="stylesheet" href="/doctors/panel.css?v=20261126-local-1">
+  <link rel="stylesheet" href="/doctors/panel.css?v=20261126-roster-visibility-1">
   <script defer src="/chat-overlay/menu-twemoji.js?v=20261126-doctors-1"></script>
   <script defer src="/tutors/qr-code.js?v=20261005-1"></script>
   <script defer src="/chat-overlay/gesture-navigation.js?v=20261126-doctors-1"></script>
   <script defer src="/tutors/phone-cards-ui.js"></script>
-  <script defer src="/doctors/panel.js?v=20261126-admission-review-1"></script>
+  <script defer src="/doctors/panel.js?v=20261126-roster-visibility-1"></script>
   <script defer src="/tutors/parent-directory.js?v=20261126-doctors-1"></script>
   <script defer src="/doctors/reports.js"></script>
 </head>
@@ -150,7 +150,10 @@
         <h2 id="patientTitle">Список пациентов</h2>
         <button id="refreshPatients" class="medsi-reports-refresh" type="button" aria-label="Обновить список">↻</button>
       </header>
-      <p id="patientCount" role="status"></p>
+      <div class="patient-list-meta">
+        <p id="patientCount" role="status"></p>
+        <button id="patientHiddenToggle" class="patient-visibility hidden" type="button"></button>
+      </div>
       <div class="patient-search">
         <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg>
         <input id="patientSearch" type="search" placeholder="Поиск пациента" aria-label="Поиск пациентов">

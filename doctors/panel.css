@@ -47,21 +47,29 @@ body[data-screen="screenPatients"] {overflow:hidden}
   outline:2px solid #55bdc6;outline-offset:2px;
 }
 .patient-deadline {
-  display:grid;justify-items:start;gap:9px;color:#237764;
-  --patient-progress-track:#e2efee;--patient-progress-start:#40c3ad;--patient-progress-end:#249482;
+  display:grid;justify-items:start;gap:9px;color:#4c5d69;
+  --patient-progress-track:#e9eef1;--patient-progress-start:#9daab5;--patient-progress-end:#748694;
 }
 .patient-deadline-label {
-  display:inline-flex;align-items:center;gap:7px;padding:0;border:0;background:transparent;
+  display:inline-flex;align-items:center;gap:7px;padding:4px 9px;border-radius:999px;background:var(--patient-progress-track);
   color:inherit;font-family:inherit;font-size:14px;font-weight:680;line-height:1.3;text-align:left;
 }
 .patient-deadline-label svg {
   width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.7;
   stroke-linecap:round;stroke-linejoin:round;
 }
-.patient-deadline[data-tone="warning"] {
-  color:#886220;--patient-progress-track:#fff1d9;--patient-progress-start:#f5cc74;--patient-progress-end:#dca047;
+.patient-deadline[data-tone="later"] {
+  color:#355e86;--patient-progress-track:#e5effa;--patient-progress-start:#80afdf;--patient-progress-end:#4f86bd;
 }
-.patient-deadline[data-tone="muted"] {color:#5e7681}
+.patient-deadline[data-tone="week"] {
+  color:#226b62;--patient-progress-track:#ddf1eb;--patient-progress-start:#52bcaa;--patient-progress-end:#268b7c;
+}
+.patient-deadline[data-tone="soon"] {
+  color:#865312;--patient-progress-track:#fff0d8;--patient-progress-start:#efbf6b;--patient-progress-end:#cb872c;
+}
+.patient-deadline[data-tone="today"] {
+  color:#903f37;--patient-progress-track:#fce8e3;--patient-progress-start:#f19380;--patient-progress-end:#ca6254;
+}
 .patient-deadline progress {
   display:block;width:100%;height:9px;appearance:none;border:0;border-radius:999px;overflow:hidden;
   background:var(--patient-progress-track);

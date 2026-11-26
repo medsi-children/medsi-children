@@ -120,13 +120,22 @@
     return field;
   }
 
+  function deadlineTone(remaining){
+    if(remaining===null)return 'unknown';
+    if(remaining<0)return 'past';
+    if(remaining===0)return 'today';
+    if(remaining<=3)return 'soon';
+    if(remaining<=7)return 'week';
+    return 'later';
+  }
+
   function patientDeadline(patient,day){
     const footer=node('div','patient-deadline');
     const remaining=patient.discharge?days(patient.discharge,day):null;
     const left=Math.max(0,remaining);
     const label=remaining===null?'Дата выписки не указана':remaining===0?'Выписка сегодня':
       (plural.select(left)==='one'?'Остался ':'Осталось ')+countDays(left);
-    footer.dataset.tone=remaining===null?'muted':remaining>0&&remaining<=3?'warning':'scheduled';
+    footer.dataset.tone=deadlineTone(remaining);
     const status=node('span','patient-deadline-label');
     status.innerHTML='<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3v4m9-4v4M3 10h11m-5 11H6a3 3 0 0 1-3-3V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v3"/><circle cx="16.5" cy="16.5" r="4.5"/><path d="M16.5 14v2.5l1.5 1"/></svg>';
     status.append(document.createTextNode(label));
@@ -134,7 +143,7 @@
     if(patient.admission&&patient.discharge){
       const bar=node('progress');
       bar.max=Math.max(1,days(patient.discharge,patient.admission));
-      bar.value=Math.max(0,Math.min(bar.max,days(day,patient.admission)));
+      bar.value=remaining<=0?bar.max:Math.max(0,Math.min(bar.max,days(day,patient.admission)));
       bar.setAttribute('aria-label','Срок госпитализации');
       footer.append(bar);
     }

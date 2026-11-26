@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import {createHash,randomUUID} from 'node:crypto';
 import {once} from 'node:events';
+import {readFileSync} from 'node:fs';
+import {runInNewContext} from 'node:vm';
 import test from 'node:test';
 import AdmZip from 'adm-zip';
 import express from 'express';
@@ -168,6 +170,7 @@ test('Greenwood keeps undated rows and uses an explicitly configured discharge f
   const sql=()=>assert.fail('No automatic contact lookup');
   const roster=createDoctorsRoster(sql,env,{greenwood,plans:{dates:async()=>({admission:null,discharge:null,editable:true})}});
   const [dated,undated]=await roster.list();
+  assert.equal(dated.admission,'2024-02-29','registry admission is visible before a Disk plan is found');
   assert.equal(dated.discharge,'2024-03-10');
   assert.equal(undated.discharge,null);
   assert.equal(undated.editable,false);
@@ -431,4 +434,48 @@ test('production write requires a newly confirmed operation and saves a recovery
   assert.equal(manifest.originalSha256,hash(original));
   assert.equal(manifest.replacementSha256,hash(bytes));
   assert.deepEqual(backups.get(manifest.backupKey),original);
+});
+
+test('doctors share the exact educator QR card and modal, therapy hint and local child icon',()=>{
+  const file=path=>readFileSync(new URL('../../../'+path,import.meta.url),'utf8');
+  const doctors=file('doctors.html'),tutors=file('tutors.html');
+  for(const selector of [/<section id="tutorQrCard"[\s\S]*?<\/section>/,/<div id="tutorQrModal"[\s\S]*?<\/div>/])
+    assert.equal(doctors.match(selector)?.[0],tutors.match(selector)?.[0]);
+  assert.match(doctors,/tutors\/qr-code\.js/);
+  assert.match(doctors,/tutors\/qr-code\.css/);
+  assert.match(doctors,/🧒 Отчёты и дети/);
+  assert.match(file('chat-overlay/menu-twemoji.js'),/doctorReports[^\n]*1f9d2\.svg/);
+  assert.match(file('chat-overlay/assets/twemoji/1f9d2.svg'),/<svg/);
+  const panel=file('doctors/panel.js'),educator=file('tutors/full-web.js');
+  for(const copy of ['Вставьте отчёт по групповой терапии.','Отчёт сохранён. Можно закрыть приложение.']){
+    assert.ok(panel.includes(copy));assert.ok(educator.includes(copy));
+  }
+  assert.match(file('tutors/parent-directory.js'),/if\(!doctor\)search\.focus\(\);else close\.focus/);
+});
+test('shared swipe gesture resolves doctor screens and modal close buttons',()=>{
+  const source=readFileSync(new URL('../../../chat-overlay/gesture-navigation.js',import.meta.url),'utf8');
+  const clicked=[],visible=new Map();
+  const button=name=>({click(){clicked.push(name)}});
+  const document={
+    body:{dataset:{screen:'screenChoose'}},head:{appendChild(){}},
+    getElementById(id){return id==='doctorWorkspace'?{}:null},
+    querySelector(selector){return visible.get(selector)||null},
+    createElement(){return {}},addEventListener(){}
+  };
+  const window={};
+  runInNewContext(source,{window,document});
+  const action=()=>window.MedsiGestureNavigation.resolveAction();
+  assert.equal(action(),null);
+  for(const screen of ['screenPhones','screenPatients','screenTherapy']){
+    document.body.dataset.screen=screen;visible.set('#'+screen+' [data-home]',button(screen));
+    assert.equal(action()(),true);assert.equal(clicked.at(-1),screen);
+  }
+  visible.set('#therapyDone:not(.hidden)',{});visible.set('#screenTherapy #therapyAgain',button('done'));
+  action()();assert.equal(clicked.at(-1),'done');
+  for(const [modal,close] of [['#medsiParentDirectoryDialog:not(.hidden)','#medsiDirectoryClose'],
+    ['#tutorQrModal:not(.hidden)','#tutorQrClose'],['#medsiTutorReportLibrary:not(.hidden)','#medsiReportsBack']]){
+    visible.set(modal,{});visible.set(close,button(close));action()();assert.equal(clicked.at(-1),close);visible.delete(modal);
+  }
+  visible.set('dialog.doctor-date-editor[open]',{close(){clicked.push('date')}});
+  action()();assert.equal(clicked.at(-1),'date');
 });

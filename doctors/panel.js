@@ -97,67 +97,122 @@
   const countDays=count=>count+' '+({one:'день',few:'дня',many:'дней'}[plural.select(count)]||'дня');
 
   let patients=[],phones=[],listing=false;
-  function patientCard(patient){
-    const card=node('article','doctor-patient');
-    card.dataset.status='unscheduled';
-    const header=node('header','doctor-patient-heading');
-    header.append(node('h2','',patient.childName||'Имя ребёнка не указано'));
-    card.append(header);
+  const parentLabel=parent=>[parent.parentName,parent.relationship].filter(Boolean).join(' · ')||'Родитель';
 
-    const details=node('div','doctor-patient-details');
-    if(patient.parents.length){
-      const contacts=node('div','doctor-contacts');
-      for(const parent of patient.parents){
-        const link=node('a','doctor-contact');
-        link.href='tel:'+parent.phone;
-        const text=node('span','doctor-contact-text');
-        text.append(
-          node('strong','',[parent.parentName,parent.relationship].filter(Boolean).join(' · ')||'Родитель'),
-          node('span','',phoneText(parent.phone))
-        );
-        const glyph=node('span','doctor-call-icon');
-        glyph.setAttribute('aria-hidden','true');
-        link.append(text,glyph);contacts.append(link);
-      }
-      details.append(contacts);
-    }else{
-      details.append(node('p','doctor-contact-empty','Нет подтверждённого контакта'));
-    }
-
-    const dateRow=node('div','doctor-dates');
-    for(const [key,label,value] of [['admission','Госпитализация',patient.admission],['discharge','Выписка',patient.discharge]]){
-      const group=node('div','doctor-date doctor-date-'+key);
-      const dateLine=node('div','doctor-date-value');
-      dateLine.append(node('strong',value?'':'doctor-date-missing',value?dateText(value):'Не указана'));
-      group.append(node('span','doctor-date-label',label),dateLine);
-      if(key==='discharge' && patient.editable){
-        const edit=node('button','doctor-date-edit','✎');
-        edit.type='button';edit.setAttribute('aria-label','Изменить дату выписки');
-        edit.onclick=()=>openDateEditor(patient);
-        group.append(edit);
-      }
-      dateRow.append(group);
-    }
-    details.append(dateRow);
-    if(patient.conflict)details.append(node('p','doctor-plan-conflict',patient.diskDischarge
+  function planConflict(patient){
+    if(!patient.conflict)return '';
+    return patient.diskDischarge
       ? 'Дата в плане: '+dateText(patient.diskDischarge)
-      : 'Проверьте даты и принадлежность планов.'));
-    if(patient.discharge){
-      const day=today(),left=days(patient.discharge,day);
-      card.dataset.status=left<0?'overdue':left<=3?'soon':'active';
-      const timeline=node('div','doctor-timeline');
-      timeline.append(node('p','',left<0?'Выписка просрочена на '+countDays(-left):left?'До выписки '+countDays(left):'Выписка сегодня'));
-      if(patient.admission){
-        const bar=node('progress');
-        bar.max=Math.max(1,days(patient.discharge,patient.admission));
-        bar.value=Math.max(0,Math.min(bar.max,days(day,patient.admission)));
-        bar.setAttribute('aria-label','Срок госпитализации');
-        timeline.append(bar);
+      : 'Проверьте даты и принадлежность планов.';
+  }
+
+  function openPatientDetails(patient){
+    const dialog=node('dialog','doctor-date-editor patient-detail-dialog');
+    const title=node('h2','',patient.childName||'Имя ребёнка не указано');
+    title.id='patientDetailsTitle';
+    dialog.setAttribute('aria-labelledby',title.id);
+    dialog.append(title);
+    if(patient.parents.length){
+      const list=node('ul','patient-detail-contacts');
+      for(const parent of patient.parents){
+        const item=node('li');
+        item.append(node('strong','',parentLabel(parent)),phoneLink(parent.phone));
+        list.append(item);
       }
-      details.append(timeline);
+      dialog.append(list);
+    }else{
+      dialog.append(node('p','','Нет подтверждённого контакта'));
     }
-    card.append(details);
-    return card;
+    const conflict=planConflict(patient);
+    if(conflict)dialog.append(node('p','patient-detail-conflict',conflict));
+    const close=node('button','btn soft-back-btn','Закрыть');
+    close.type='button';
+    close.onclick=()=>dialog.close();
+    dialog.append(close);
+    document.body.append(dialog);
+    dialog.onclose=()=>dialog.remove();
+    dialog.showModal();
+  }
+
+  function patientDate(label,value,className){
+    const field=node('div','patient-date '+className);
+    field.append(node('span','patient-field-label',label));
+    const date=node(value?'time':'span','patient-date-value'+(value?'':' patient-muted'),dateText(value));
+    if(value)date.dateTime=value;
+    else date.setAttribute('aria-label',label+': дата не указана');
+    field.append(date);
+    return field;
+  }
+
+  function patientRow(patient,day){
+    const row=node('li','patient-row');
+    const name=patient.childName||'Имя ребёнка не указано';
+    const primary=patient.parents[0];
+    const identity=node('div','patient-identity');
+    const nameButton=node('button','patient-name',name);
+    nameButton.type='button';
+    nameButton.setAttribute('aria-haspopup','dialog');
+    nameButton.title=name;
+    nameButton.onclick=()=>openPatientDetails(patient);
+    const others=patient.parents.length-1;
+    const contactText=primary?parentLabel(primary)+(others>0?' +'+others:''):'Нет контакта';
+    identity.append(nameButton,node('span','patient-contact-name',contactText));
+    if(primary){
+      const call=phoneLink(primary.phone);
+      call.className='patient-phone';
+      call.setAttribute('aria-label','Позвонить: '+phoneText(primary.phone));
+      call.title=phoneText(primary.phone);
+      identity.append(call);
+    }
+    row.append(identity);
+
+    const admission=patientDate('Поступление',patient.admission,'patient-admission');
+    const discharge=patientDate('Выписка',patient.discharge,'patient-discharge');
+    if(patient.editable){
+      const edit=node('button','patient-edit','✎');
+      edit.type='button';
+      edit.setAttribute('aria-label','Изменить дату выписки');
+      edit.title='Изменить дату выписки';
+      edit.onclick=()=>openDateEditor(patient);
+      discharge.append(edit);
+    }
+    row.append(admission,discharge);
+
+    const timeline=node('div','patient-timeline');
+    const left=patient.discharge?days(patient.discharge,day):null;
+    let status='unscheduled';
+    if(patient.conflict)status='conflict';
+    else if(left!==null){
+      if(left<0)status='overdue';
+      else if(left===0)status='today';
+      else if(left<=3)status='soon';
+      else if(left<=7)status='week';
+      else status='later';
+    }
+    row.dataset.status=status;
+    const label=patient.conflict?'Статус':left!==null&&left<0?'Просрочено':'До выписки';
+    timeline.append(node('span','patient-field-label',label));
+    if(patient.conflict){
+      const conflict=node('button','patient-status patient-conflict','Сверить даты');
+      conflict.type='button';
+      conflict.title=planConflict(patient);
+      conflict.onclick=()=>openPatientDetails(patient);
+      timeline.append(conflict);
+    }else{
+      const value=left===null?'—':left<0?countDays(-left):left===0?'Сегодня':countDays(left);
+      const summary=node('span','patient-status'+(left===null?' patient-muted':''),value);
+      if(left!==null&&left<0)summary.setAttribute('aria-label','Выписка просрочена на '+countDays(-left));
+      timeline.append(summary);
+    }
+    if(patient.admission&&patient.discharge&&!patient.conflict){
+      const bar=node('progress');
+      bar.max=Math.max(1,days(patient.discharge,patient.admission));
+      bar.value=Math.max(0,Math.min(bar.max,days(day,patient.admission)));
+      bar.setAttribute('aria-label','Срок госпитализации');
+      timeline.append(bar);
+    }
+    row.append(timeline);
+    return row;
   }
   function openDateEditor(patient){
     const dialog=node('dialog','doctor-date-editor');
@@ -214,7 +269,9 @@
     id('patientCount').textContent=count+' '+form+(value?' из '+patients.length:'');
     const scene=id('patientList').closest('.scene');
     const scroll=scene.scrollTop, pageScroll=window.scrollY;
-    id('patientList').replaceChildren(...rows.map(patientCard));
+    const day=today();
+    id('patientList').replaceChildren(...rows.map(patient=>patientRow(patient,day)));
+    id('patientList').classList.toggle('hidden',!count);
     scene.scrollTop=scroll;
     if (window.scrollY!==pageScroll)window.scrollTo(0,pageScroll);
   }

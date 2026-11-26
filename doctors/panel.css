@@ -1,113 +1,138 @@
 #screenChoose .medsi-bot-launcher {cursor: default}
 #screenChoose .medsi-bot-launcher:active {transform:none}
 #screenPatients, #screenTherapy {display:grid;gap:14px}
-#screenPatients input, #screenPhones input {min-width:0}
-#screenPhones input {margin:8px 0}
+#screenPatients {gap:11px}
+#screenPhones input {margin:8px 0;min-width:0}
 #screenPhones .soft-back-btn {margin-bottom:6px}
 .doctor-tools {display:flex;align-items:center;justify-content:space-between;gap:10px}
-#patientCount {margin:-4px 2px 0;color:#50727a;font-size:.82rem;font-weight:650}
-#patientSearch {min-height:48px;background:#fff;border-color:#ade0e4;box-shadow:0 3px 10px #269caf0a}
-#patientList {gap:15px;align-items:start}
-#screenPatients .doctor-tools .btn {box-shadow:none}
-.doctor-patient {
-  min-width:0;overflow:hidden;border:1px solid #86d7d4;border-radius:20px;
-  background:linear-gradient(155deg,#fff 45%,#f2fdfc);overflow-wrap:anywhere;
-  box-shadow:0 10px 17px -7px #23798235,0 2px 3px #2379820a;
-  --discharge-top:#d7f8ec;--discharge-bottom:#b5efe0;--discharge-edge:#a1e4d4;
-  --discharge-ink:#236a64;--fill-top:#2ecfae;--fill-bottom:#14a1ad;--track:#d3f2ec;
+body[data-screen="screenPatients"] #title {display:none}
+.patient-page-nav {display:flex;align-items:center;justify-content:space-between}
+.patient-nav-button {
+  display:inline-flex;align-items:center;justify-content:center;min-height:40px;padding:0 8px;
+  border:0;border-radius:8px;background:transparent;color:#21678d;font:inherit;font-size:.8rem;
+  font-weight:700;cursor:pointer;
 }
-.doctor-patient-heading {
-  position:relative;isolation:isolate;overflow:hidden;padding:15px 15px 17px;
-  box-shadow:inset 0 1px 0 #ffffff9c,inset 0 -1px 0 #238a8c28;
+#refreshPatients {width:40px;padding:0;font-size:21px}
+.patient-nav-button:hover {background:#e9f3fb}
+.patient-page-header {display:flex;align-items:end;justify-content:space-between;gap:16px;margin-bottom:9px}
+.patient-page-header h1 {margin:0;color:#183d43;font-size:clamp(1.25rem,3.3vw,1.65rem);line-height:1.2;letter-spacing:-.025em}
+#patientCount {margin:5px 0 0;color:#557178;font-size:.78rem;font-weight:600}
+#patientSearch {
+  width:min(100%,235px);min-width:0;min-height:44px;padding:9px 13px;
+  border:1px solid #d5e3ed;border-radius:9px;background:#fff;font-size:16px;
 }
-.doctor-patient-heading::after {
-  content:'';position:absolute;z-index:-1;inset:27% 0 0;
-  background:var(--medsi-home-wave) center bottom/100% 100% no-repeat;pointer-events:none;
+#patientList {display:grid;gap:8px;list-style:none;margin:0;padding:0}
+.patient-row {
+  display:grid;grid-template-columns:minmax(0,1.5fr) minmax(85px,.58fr) minmax(114px,.7fr) minmax(100px,.6fr);
+  align-items:center;column-gap:18px;min-width:0;height:76px;padding:0 15px;
+  border:1px solid var(--row-edge);border-radius:11px;background:var(--row-fill);color:var(--row-ink);
+  --row-fill:#fff;--row-edge:#e1e9f0;--row-ink:#243f53;--row-meta:#506b80;
+  --row-accent:#21678d;--row-track:#dfebf3;--row-hover:#22678d12;
 }
-.doctor-patient h2 {
-  margin:0;color:#083e43;font-size:1.1rem;line-height:1.24;font-weight:820;
-  text-shadow:0 1px 0 #e1fffa75;
+.patient-row[data-status="later"] {
+  --row-fill:#f3f9fd;--row-edge:#dcebf5;--row-track:#d8e9f5;
 }
-.doctor-patient-details {padding:12px 14px 14px;display:grid;gap:12px}
-.doctor-contacts {display:grid;gap:8px}
-.doctor-contact {display:flex;align-items:center;justify-content:space-between;gap:9px;text-decoration:none;color:#204e52}
-.doctor-contact:focus-visible,.doctor-date-edit:focus-visible {outline:2px solid #1c9b9c;outline-offset:3px}
-.doctor-contact-text {display:grid;line-height:1.35;gap:2px;font-size:.81rem}
-.doctor-contact-text span {color:#456e72;white-space:nowrap;font-variant-numeric:tabular-nums}
-.doctor-call-icon {
-  display:grid;place-items:center;flex:0 0 36px;height:36px;border-radius:50%;
-  background:linear-gradient(155deg,#20b4ae,#087d9b);box-shadow:0 4px 9px #168ca440,inset 0 1px 0 #ffffff55;
+.patient-row[data-status="week"] {
+  --row-fill:#e9f5ff;--row-edge:#d3e9fa;--row-track:#cbe3f6;
 }
-.doctor-call-icon::after {
-  content:'';width:15px;height:15px;background:#fff;
+.patient-row[data-status="soon"] {
+  --row-fill:#d8efff;--row-edge:#c0e0f6;--row-ink:#143d5a;--row-meta:#3c607b;
+  --row-accent:#155a85;--row-track:#b5d8f0;
+}
+.patient-row[data-status="today"] {
+  --row-fill:#086d9d;--row-edge:#086d9d;--row-ink:#fff;--row-meta:#edf8ff;
+  --row-accent:#fff;--row-track:#ffffff50;--row-hover:#ffffff24;
+}
+.patient-row[data-status="overdue"] {
+  --row-fill:#fff0f1;--row-edge:#f6dadd;--row-ink:#4d3440;--row-meta:#74515b;
+  --row-accent:#a62f44;--row-track:#f3cbd0;--row-hover:#b6405812;
+}
+.patient-row[data-status="conflict"] {
+  --row-fill:#f6f8fb;--row-edge:#e4eaf2;--row-accent:#526987;
+}
+.patient-identity,.patient-date,.patient-timeline {min-width:0}
+.patient-identity {position:relative;display:grid;gap:3px;align-content:center;padding-right:42px}
+.patient-name,.patient-conflict {
+  display:block;max-width:100%;padding:0;border:0;background:transparent;color:inherit;
+  text-align:left;font:inherit;cursor:pointer;
+}
+.patient-name {
+  display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;
+  font-size:.96rem;font-weight:750;line-height:1.2;
+}
+.patient-name:hover,.patient-conflict:hover {text-decoration:underline;text-underline-offset:3px}
+.patient-contact-name {
+  overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+  color:var(--row-meta);font-size:.74rem;line-height:1.3;
+}
+.patient-phone,.patient-edit {
+  position:absolute;display:inline-flex;align-items:center;justify-content:center;
+  width:40px;height:40px;padding:0;border:0;border-radius:9px;
+  background:transparent;color:var(--row-accent);cursor:pointer;
+}
+.patient-phone {top:50%;right:0;transform:translateY(-50%);font-size:0}
+.patient-phone::after {
+  content:'';width:16px;height:16px;background:currentColor;
   mask:url('/chat-overlay/assets/twemoji/1f4de.svg') center/contain no-repeat;
 }
-.doctor-contact-empty {margin:0;color:#5c777b;font-size:.8rem}
-.doctor-dates {display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.doctor-date {
-  display:grid;gap:3px;position:relative;min-width:0;padding:8px 10px;
-  border:1px solid #b9e5f8;border-radius:11px;
-  background:linear-gradient(145deg,#e5f6ff,#caecfc);
-  box-shadow:inset 0 1px 0 #ffffffb8,0 2px 4px #4486ab0a;
+.patient-phone:hover,.patient-row .patient-edit:hover {background:var(--row-hover)}
+.patient-muted {color:var(--row-meta)}
+.patient-date,.patient-timeline {position:relative;display:grid;align-content:start;min-height:46px;gap:3px;padding-top:3px}
+.patient-field-label {color:var(--row-meta);font-size:.68rem;font-weight:620;line-height:1.2;white-space:nowrap}
+.patient-date-value {white-space:nowrap;font-size:.83rem;font-weight:690;font-variant-numeric:tabular-nums;line-height:1.25}
+.patient-edit {right:0;top:0;font-size:19px;line-height:1}
+#screenPatients button:focus-visible,#screenPatients a:focus-visible {outline:2px solid #248e90;outline-offset:2px}
+#screenPatients .patient-row :is(button,a):focus-visible {outline-color:var(--row-accent)}
+.patient-status {color:var(--row-accent);font-size:.78rem;line-height:1.25;font-weight:720;white-space:nowrap}
+.patient-status.patient-muted {color:var(--row-meta)}
+.patient-timeline progress {
+  width:56px;height:3px;appearance:none;border:0;border-radius:4px;
+  background:var(--row-track);overflow:hidden;
 }
-.doctor-date-discharge {
-  color:var(--discharge-ink);border-color:var(--discharge-edge);
-  background:linear-gradient(145deg,var(--discharge-top),var(--discharge-bottom));
-}
-.doctor-date-label {color:#315f76;font-size:.72rem;line-height:1.25;white-space:nowrap;font-weight:680}
-.doctor-date-discharge .doctor-date-label,
-.doctor-date-discharge .doctor-date-edit {color:var(--discharge-ink)}
-.doctor-date-value {line-height:1.35;white-space:nowrap}
-.doctor-date-value strong {color:#1d4548;font-size:.97rem;font-variant-numeric:tabular-nums}
-.doctor-date-value .doctor-date-missing {color:#4f7072;font-size:.78rem;font-weight:600}
-.doctor-date-edit {
-  position:absolute;display:grid;place-items:center;top:3px;right:3px;width:30px;height:30px;
-  border:0;border-radius:8px;background:transparent;font-size:18px;line-height:1;cursor:pointer;
-}
-.doctor-date-edit::before {content:'';position:absolute;inset:-6px}
-.doctor-date-edit:hover {background:#ffffff85}
-.doctor-timeline {display:grid;gap:6px}
-.doctor-timeline p {margin:0;color:var(--discharge-ink);font-size:.78rem;font-weight:780;line-height:1.35}
-.doctor-patient progress {
-  display:block;width:100%;height:7px;appearance:none;border:0;border-radius:8px;
-  background:var(--track);overflow:hidden;
-}
-.doctor-patient progress::-webkit-progress-bar {background:var(--track)}
-.doctor-patient progress::-webkit-progress-value {
-  background:linear-gradient(90deg,var(--fill-top),var(--fill-bottom));border-radius:8px;
-}
-.doctor-patient progress::-moz-progress-bar {
-  background:linear-gradient(90deg,var(--fill-top),var(--fill-bottom));border-radius:8px;
-}
-.doctor-patient[data-status="soon"] {
-  --discharge-top:#ffedab;--discharge-bottom:#ffdb86;--discharge-edge:#f3cc72;
-  --discharge-ink:#725012;--fill-top:#ffca52;--fill-bottom:#e99021;--track:#ffedc7;
-}
-.doctor-patient[data-status="overdue"] {
-  --discharge-top:#ffe1e5;--discharge-bottom:#ffc5d4;--discharge-edge:#eeadc1;
-  --discharge-ink:#86354e;--fill-top:#f59baf;--fill-bottom:#d85e86;--track:#ffe5ed;
-}
-.doctor-patient[data-status="unscheduled"] {
-  --discharge-top:#eef0ff;--discharge-bottom:#dfdefb;--discharge-edge:#d4d4f4;--discharge-ink:#514a83;
-}
-.doctor-plan-conflict {margin:0;color:#893e46;font-size:.8rem}
-@media(min-width:740px) {
-  #patientList {grid-template-columns:repeat(2,minmax(0,1fr))}
-  .doctor-patient-details {padding:14px 16px 16px}
-  .doctor-patient-heading {padding:15px 17px}
+.patient-timeline progress::-webkit-progress-bar {background:var(--row-track)}
+.patient-timeline progress::-webkit-progress-value {background:var(--row-accent)}
+.patient-timeline progress::-moz-progress-bar {background:var(--row-accent)}
+.patient-detail-dialog h2 {margin:0;font-size:1.1rem;line-height:1.35;overflow-wrap:anywhere}
+.patient-detail-dialog p {margin:12px 0;color:#557178;font-size:.85rem}
+.patient-detail-dialog .patient-detail-conflict {color:#984e5c}
+.patient-detail-dialog .btn {margin-top:12px}
+.patient-detail-contacts {display:grid;gap:8px;list-style:none;padding:0;margin:12px 0;font-size:.85rem}
+.patient-detail-contacts li {display:grid;gap:2px;overflow-wrap:anywhere}
+.patient-detail-contacts a {color:#217b80}
+@media(max-width:740px) {
+  .patient-page-header {display:grid;justify-content:stretch;gap:12px;margin-bottom:2px}
+  #patientSearch {width:100%}
+  .patient-row {
+    grid-template-columns:minmax(0,1fr) minmax(0,1.02fr) minmax(0,.94fr);
+    grid-template-rows:49px 42px;column-gap:7px;row-gap:3px;height:112px;padding:7px 12px;
+  }
+  .patient-identity {grid-column:1 / -1;align-self:center;padding-right:44px}
+  .patient-name {font-size:.91rem}
+  .patient-contact-name {font-size:.72rem}
+  .patient-date,.patient-timeline {min-height:42px}
+  .patient-date-value {font-size:.76rem}
+  .patient-field-label {font-size:.61rem}
+  .patient-edit {width:31px;height:34px;font-size:16px;top:-3px}
+  .patient-status {font-size:.69rem}
 }
 @media(max-width:360px) {
-  .doctor-patient-details {padding-right:10px;padding-left:10px}
-  .doctor-date {padding-left:7px}
-  .doctor-date-discharge .doctor-date-edit {width:26px;right:1px}
+  .patient-row {padding-right:9px;padding-left:9px;column-gap:5px}
+  .patient-edit {right:-3px;width:25px}
+  .patient-date-value {font-size:.72rem}
 }
 #therapyForm {display:grid;gap:12px}
+body[data-screen="screenPatients"] {height:auto;min-height:100dvh;background:#f3f7fb}
+body[data-screen="screenPatients"]::before {background:#f3f7fb}
 body[data-screen="screenPatients"] .wrap {align-items:start;padding-top:calc(14px + env(safe-area-inset-top))}
-body[data-screen="screenPatients"] .frame {
-  background:linear-gradient(165deg,#fbffff,#ecfbfb 65%,#e1f7f9);
-}
 body[data-screen="screenPatients"] .frame, body[data-screen="screenTherapy"] .frame {
   width:min(100%,860px);aspect-ratio:auto;min-height:0;
+}
+body[data-screen="screenPatients"] .frame {
+  background:#fafcfe;border-color:#e3edf5;box-shadow:0 10px 32px #3557770d;
+}
+body[data-screen="screenPatients"] .scene {padding:12px 20px 20px}
+@media(max-width:740px) {
+  body[data-screen="screenPatients"] .scene {padding:10px 12px 14px}
 }
 body[data-screen="screenPatients"] .scene, body[data-screen="screenTherapy"] .scene{
   position:relative;inset:auto;overflow:visible;

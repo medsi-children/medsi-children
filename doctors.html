@@ -114,14 +114,19 @@
         </section>
 
         <section id="screenPatients" class="hidden">
-          <div class="doctor-tools">
-            <button type="button" class="btn soft-back-btn" data-home>← В меню</button>
-            <button id="refreshPatients" class="btn soft-back-btn" type="button" aria-label="Обновить список">↻</button>
+          <div class="patient-page-nav">
+            <button type="button" class="patient-nav-button" data-home>← В меню</button>
+            <button id="refreshPatients" class="patient-nav-button" type="button" aria-label="Обновить список" title="Обновить список">↻</button>
           </div>
-          <input id="patientSearch" type="search" placeholder="Имя или фамилия" aria-label="Поиск пациентов">
-          <p id="patientCount" role="status"></p>
+          <div class="patient-page-header">
+            <div>
+              <h1>Список пациентов</h1>
+              <p id="patientCount" role="status"></p>
+            </div>
+            <input id="patientSearch" type="search" placeholder="Имя или фамилия" aria-label="Поиск пациентов">
+          </div>
           <p id="patientError" class="status error hidden" role="alert"></p>
-          <div id="patientList" class="phones-list"></div>
+          <ul id="patientList" aria-label="Пациенты"></ul>
         </section>
         <section id="screenPhones" class="hidden">
           <button type="button" class="btn soft-back-btn" data-home>← В меню</button>

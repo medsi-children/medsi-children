@@ -406,7 +406,7 @@ test('production write requires a newly confirmed operation and saves a recovery
   const sql=createPostgresSql(pool);
   const id='synthetic-'+randomUUID(),root='disk:/',folder=root+'Тестов Пациент',path=folder+'/План.xlsx';
   const original=book('01.02.2024-16.02.2024');
-  let bytes=original,writes=0;
+  let bytes=original,writes=0,cleanupAllowed=false;
   const stat=()=>({type:'file',path,name:'План.xlsx',sha256:hash(bytes),modified:'2024-02-05T00:00:00Z'});
   const disk={
     async list(p){return p===root?[{type:'dir',name:'Тестов Пациент',path:folder}]:[stat()];},
@@ -415,7 +415,8 @@ test('production write requires a newly confirmed operation and saves a recovery
   };
   const backups=new Map();
   const storage={configured:true,async hasObject(key){return backups.has(key);},
-    async putBuffer(key,body){backups.set(key,body);},async sha256Object(key){return hash(backups.get(key));}};
+    async putBuffer(key,body){backups.set(key,body);},async sha256Object(key){return hash(backups.get(key));},
+    async removeObject(key){if(!cleanupAllowed)throw new Error('Synthetic cleanup outage');backups.delete(key);return true;}};
   const env={DOCTORS_DISK_ROOT:root,DOCTORS_DISK_TOKEN:'synthetic',DOCTORS_GREENWOOD_SHEET_ID:'synthetic',
     DOCTORS_DISK_CONCURRENT_EDIT_ACK:'1',DOCTORS_DISK_WRITE_EPOCH:'synthetic-generation-1'};
   const create=enabled=>createDoctorsPlans({sql,disk,storage,env:{...env,DOCTORS_DISK_WRITE_ENABLED:enabled?'1':'0'},
@@ -437,6 +438,11 @@ test('production write requires a newly confirmed operation and saves a recovery
   assert.equal(manifest.originalSha256,hash(original));
   assert.equal(manifest.replacementSha256,hash(bytes));
   assert.deepEqual(backups.get(manifest.backupKey),original);
+  assert.equal(next.diagnostics().issues.backupCleanupFailed,2);
+  cleanupAllowed=true;
+  const cleanup=create(true);await cleanup.start();cleanup.stop();
+  assert.equal(backups.size,0,'successful operations clean up temporary objects after commit, including retries');
+  assert.equal(writes,1);
 });
 
 test('doctors share the exact educator QR card and modal, therapy hint and local child icon',()=>{
@@ -555,4 +561,16 @@ test('doctor matching uses Medsi given-name variants, exact surname and unique f
   assert.equal(resolveDoctorFolder(patient,[patient],[folder],matcher).folder,folder);
   assert.equal(resolveDoctorFolder(patient,[patient,other],[folder],matcher).folder,null);
   assert.equal(resolveDoctorFolder(patient,[patient],[folder,{name:'Тестова София'}],matcher).ambiguous,true);
+});
+
+test('Greenwood parses calendar datetimes without guessing missing admission',()=>{
+  const encode=rows=>'google.visualization.Query.setResponse('+JSON.stringify({status:'ok',table:{cols:[{id:'C'},{id:'G'}],rows}})+');';
+  const rows=decodeGreenwood(encode([
+    {c:[{v:'Тестов Пациент'},{v:'Date(2024,1,29,12,30,0)'}]},
+    {c:[{v:'Другой Пациент'},{v:'01.03.2024 09:00'}]},
+    {c:[{v:'Третий Пациент'},{v:'31.02.2024 09:00'}]}
+  ]));
+  assert.equal(rows[0].episode,'2024-02-29');
+  assert.equal(rows[1].episode,'2024-03-01');
+  assert.equal(rows[2].episode,null);
 });

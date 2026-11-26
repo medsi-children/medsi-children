@@ -54,6 +54,8 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk,nameVarian
       admission text, desired text NOT NULL, expected jsonb NOT NULL,
       status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now())`;
     await sql`ALTER TABLE doctor_discharge_changes ADD COLUMN IF NOT EXISTS write_scope text`;
+    await sql`CREATE TABLE IF NOT EXISTS doctor_plan_backup_cleanup (
+      object_key text PRIMARY KEY, operation_id uuid NOT NULL REFERENCES doctor_discharge_changes(id))`;
     await sql`CREATE UNIQUE INDEX IF NOT EXISTS doctor_discharge_single_pending
       ON doctor_discharge_changes (patient_id) WHERE status='pending'`;
   })().catch(error=>{prepared=null;throw error;});
@@ -157,6 +159,26 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk,nameVarian
     return snapshot;
   }
 
+  // Cleanup is deliberately after the committed synced status. Failed or
+  // partially uploaded operations keep their recovery objects. Register keys
+  // outside the upload transaction so a rollback cannot lose the cleanup list.
+  async function cleanupBackups(issues){
+    if(!write || policy.mode!=='production' || typeof storage.removeObject!=='function')return;
+    try{
+      const [rows]=await sql`SELECT b.object_key FROM doctor_plan_backup_cleanup b
+        JOIN doctor_discharge_changes c ON c.id=b.operation_id
+        WHERE c.status='synced' AND c.write_scope=${scope}
+        ORDER BY b.object_key DESC LIMIT 100`;
+      for(const row of rows){
+        const key=row.object_key;
+        if(!/^doctor-plan-backups\/[a-f0-9]{64}\.xlsx(?:\.json)?$/.test(key)){increment(issues,'backupCleanupInvalidKey');continue;}
+        try{
+          if(await storage.removeObject(key)!==true)throw new Error('Cleanup failed');
+          await sql`DELETE FROM doctor_plan_backup_cleanup WHERE object_key=${key}`;
+        }catch{increment(issues,'backupCleanupFailed');}
+      }
+    }catch{increment(issues,'backupCleanupFailed');}
+  }
   async function writeAll(snapshot, operation, owns, stillCurrent) {
     if(snapshot.unsafe)return 'conflict';
     if(!snapshot.current.length)return 'pending';
@@ -183,6 +205,11 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk,nameVarian
     }
     for(const entry of staged){
       const key='doctor-plan-backups/'+digest(Buffer.from(operation.id+entry.plan.path+entry.plan.version))+'.xlsx';
+      if(policy.mode==='production'){
+        for(const objectKey of [key,key+'.json'])
+          await sql`INSERT INTO doctor_plan_backup_cleanup(object_key,operation_id)
+            VALUES(${objectKey},${operation.id}) ON CONFLICT(object_key) DO NOTHING`;
+      }
       if(!await storage.hasObject(key)){
         await storage.putBuffer(key,entry.bytes,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',{ifAbsent:true});
       }
@@ -300,6 +327,7 @@ export function createDoctorsPlans({sql,env,storage,listPatients,disk,nameVarian
           console.warn('MEDSI_DOCTORS_PATIENT_SYNC_UNAVAILABLE');
         }
       }
+      await cleanupBackups(issues);
       failures=patientFailed?Math.min(failures+1,4):0;
       if(!patientFailed && !stopped)lastComplete=new Date().toISOString();
     }catch(error){

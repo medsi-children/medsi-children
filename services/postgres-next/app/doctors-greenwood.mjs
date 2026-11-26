@@ -15,10 +15,10 @@ const dischargeColumn=value=>{
 function sheetDate(cell){
   if(cell==null || (cell.v==null && !cell.f))return null;
   const formatted=String(cell.f||cell.v||'').trim();
-  const match=/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(formatted);
+  const match=/^(\d{1,2})\.(\d{1,2})\.(\d{4})(?:\s+(?:[01]?\d|2[0-3]):[0-5]\d(?::[0-5]\d)?)?$/.exec(formatted);
   const iso=match ? [match[3],match[2].padStart(2,'0'),match[1].padStart(2,'0')].join('-') : formatted;
   if(validIsoDate(iso))return iso;
-  const raw=/^Date\((\d{4}),(\d{1,2}),(\d{1,2})\)$/.exec(String(cell.v||''));
+  const raw=/^Date\((\d{4}),(\d{1,2}),(\d{1,2})(?:,(?:[01]?\d|2[0-3]),(?:[0-5]?\d)(?:,(?:[0-5]?\d)(?:,\d{1,3})?)?)?\)$/.exec(String(cell.v||''));
   if(raw){
     if(Number(raw[2])>11)return null;
     const value=[raw[1],String(Number(raw[2])+1).padStart(2,'0'),raw[3].padStart(2,'0')].join('-');

@@ -9,18 +9,21 @@
     return element;
   };
   let screen='screenChoose';
-  const titles={screenChoose:'Медси Бот',screenPhones:'Телефоны',screenPatients:'Список пациентов',screenTherapy:'Психотерапия'};
+  const titles={screenChoose:'Медси Бот',screenPhones:'Телефоны родителей',screenPatients:'Список пациентов',screenTherapy:'Психотерапия'};
   function setStatus(name,message){
     id(name).textContent=message;
     hidden(name,!message);
   }
   function show(name){
     const returningFromPatients=screen==='screenPatients' && name==='screenChoose';
+    if(document.activeElement?.matches('input,textarea'))document.activeElement.blur();
     screen=name;
     Object.keys(titles).forEach(key=>hidden(key,key!==name));
     document.body.dataset.screen=name;
     id('frame').classList.toggle('choose-mode',name==='screenChoose');
     id('title').textContent=titles[name];
+    id('meta').textContent=name==='screenPhones'?'Здесь можно быстро скопировать номер или позвонить.':name==='screenTherapy'?'Вставьте отчёт по групповой терапии.':'';
+    hidden('meta',!id('meta').textContent);
     id('doctorWorkspace').inert=name==='screenPatients';
     if(name==='screenPatients'){
       id('screenPatients').scrollTop=0;
@@ -258,7 +261,7 @@
       card.style.animationDelay=Math.min(index*24,160)+'ms';
       const meta=node('div','phone-card-meta');
       meta.append(node('div','',[row.relationship||'Родитель',row.parentName].filter(Boolean).join(' ')),
-        node('div','phone-number-strong',phoneText(row.phone)));
+        node('div','phone-number-strong','Телефон: '+phoneText(row.phone)));
       const actions=node('div','phone-card-actions');
       actions.append(phoneLink(row.phone));
       card.append(node('div','phone-card-title',row.childName||'Без имени ребёнка'),meta,actions);
@@ -274,13 +277,19 @@
   },30000);
   id('btnParentPhones').onclick=async()=>{
     show('screenPhones');
-    id('phonesList').textContent='Загружаем контакты…';
+    const spinner=node('div','phone-mini-loader');spinner.setAttribute('aria-label','Загрузка');
+    id('phonesList').replaceChildren(spinner);
     setStatus('phonesError','');
     try{phones=(await request('/phones')).patients;renderPhones();}
     catch(error){id('phonesList').textContent='';setStatus('phonesError',error.message);}
   };
   id('phoneSearch').oninput=renderPhones;
-  id('btnPsychology').onclick=()=>show('screenTherapy');
+  id('btnPsychology').onclick=()=>{
+    if(!id('therapyDone').classList.contains('hidden')){
+      id('therapyText').value='';hidden('therapyDone',true);hidden('therapyForm',false);
+    }
+    show('screenTherapy');
+  };
   document.querySelectorAll('[data-home]').forEach(button=>{button.onclick=()=>show('screenChoose');});
   let attempt;
   id('therapyForm').onsubmit=async event=>{
@@ -294,14 +303,18 @@
     try{
       const receipt=await request('/psychology',{body:attempt});
       if(!receipt.accepted || receipt.submissionId!==attempt.submissionId)throw new Error('No receipt');
+      attempt=null;
       hidden('therapyForm',true);hidden('therapyDone',false);
+      if(screen==='screenTherapy'){
+        id('title').textContent='Готово';id('meta').textContent='Отчёт сохранён. Можно закрыть приложение.';
+      }
     }catch{
       setStatus('therapyError','Сохранение не подтверждено. При повторной отправке этого текста используется тот же номер операции.');
     }finally{button.disabled=false;button.textContent='Отправить';}
   };
   id('therapyAgain').onclick=()=>{
     attempt=null;id('therapyText').value='';
-    hidden('therapyDone',true);hidden('therapyForm',false);id('therapyText').focus();
+    hidden('therapyDone',true);hidden('therapyForm',false);show('screenChoose');
   };
   restore();
 })();

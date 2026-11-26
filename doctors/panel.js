@@ -159,9 +159,9 @@
   const dischargeSources={
     doctor:'Дата установлена врачом',
     disk:'Взято с Яндекс Диска',
-    'disk-preliminary':'Взято с Яндекс Диска · предварительный план',
+    'disk-preliminary':'Взято с Яндекс Диска',
     'disk-candidate':'Взято с Яндекс Диска',
-    google:'Взято из Google Таблицы · ориентировочная дата'
+    google:'Взято из Google Таблицы'
   };
 
   function patientSource(source){

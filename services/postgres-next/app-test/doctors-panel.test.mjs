@@ -821,6 +821,61 @@ test('doctor edit writes verified folder and root plans, ignores older and unrel
   assert.equal((await fourth.local.dates(id,patient)).diskWriteStatus,'conflict');
 });
 
+test('display keeps its last complete Disk dates across failures and restarts without reusing write targets',{
+  skip:!process.env.MEDSI_DOCTORS_TEST_PG_PORT
+},async t=>{
+  const pool=new pg.Pool({host:'127.0.0.1',port:Number(process.env.MEDSI_DOCTORS_TEST_PG_PORT),
+    database:process.env.PGDATABASE||'postgres',max:2});
+  t.after(()=>pool.end());
+  const sql=createPostgresSql(pool);
+  const root='disk:/',folder=root+'Тестов Пациент';
+  const ordinary=folder+'/План.xlsx',final=folder+'/План итог.xlsx';
+  const records=new Map([[ordinary,book('01.02.2024-16.02.2024')],[final,book('01.02.2024-20.02.2024')]]);
+  const patient={id:'synthetic-'+randomUUID(),childName:'Тестов Пациент',
+    registry:true,episode:'2024-02-01',registryDischarge:'2024-02-22'};
+  const listPatients=async()=>[patient];
+  const env={DOCTORS_DISK_ROOT:root,DOCTORS_GREENWOOD_SHEET_ID:randomUUID()};
+  const greenwood={configured:true};
+  let now=Date.now(),outage=false,unreadable=null;
+  const stat=path=>({type:'file',name:path.split('/').at(-1),path,sha256:hash(records.get(path))});
+  const disk={async list(path){
+    if(outage)throw Error('simulated outage');
+    return path===root?[{type:'dir',path:folder,name:'Тестов Пациент'}]:[...records.keys()].map(stat);
+  },async stat(path){return stat(path);},async download(path){
+    if(path===unreadable)throw Error('simulated file read failure');
+    return records.get(path);
+  }};
+  const create=()=>{
+    const scanner=createDoctorsDiskRead({env,sql,disk,listPatients,now:()=>now});
+    const local=createDoctorsLocalDates({sql,greenwood,diskRead:scanner,listPatients});
+    return {scanner,display:async()=>{
+      const snapshot=await local.readDiskDisplay([patient]);
+      return local.dates(patient.id,patient,snapshot);
+    }};
+  };
+  const scan=async()=>{
+    now+=1000;
+    const instance=create();
+    await instance.scanner.start();
+    instance.scanner.stop();
+    return instance;
+  };
+  assert.equal((await (await scan()).display()).discharge,'2024-02-20');
+  assert.equal((await create().display()).discharge,'2024-02-20');
+  outage=true;
+  assert.equal((await (await scan()).display()).discharge,'2024-02-20');
+  outage=false;
+  unreadable=final;
+  const partial=await scan();
+  assert.equal((await partial.display()).discharge,'2024-02-20');
+  assert.equal(partial.scanner.get(patient.id,patient.episode).writeReady,false);
+  unreadable=null;
+  records.delete(final);
+  assert.equal((await (await scan()).display()).discharge,'2024-02-16');
+  records.clear();
+  assert.equal((await (await scan()).display()).discharge,'2024-02-22');
+});
+
 test('one-day admission mismatch is only an unconfirmed read candidate, never a write target',async()=>{
   const root='disk:/',folder=root+'Тестов Пациент',path=folder+'/План итог.xlsx';
   const bytes=book('02.02.2024-20.02.2024');

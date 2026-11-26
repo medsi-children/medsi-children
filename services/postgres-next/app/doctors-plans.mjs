@@ -12,6 +12,9 @@ const xlsxCodes=new Map([
   ['Unsupported sheet path','xlsxSheetPath'],['Missing or oversized XLSX entry','xlsxEntry'],
   ['Unsupported XLSX XML','xlsxXml'],['Ambiguous plan field','xlsxAmbiguousField'],
   ['Unsupported plan field position','xlsxFieldPosition'],['Unsupported plan date cell','xlsxDateCell'],
+  ['Missing plan date cell','xlsxDateMissing'],['Formula plan date cell','xlsxDateFormula'],
+  ['Empty plan date cell','xlsxDateEmpty'],['Numeric date without calendar style','xlsxDateNumericStyle'],
+  ['Invalid native Excel date','xlsxDateNativeInvalid'],
   ['Unsupported plan date range','xlsxDateRange'],['Invalid plan date','xlsxInvalidDate'],
   ['Invalid plan date order','xlsxDateOrder'],['Oversized XLSX','xlsxTooLarge']
 ]);

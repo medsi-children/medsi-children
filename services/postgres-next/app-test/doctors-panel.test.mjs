@@ -506,3 +506,33 @@ test('XLSX dates accept unpadded day and month without losing validation',()=>{
   assert.equal(readPlanDates(updatePlanDischarge(bytes,'2024-02-09')).discharge,'2024-02-09');
   assert.throws(()=>readPlanDates(book('30.2.2024')));
 });
+
+function modifySyntheticBook(bytes,change){
+  const zip=new AdmZip(bytes);
+  const path='xl/worksheets/sheet1.xml';
+  zip.updateFile(path,Buffer.from(change(zip.readAsText(path))));
+  return zip;
+}
+test('native Excel calendar cells can be read but not overwritten as text',()=>{
+  const original=book('01.02.2024');
+  const zip=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" s="1"><v>45323.5</v></c>'));
+  zip.addFile('xl/styles.xml',Buffer.from('<styleSheet xmlns="'+SHEET+'"><cellXfs count="2"><xf numFmtId="0"/><xf numFmtId="14"/></cellXfs></styleSheet>'));
+  const numeric=zip.toBuffer();
+  assert.equal(readPlanDates(numeric).admission,'2024-02-01');
+  assert.equal(readPlanDates(numeric).discharge,null);
+  assert.throws(()=>updatePlanDischarge(numeric,'2024-02-19'),/read-only/);
+  const iso=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" t="d"><v>2024-02-01T12:30:00</v></c>')).toBuffer();
+  assert.equal(readPlanDates(iso).admission,'2024-02-01');
+  const general=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4"><v>45323</v></c>')).toBuffer();
+  assert.throws(()=>readPlanDates(general),/calendar style/);
+  const formula=modifySyntheticBook(original,s=>s.replace('<c r="C4" s="1" t="s"><v>0</v></c>','<c r="C4" t="str"><f>A1</f><v>01.02.2024</v></c>')).toBuffer();
+  assert.throws(()=>readPlanDates(formula),/Formula plan date cell/);
+});
+test('date field follows the explicit merged label, never arbitrary neighboring dates',()=>{
+  const zip=modifySyntheticBook(book('01.02.2024-19.02.2024'),s=>s.replace('r="C4" s="1"','r="D4" s="1"').replace('<mergeCell ref="C4:F4"/>','<mergeCell ref="B4:C4"/><mergeCell ref="D4:F4"/>'));
+  const bytes=zip.toBuffer();
+  assert.equal(readPlanDates(bytes).discharge,'2024-02-19');
+  assert.equal(readPlanDates(updatePlanDischarge(bytes,'2024-02-20')).discharge,'2024-02-20');
+  const absent=modifySyntheticBook(book('01.02.2024'),s=>s.replace('r="C4" s="1"','r="D4" s="1"')).toBuffer();
+  assert.throws(()=>readPlanDates(absent),/Missing plan date cell/);
+});

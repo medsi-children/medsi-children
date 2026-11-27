@@ -299,7 +299,7 @@
     if (shell) shell.remove();
     await Promise.all([
       educator || window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261119-contacts-1'),
-      window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20261127-therapy-readable-2'),
+      window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20261127-therapy-compact-3'),
       script('/parents/bot-chat-view.js?v=20261012-group-therapy-label-1'),
       script('/parents/bot-chat-runtime.js?v=20261119-contacts-1'),
       avatarReady
@@ -308,7 +308,7 @@
     frame.className = 'medsi-bot-frame';
     frame.hidden = true;
     chatRoot = frame.attachShadow({ mode: 'open' });
-    const styleReady = ['/parents/bot-chat.css?v=20261005-2', '/parents/psychology-format.css?v=20261127-therapy-readable-2', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise(resolve => {
+    const styleReady = ['/parents/bot-chat.css?v=20261005-2', '/parents/psychology-format.css?v=20261127-therapy-compact-3', '/parents/bot-character.css?v=20261003-1'].map(href => new Promise(resolve => {
       const link = document.createElement('link');
       link.rel = 'stylesheet'; link.href = href; link.onload = resolve; link.onerror = resolve;
       chatRoot.appendChild(link);

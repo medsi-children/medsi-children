@@ -101,11 +101,17 @@
       else if(/^Группа прошла(?=\s|[.,:;!?]|$)/iu.test(piece))title='Итоги';
       else if(/^Затем(?=\s|[.,:;!?]|$)/iu.test(piece))title='Ход занятия';
       const parts=bodyParts(piece);
-      // Short transitions contain no independent observation. Preserve their
-      // words in the preceding step instead of creating a one-line timeline
-      // entry such as "Далее обсуждение.".
+      // A brief bridge such as "Далее обсуждение." belongs to the preceding
+      // sentence, not to its own paragraph with a large empty gap. Keep the
+      // exact authored words and punctuation, and never modify a list/substep.
       if(steps.length&&/^Далее\s+(?:обсуждение|беседа|рефлексия)[.!?]?$/iu.test(piece)){
-        steps[steps.length-1].parts.push(...parts);
+        const previous=steps[steps.length-1].parts;
+        const last=previous[previous.length-1];
+        if(last?.type==='p'&&parts.length===1&&parts[0].type==='p'){
+          last.text+=' '+parts[0].text;
+        }else{
+          previous.push(...parts);
+        }
         continue;
       }
       if(steps.length&&steps[steps.length-1].title===title)steps[steps.length-1].parts.push(...parts);
@@ -201,6 +207,15 @@
       for(const part of original.parts||[]){
         if(part.type!=='p'){current.parts.push(part);continue}
         for(const sentence of narrativeSlices(part.text)){
+          // A second parsing pass normally creates a paragraph for every
+          // sentence. Keep tiny connective phrases on the same line as the
+          // preceding sentence, without losing or changing their wording.
+          const previous=current.parts[current.parts.length-1];
+          if(previous?.type==='p'&&
+            /^Далее\s+(?:обсуждение|беседа|рефлексия)[.!?]?$/iu.test(sentence)){
+            previous.text+=' '+sentence;
+            continue;
+          }
           const title=narrativeKind(sentence);
           if((title==='Наблюдения за участниками'||title==='Итоги') &&
             title!==current.title && (current!==section||section.parts.length)){

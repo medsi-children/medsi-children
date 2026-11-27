@@ -353,11 +353,14 @@ test('uncertain therapy parsing still renders an elegant complete report',()=>{
   vm.runInNewContext(source,{window,document:doc});
   const f=window.MedsiPsychologyFormatter;
   const paragraphs=['Тема: Коллективное творчество.',
+    'Отчёт о групповой психотерапии.',
     'Участник А предложил идею. Затем Участник Б добавил предложение.',
     'Итоговый макет собрали вместе.'];
   const input=paragraphs.join('\n\n');
   // The parser may recognize an ambiguous format conservatively, but it
   // must never expose a raw-source/debug control or drop participant details.
+  assert.equal(f.losslessView(input,f.parse(input)),false,
+    'The fixture must genuinely exercise conservative presentation');
   const node=make('div');
   assert.equal(f.render(node,input),true);
   const root=node.children[0];

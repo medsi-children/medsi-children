@@ -328,11 +328,20 @@ test('therapy stays a clean structured card without an original-source button',(
     'Начало занятия','Разминка','Обсуждение','Практическая часть',
     'Наблюдения за участниками','Завершение','Итоги'
   ]);
+  const practical=parsed.sections.find(item=>item.title==='Практическая часть');
+  assert.equal(practical.parts.length,1,
+    'A short transition must not create a separated paragraph below the task');
+  assert.equal(practical.parts[0].text,
+    'Практическое задание: собрать общий макет. Далее обсуждение.');
   const result=make('div');
   assert.equal(f.render(result,text),true);
   const root=result.children[0];
   assert.equal(root.className,'psych-report');
   assert.deepEqual(Array.from(root.children.map(child=>child.className)),['psych-intro','psych-flow']);
+  const practicalNode=root.children[1].children[3].children[1];
+  assert.equal(practicalNode.children.length,2,'One heading and one uninterrupted paragraph');
+  assert.equal(practicalNode.children[1].textContent,
+    'Практическое задание: собрать общий макет. Далее обсуждение.');
   const body=parsed.sections.flatMap(item=>item.parts.map(part=>part.text||'')).join(' ');
   for(const phrase of phrases){
     assert.ok(body.includes(phrase),'Missing source sentence: '+phrase);

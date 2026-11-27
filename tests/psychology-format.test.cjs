@@ -365,3 +365,23 @@ test('therapy source fallback and details are readable on narrow screens',()=>{
  assert.match(css,/\.psych-source-details summary\{[^}]*cursor:pointer/);
  assert.match(css,/@media\(max-width:560px\)\{\.psych-source-details/);
 });
+
+
+test('a source field that would be hidden forces exact original-text fallback',()=>{
+ const script=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const node=tag=>({
+  tag,className:'',textContent:'',children:[],
+  append(...parts){this.children.push(...parts)},
+  appendChild(part){this.children.push(part);return part},
+  replaceChildren(...parts){this.children=[...parts]}
+ });
+ const win={},doc={readyState:'loading',addEventListener(){},createElement:node};
+ vm.runInNewContext(script,{window:win,document:doc});
+ const report='Тема: Совместное творчество.\n\nОтчёт о групповой психотерапии';
+ const f=win.MedsiPsychologyFormatter;
+ assert.equal(f.losslessView(report,f.parse(report)),false);
+ const container=node('main');
+ assert.equal(f.render(container,report),true);
+ assert.equal(container.children[0].className,'psych-report psych-report-source-only');
+ assert.equal(container.children[0].children[0].textContent,report);
+});

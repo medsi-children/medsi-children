@@ -18,17 +18,17 @@ body[data-screen="screenStart"] #headerBlock,body[data-screen="screenNames"] #he
 .field-optional{margin-left:5px;color:#789399;font-size:.8em;font-weight:500}
 
 
-/* Group therapy: compact pink attendance explanation, scoped to this report. */
+/* Group therapy: compact rose version of the report banners. */
 .report-disclaimer.report-disclaimer-psychology{
-  background:linear-gradient(135deg,#fff0f5 0%,#ffe3ee 53%,#ffd7e6 100%);
-  color:#603248!important;
-  border:1px solid rgba(185,79,124,.32);
-  border-radius:13px;
-  box-shadow:0 6px 16px rgba(180,82,124,.10);
+  background:linear-gradient(135deg,#b74778 0%,#b23972 54%,#9d2c61 100%);
+  color:#fff!important;
+  border:1px solid rgba(151,36,86,.18);
+  border-radius:18px;
+  box-shadow:0 16px 34px rgba(180,57,114,.20);
   padding:9px 11px;
   margin-bottom:8px;
   font-size:.80rem!important;
-  font-weight:500;
+  font-weight:650;
   line-height:1.32;
 }
 .report-disclaimer-psychology .psychology-participation-notice{
@@ -40,26 +40,24 @@ body[data-screen="screenStart"] #headerBlock,body[data-screen="screenNames"] #he
 .report-disclaimer-psychology .psychology-participation-notice>strong{
   display:block;
   margin:0 0 3px;
-  color:#8c2c58;
+  color:inherit;
   font-size:.85rem;
   line-height:1.3;
-  font-weight:750;
+  font-weight:bolder;
 }
 .report-disclaimer-psychology .psychology-participation-notice p{
   margin:0 0 4px;
-  color:#593347;
+  color:inherit;
   font-size:inherit;
   line-height:inherit;
-  font-weight:500;
+  font-weight:inherit;
 }
 .report-disclaimer-psychology .psychology-participation-notice .psychology-participation-lead{
-  color:#6c2c4b;
-  font-weight:650;
+  font-weight:bolder;
 }
 .report-disclaimer-psychology .psychology-participation-notice .psychology-participation-thanks{
   margin-bottom:0;
-  color:#873358;
-  font-weight:650;
+  font-weight:bolder;
 }
 @media(max-width:560px){
   .report-disclaimer.report-disclaimer-psychology{padding:8px 10px;font-size:.82rem!important}

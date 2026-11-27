@@ -189,7 +189,7 @@ test('narrative participant notes follow activity, never swallow the introductio
   const container=node('main');
   assert.equal(format.render(container,value),true);
   const root=container.children[0];
-  assert.deepEqual(root.children.map(child=>child.className),['psych-preface','psych-flow']);
+  assert.deepEqual(root.children.map(child=>child.className),['psych-preface','psych-flow','psych-source-details']);
   const flow=root.children[1];
   assert.deepEqual(flow.children.map(step=>step.children[1].children[0].textContent),
    ['Ход занятия','Наблюдения за участниками','Итоги']);
@@ -295,4 +295,73 @@ test('therapy stylesheet and script refresh in both parent report and assistant 
   assert.ok(markup.includes('/parents/psychology-format.js?v='+version));
   assert.ok(markup.includes('/parents/psychology-format.css?v='+version));
  }
+});
+
+
+test('full psychotherapy source stays available and short transitions do not create artificial stages',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const node=tag=>({
+  tag,className:'',textContent:'',children:[],
+  append(...items){this.children.push(...items)},
+  appendChild(item){this.children.push(item);return item},
+  replaceChildren(...items){this.children=[...items]}
+ });
+ const win={},doc={readyState:'loading',addEventListener(){},createElement:node};
+ vm.runInNewContext(source,{window:win,document:doc});
+ const formatter=win.MedsiPsychologyFormatter;
+ // Fictional participants and exercises. No real clinical data in tests.
+ const text=[
+  'Тема групповой психотерапии: "Создание коллективной истории".',
+  'Вначале занятия договорились об очередности выступлений.',
+  'Затем разминка: каждый придумал персонажа.',
+  'Далее обсуждение вариантов развития истории.',
+  'Практическое задание: составить общий рассказ.',
+  'Далее обсуждение.',
+  'Активно участвовали Участник А и Участник Б. Участник В выступил в конце.',
+  'В конце занятия все прочитали готовую историю.',
+  'Группа прошла спокойно.'
+ ].join(' ');
+ const parsed=formatter.parse(text);
+ assert.equal(formatter.losslessView(text,parsed),true);
+ assert.deepEqual(Array.from(parsed.sections.map(s=>s.title)),[
+  'Начало занятия','Разминка','Обсуждение','Практическая часть',
+  'Наблюдения за участниками','Завершение','Итоги'
+ ]);
+ const renderedBody=parsed.sections.flatMap(s=>s.parts.map(p=>p.text||'')).join(' ');
+ assert.ok(renderedBody.includes('Далее обсуждение.'));
+ assert.equal(renderedBody.split('Далее обсуждение.').length-1,1);
+ const root=node('div');
+ assert.equal(formatter.render(root,text),true);
+ assert.equal(root.children[0].className,'psych-report');
+ const details=root.children[0].children.at(-1);
+ assert.equal(details.tag,'details');
+ assert.equal(details.className,'psych-source-details');
+ assert.equal(details.children[0].textContent,'Показать полный исходный текст');
+ assert.equal(details.children[1].textContent,text,
+  'The original authored text must remain available byte-for-byte');
+});
+
+test('therapy audit rejects an edited or missing observation before visual rendering',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const win={},doc={readyState:'loading',addEventListener(){}};
+ vm.runInNewContext(source,{window:win,document:doc});
+ const formatter=win.MedsiPsychologyFormatter;
+ const raw='Тема: Совместное творчество.\n\nОсновная часть: Участник А собирал модель. Участник Б подбирал детали.';
+ const valid=formatter.parse(raw);
+ assert.equal(formatter.losslessView(raw,valid),true);
+ const lost=formatter.parse(raw);
+ lost.sections[0].parts[0].text='Участник А собирал модель.';
+ assert.equal(formatter.losslessView(raw,lost),false,
+  'Missing even one participant observation must invalidate the formatted view');
+ const alias='Тема занятия: Игра с конструкторами.\n\nОсновная часть: Участники собирали мосты.';
+ assert.equal(formatter.losslessView(alias,formatter.parse(alias)),true,
+  'Recognized heading aliases must not trigger unnecessary raw-text fallback');
+});
+
+test('therapy source fallback and details are readable on narrow screens',()=>{
+ const css=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.css'),'utf8');
+ assert.match(css,/\.psych-source-content\{[^}]*white-space:pre-wrap/);
+ assert.match(css,/\.psych-report-source-only\{[^}]*border/);
+ assert.match(css,/\.psych-source-details summary\{[^}]*cursor:pointer/);
+ assert.match(css,/@media\(max-width:560px\)\{\.psych-source-details/);
 });

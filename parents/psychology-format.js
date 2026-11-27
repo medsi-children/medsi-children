@@ -101,11 +101,17 @@
       else if(/^Группа прошла(?=\s|[.,:;!?]|$)/iu.test(piece))title='Итоги';
       else if(/^Затем(?=\s|[.,:;!?]|$)/iu.test(piece))title='Ход занятия';
       const parts=bodyParts(piece);
-      // Short transitions contain no independent observation. Preserve their
-      // words in the preceding step instead of creating a one-line timeline
-      // entry such as "Далее обсуждение.".
+      // A brief bridge such as "Далее обсуждение." belongs to the preceding
+      // sentence, not to its own paragraph with a large empty gap. Keep the
+      // exact authored words and punctuation, and never modify a list/substep.
       if(steps.length&&/^Далее\s+(?:обсуждение|беседа|рефлексия)[.!?]?$/iu.test(piece)){
-        steps[steps.length-1].parts.push(...parts);
+        const previous=steps[steps.length-1].parts;
+        const last=previous[previous.length-1];
+        if(last?.type==='p'&&parts.length===1&&parts[0].type==='p'){
+          last.text+=' '+parts[0].text;
+        }else{
+          previous.push(...parts);
+        }
         continue;
       }
       if(steps.length&&steps[steps.length-1].title===title)steps[steps.length-1].parts.push(...parts);

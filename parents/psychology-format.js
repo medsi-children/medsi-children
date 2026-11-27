@@ -104,7 +104,7 @@
       // Short transitions contain no independent observation. Preserve their
       // words in the preceding step instead of creating a one-line timeline
       // entry such as "Далее обсуждение.".
-      if(steps.length&&/^Далее\\s+(?:обсуждение|беседа|рефлексия)[.!?]?$/iu.test(piece)){
+      if(steps.length&&/^Далее\s+(?:обсуждение|беседа|рефлексия)[.!?]?$/iu.test(piece)){
         steps[steps.length-1].parts.push(...parts);
         continue;
       }

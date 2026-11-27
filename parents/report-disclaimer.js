@@ -2,11 +2,6 @@
   const banner=document.getElementById('reportDisclaimer');if(!banner)return;
   const standard='<strong>Пожалуйста, не обсуждайте отчёты с ребёнком и не показывайте их ему.</strong><div class="chat-note-list"><span class="chat-note-item">В отчётах содержатся безоценочные наблюдения о состоянии и поведении ребёнка.</span><span class="chat-note-item">Даже нейтральные фразы могут повлиять на доверие и работу специалистов.</span></div>';
   const psychology=[
-    '<strong>Групповая психотерапия</strong>',
-    '<div class="chat-note-list">',
-    '<span class="chat-note-item">Здесь вы можете прочесть отчёт с групповой психотерапии.</span>',
-    '<span class="chat-note-item">Отчёты об индивидуальной работе с вашим ребёнком вам предоставит ваш психолог.</span>',
-    '</div>',
     '<div class="psychology-participation-notice" role="note">',
     '<strong>Уважаемые родители!</strong>',
     '<p class="psychology-participation-lead">Если имя вашего ребёнка не упомянуто в отчёте о групповой психотерапии, это не означает, что он пропустил занятие.</p>',

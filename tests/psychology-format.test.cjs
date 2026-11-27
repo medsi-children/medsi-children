@@ -451,10 +451,12 @@ test('therapy attendance notice is pink, readable and only shown for group thera
  assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{/);
  assert.match(css,/\.psychology-participation-lead\{/);
  assert.match(css,/@media\(max-width:560px\)/);
- assert.match(css,/\.report-disclaimer\.report-disclaimer-psychology\{[^}]*padding:9px 11px;[^}]*font-size:\.80rem!important;[^}]*line-height:1\.32;/);
+ assert.match(css,/\.report-disclaimer\.report-disclaimer-psychology\{[^}]*background:linear-gradient\(135deg,#b74778 0%,#b23972 54%,#9d2c61 100%\);[^}]*color:#fff!important;[^}]*border-radius:18px;[^}]*padding:9px 11px;[^}]*font-size:\.80rem!important;[^}]*font-weight:650;[^}]*line-height:1\.32;/);
+ assert.match(css,/\.psychology-participation-notice p\{[^}]*color:inherit;[^}]*font-weight:inherit;/);
+ assert.match(css,/\.psychology-participation-notice>strong\{[^}]*color:inherit;[^}]*font-weight:bolder;/);
  assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{[^}]*margin:0;[^}]*padding:0;[^}]*border:0;[^}]*background:transparent;/);
  const main=read('index.html');
- assert.ok(main.includes('/parents/dashboard-ui.css?v=20261128-group-therapy-heading-1'));
+ assert.ok(main.includes('/parents/dashboard-ui.css?v=20261128-rose-banner-1'));
  assert.ok(main.includes('/parents/report-disclaimer.js?v=20261128-group-therapy-heading-1'));
  assert.ok(main.includes('/parents/full-web.js?v=20261128-group-therapy-heading-1'));
  const app=read('parents/full-web.js');

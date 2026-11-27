@@ -31,20 +31,10 @@ body[data-screen="screenStart"] #headerBlock,body[data-screen="screenNames"] #he
   font-weight:500;
   line-height:1.32;
 }
-.report-disclaimer.report-disclaimer-psychology>strong{
-  color:#96345f;
-  font-size:.86rem;
-  font-weight:750;
-  margin-bottom:4px;
-}
-.report-disclaimer-psychology .chat-note-list{gap:3px}
-.report-disclaimer-psychology .chat-note-item{gap:5px}
-.report-disclaimer-psychology .chat-note-item:before{color:#b64d7e}
 .report-disclaimer-psychology .psychology-participation-notice{
-  margin-top:6px;
-  padding:6px 0 0;
+  margin:0;
+  padding:0;
   border:0;
-  border-top:1px solid rgba(194,79,131,.24);
   background:transparent;
 }
 .report-disclaimer-psychology .psychology-participation-notice>strong{
@@ -73,5 +63,4 @@ body[data-screen="screenStart"] #headerBlock,body[data-screen="screenNames"] #he
 }
 @media(max-width:560px){
   .report-disclaimer.report-disclaimer-psychology{padding:8px 10px;font-size:.82rem!important}
-  .report-disclaimer-psychology .psychology-participation-notice{margin-top:5px;padding-top:5px}
 }

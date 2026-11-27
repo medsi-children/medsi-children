@@ -28,7 +28,7 @@
     if(text.length<=90)return{title:cap(text),body:''};
     return{title:'Этап занятия',body:text}
   }
-  function parse(v){const chunks=insertBreaks(normalize(v)).split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);const meta=[],sections=[],tail=[];let current=null;chunks.forEach(chunk=>{let m=chunk.match(/^(ТЕМА(?: групповой психотерапии| занятия)?|ЦЕЛЬ(?: групповой психотерапии| занятия)?|Возрастная категория|Начало группы)\s*:\s*([\s\S]*)$/i);if(m){meta.push({title:canonical(META,m[1]),body:cap(m[2])});current=null;return}m=chunk.match(/^Часть\s+([1-9])\s*:?\s*([\s\S]*)$/i);if(m){current={number:m[1],title:'Часть',parts:bodyParts(m[2])};sections.push(current);return}m=chunk.match(/^(?:([1-9])[.)]\s*)?(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*[:.]?\s*([\s\S]*)$/i);if(m){current={number:m[1]||'',title:canonical(SECTIONS,m[2]),parts:bodyParts(m[3])};sections.push(current);return}m=chunk.match(/^([1-9])[.)]\s*([\s\S]*)$/);if(m){const generic=splitNumberedHeading(m[2]);current={number:m[1],title:generic.title,parts:bodyParts(generic.body)};sections.push(current);return}const parts=bodyParts(chunk);if(current)current.parts.push.apply(current.parts,parts);else tail.push.apply(tail,parts)});return expandNarrativeCategories(expandNarrativeProse(v,expandNarrativeTopic({meta,sections,tail})))}
+  function parse(v){const chunks=insertBreaks(normalize(v)).split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);const meta=[],sections=[],tail=[];let current=null;chunks.forEach(chunk=>{let m=chunk.match(/^(ТЕМА(?: групповой психотерапии| занятия)?|ЦЕЛЬ(?: групповой психотерапии| занятия)?|Возрастная категория|Начало группы)\s*:\s*([\s\S]*)$/i);if(m){meta.push({title:canonical(META,m[1]),body:cap(m[2])});current=null;return}m=chunk.match(/^Часть\s+([1-9])\s*:?\s*([\s\S]*)$/i);if(m){current={number:m[1],title:'Часть',parts:bodyParts(m[2])};sections.push(current);return}m=chunk.match(/^(?:([1-9])[.)]\s*)?(НАЧАЛО|Начало|Вводная часть|РАЗОГРЕВ|Разогрев|Интерактивная часть|Основная часть|Практическое упражнение|Заключительная часть|Заключение|Выводы|Рефлексия|В завершении|Завершение)\s*[:.]?\s*([\s\S]*)$/i);if(m){current={number:m[1]||'',title:canonical(SECTIONS,m[2]),parts:bodyParts(m[3])};sections.push(current);return}m=chunk.match(/^([1-9])[.)]\s*([\s\S]*)$/);if(m){const generic=splitNumberedHeading(m[2]);current={number:m[1],title:generic.title,parts:bodyParts(generic.body)};sections.push(current);return}const parts=bodyParts(chunk);if(current)current.parts.push.apply(current.parts,parts);else tail.push.apply(tail,parts)});return expandNarrativeCategories(expandNarrativeProse(v,expandStructuredTopicProse(expandNarrativeTopic({meta,sections,tail}))))}
 
   // Older therapy notes can contain the entire chronology directly after "Тема:".
   // Only use explicit transitions; do not rewrite or invent clinical observations.
@@ -75,6 +75,42 @@
     data.sections=splitSections;
     return data;
   }
+  // Reports sometimes put the entire session under a quoted "Тема:" label.
+  // Split only at explicit, sentence-initial activity transitions; never
+  // invent observations or infer a participant's condition from free prose.
+  function expandStructuredTopicProse(data){
+    const topic=data.meta.find(item=>item.title==='Тема групповой психотерапии');
+    if(!topic||!topic.body)return data;
+    const match=/^([«"][^»"\n]{3,160}[»"])[.!?]?\s+([\s\S]+)$/u.exec(topic.body);
+    if(!match)return data;
+    const narrative=match[2].trim();
+    if(!/^(?:Вначале занятия|В начале (?:занятия|встречи)|Занятие началось)(?=\s|[.,:;!?]|$)/iu.test(narrative))return data;
+    const pieces=narrative.split(/(?<=[.!?])\s+(?=(?:Затем(?:\s+разминка)?|Далее(?:\s+обсуждение)?|Практическое (?:задание|упражнение)|Активно участвовали|В конце занятия|Группа прошла)(?=\s|[.,:;!?]|$))/iu)
+      .map(item=>item.trim()).filter(Boolean);
+    // One isolated transition may simply be prose about the theme.
+    if(pieces.length<3)return data;
+    const steps=[];
+    for(const piece of pieces){
+      let title='Ход занятия';
+      if(/^(?:Вначале занятия|В начале (?:занятия|встречи)|Занятие началось)(?=\s|[.,:;!?]|$)/iu.test(piece))title='Начало занятия';
+      else if(/^Затем\s+разминка(?=\s|[.,:;!?]|$)/iu.test(piece))title='Разминка';
+      else if(/^Далее\s+обсуждение(?=\s|[.,:;!?]|$)/iu.test(piece))title='Обсуждение';
+      else if(/^Практическое (?:задание|упражнение)(?=\s|[.,:;!?]|$)/iu.test(piece))title='Практическая часть';
+      else if(/^Активно участвовали(?=\s|[.,:;!?]|$)/iu.test(piece))title='Наблюдения за участниками';
+      else if(/^В конце занятия(?=\s|[.,:;!?]|$)/iu.test(piece))title='Завершение';
+      else if(/^Группа прошла(?=\s|[.,:;!?]|$)/iu.test(piece))title='Итоги';
+      else if(/^Затем(?=\s|[.,:;!?]|$)/iu.test(piece))title='Ход занятия';
+      const parts=bodyParts(piece);
+      if(steps.length&&steps[steps.length-1].title===title)steps[steps.length-1].parts.push(...parts);
+      else steps.push({number:'',title,parts});
+    }
+    // Do not create a timeline unless multiple distinct, explicit steps exist.
+    if(new Set(steps.map(step=>step.title)).size<3)return data;
+    topic.body=match[1];
+    data.sections.unshift(...steps);
+    return data;
+  }
+
   // Some psychologists write a narrative with paragraphs rather than labelled
   // "Тема:", "Цель:", etc. Build visual sections only from explicit wording:
   // no inferred observations, paraphrasing or additions to the original text.

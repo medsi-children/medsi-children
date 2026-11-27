@@ -9,7 +9,7 @@
   <link rel="shortcut icon" href="/favicon.ico"><link rel="apple-touch-icon" href="/apple-touch-icon.png"><link rel="manifest" href="/manifest.json">
   <link rel="stylesheet" href="/parents/full-web.css?v=20261116-registration-priority-1">
   <link rel="stylesheet" href="/parents/chat-screen.css?v=20261124-close-center-1">
-  <link rel="stylesheet" href="/parents/psychology-format.css?v=20261127-therapy-compact-3" data-medsi-psych-format="1">
+  <link rel="stylesheet" href="/parents/psychology-format.css?v=20261128-therapy-report-kind-1" data-medsi-psych-format="1">
   <link rel="stylesheet" href="/parents/dashboard-ui.css?v=20261128-rose-banner-2">
   <link rel="stylesheet" href="/parents/chat-ui.css?v=20261015-assistant-layout-3">
   <link rel="stylesheet" href="/chat-overlay/composer-ui.css?v=20260907-1">
@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="/parents/home-card-concept-v4.css?v=20261105-parent-home-v4-1">
   <script defer src="/parents/install-prompt.js?v=20261022-3"></script>
   <link rel="preload" as="image" href="/parents/blob.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261127-shared-replies-1">
+  <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261128-therapy-report-kind-1">
   <script defer src="/chat-overlay/message-emoji.js?v=20261003-delivery-1"></script>
 </head>
 <body>
@@ -161,7 +161,7 @@
   };
   var status=document.getElementById('parentBootStatus');
   var message=status.querySelector('p'),retryButton=status.querySelector('button');
-  var parentScript='/parents/full-web.js?v=20261128-group-therapy-heading-1';
+  var parentScript='/parents/full-web.js?v=20261128-therapy-report-kind-1';
   var bootPending=false,bootFinished=false,bootAttempts=0,bootRetryTimer=0;
   function bootStatus(text,offerRetry,code){
     if(bootFinished)return;
@@ -171,7 +171,7 @@
     status.dataset.reason=code;
   }
   // Assistant and optional chat assets must not gate the parent menu.
-  window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261127-shared-replies-1',1).then(function(){
+  window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261128-therapy-report-kind-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
   function loadAfterBoot(){
@@ -179,7 +179,7 @@
       return series(["/chat-overlay/media-preload.js?v=20260907-1", "/chat-overlay/upload-ux.js?v=20260916-parent-recovery", "/chat-overlay/composer-ui.js?v=20260907-1", "/chat-overlay/reaction-icons.js?v=20260907-twemoji-2", "/chat-overlay/message-enhancements.js?v=20260924-message-input-1", "/chat-overlay/message-long-press.js?v=20261007-2", "/chat-overlay/chat-motion.js?v=20260911-first-open-only-1", "/chat-overlay/bottom-lock.js?v=20260906-1", "/chat-overlay/video-link.js?v=1"],true);
     }).catch(function(){});
     series(['/parents/push-gateway.js?v=20260907-1','/notify-client.js?v=20261124-chat-order-1'],true).then(function(){window.MedsiParentApp.helpersReady();}).catch(function(){});
-    ["/parents/psychology-format.js?v=20261127-therapy-compact-3", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20261128-group-therapy-heading-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
+    ["/parents/psychology-format.js?v=20261128-therapy-report-kind-1", "/parents/chat-opening.js?v=20260907-1", "/parents/report-disclaimer.js?v=20261128-group-therapy-heading-1", "/chat-overlay/gesture-navigation.js?v=20260907-hint-1"].forEach(function(src){load(src,1).catch(function(){});});
     load('/parents/install-hint.js?v=20261022-2',1).catch(function(){});
   }
   function beginBoot(){

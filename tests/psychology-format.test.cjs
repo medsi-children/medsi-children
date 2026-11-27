@@ -290,7 +290,7 @@ test('ambiguous therapy prose stays untouched rather than inventing stages',()=>
 test('therapy stylesheet and script refresh in both parent report and assistant shadow root',()=>{
  const read=relative=>fs.readFileSync(path.join(__dirname,'..',relative),'utf8');
  const main=read('index.html'),assistant=read('parents/smart-bot-widget.js');
- const version='20261127-therapy-compact-3';
+ const version='20261128-therapy-report-kind-1';
  for(const markup of [main,assistant]){
   assert.ok(markup.includes('/parents/psychology-format.js?v='+version));
   assert.ok(markup.includes('/parents/psychology-format.css?v='+version));
@@ -392,8 +392,8 @@ test('uncertain therapy parsing still renders an elegant complete report',()=>{
 test('therapy formatting assets refresh in parent report and assistant',()=>{
   const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
   for(const markup of [read('index.html'),read('parents/smart-bot-widget.js')]){
-    assert.ok(markup.includes('/parents/psychology-format.js?v=20261127-therapy-compact-3'));
-    assert.ok(markup.includes('/parents/psychology-format.css?v=20261127-therapy-compact-3'));
+    assert.ok(markup.includes('/parents/psychology-format.js?v=20261128-therapy-report-kind-1'));
+    assert.ok(markup.includes('/parents/psychology-format.css?v=20261128-therapy-report-kind-1'));
   }
 });
 
@@ -458,7 +458,7 @@ test('therapy attendance notice is pink, readable and only shown for group thera
  const main=read('index.html');
  assert.ok(main.includes('/parents/dashboard-ui.css?v=20261128-rose-banner-2'));
  assert.ok(main.includes('/parents/report-disclaimer.js?v=20261128-group-therapy-heading-1'));
- assert.ok(main.includes('/parents/full-web.js?v=20261128-group-therapy-heading-1'));
+ assert.ok(main.includes('/parents/full-web.js?v=20261128-therapy-report-kind-1'));
  const app=read('parents/full-web.js');
  const titleSource=app.match(/function reportTitle\(kind\)\{[^}]*\}/)?.[0];
  assert.ok(titleSource);
@@ -466,4 +466,40 @@ test('therapy attendance notice is pink, readable and only shown for group thera
  assert.equal(title('psychology'),'Групповая терапия');
  assert.equal(title('morning'),'Утренний отчёт');
  assert.equal(title('evening'),'Вечерний отчёт');
+});
+
+test('automatic therapy formatting follows report kind independently of the visible heading',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const make=tag=>({tag,className:'',textContent:'',children:[],
+  append(...parts){this.children.push(...parts)},
+  appendChild(item){this.children.push(item);return item},
+  replaceChildren(...parts){this.children=[...parts]},
+  querySelector(selector){return this.children.find(child=>('.'+child.className)===selector)||null}
+ });
+ const box=make('div'),title={textContent:'Групповая терапия'};
+ const document={readyState:'loading',addEventListener(){},createElement:make,
+  body:{dataset:{screen:'screenReport',reportKind:'psychology'}},
+  getElementById(id){return id==='title'?title:id==='reportContent'?box:null}
+ };
+ const window={};
+ vm.runInNewContext(source,{window,document});
+ const f=window.MedsiPsychologyFormatter;
+ const input='Тема групповой психотерапии: "Совместный проект". Вначале занятия обсудили план. Затем разминка: игра. Далее обсуждение идей. Практическое задание: собрать макет. Активно участвовали Участник А и Участник Б. В конце занятия подвели итоги. Группа прошла спокойно.';
+ const reset=()=>{box.textContent=input;box.replaceChildren()};
+ reset();f.tryFormat();
+ assert.equal(box.children[0].className,'psych-report');
+ assert.equal(box.children[0].children[1].children.length,7);
+ title.textContent='Новый произвольный заголовок';reset();f.tryFormat();
+ assert.equal(box.children[0].className,'psych-report');
+ for(const kind of ['morning','evening']){
+  document.body.dataset.reportKind=kind;title.textContent='Групповая терапия';
+  reset();f.tryFormat();assert.equal(box.children.length,0);
+ }
+ document.body.dataset.reportKind='psychology';document.body.dataset.screen='screenChoose';
+ reset();f.tryFormat();assert.equal(box.children.length,0);
+ document.body.dataset.screen='screenReport';
+ delete document.body.dataset.reportKind;
+ for(const name of ['Психотерапия','Групповая терапия']){
+  title.textContent=name;reset();f.tryFormat();assert.equal(box.children[0].className,'psych-report');
+ }
 });

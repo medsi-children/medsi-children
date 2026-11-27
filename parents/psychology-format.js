@@ -286,15 +286,22 @@
     }
     return values.join(' ');
   }
+  function auditSource(source){
+    // The UI is allowed to expand recognized metadata labels. Compare
+    // their canonical names, while retaining every word of the note itself.
+    return String(source||'')
+      .replace(/(^|\n)\s*Тема(?: групповой психотерапии| занятия)?\s*:/giu,'$1Тема групповой психотерапии:')
+      .replace(/(^|\n)\s*Цель(?: групповой психотерапии| занятия)?\s*:/giu,'$1Цель групповой психотерапии:')
+      .replace(/^Отч[её]т\s+(?:по|о)\s+групповой\s+психотерапии[.!?]?\s*(?:\n|$)/iu,'');
+  }
   function losslessView(source,data){
-    const words=reportWords(source);
+    const words=reportWords(auditSource(source));
     if(!words.length)return false;
     const presented=[
       ...(data.meta||[]).flatMap(item=>[item.title,item.body]),
       contentOfParts(data.preface),
       ...(data.sections||[]).flatMap(section=>[
-        section.number?String(section.number):'',
-        section.title,contentOfParts(section.parts)
+        section.title==='Часть'&&section.number?'Часть '+section.number:(section.number?section.number+' '+section.title:section.title),contentOfParts(section.parts)
       ]),
       contentOfParts(data.tail)
     ].join(' ');

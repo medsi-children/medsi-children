@@ -290,7 +290,7 @@ test('ambiguous therapy prose stays untouched rather than inventing stages',()=>
 test('therapy stylesheet and script refresh in both parent report and assistant shadow root',()=>{
  const read=relative=>fs.readFileSync(path.join(__dirname,'..',relative),'utf8');
  const main=read('index.html'),assistant=read('parents/smart-bot-widget.js');
- const version='20261127-therapy-readability-1';
+ const version='20261127-therapy-lossless-1';
  for(const markup of [main,assistant]){
   assert.ok(markup.includes('/parents/psychology-format.js?v='+version));
   assert.ok(markup.includes('/parents/psychology-format.css?v='+version));

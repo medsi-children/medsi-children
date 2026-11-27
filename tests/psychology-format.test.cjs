@@ -396,3 +396,60 @@ test('therapy formatting assets refresh in parent report and assistant',()=>{
     assert.ok(markup.includes('/parents/psychology-format.css?v=20261127-therapy-compact-3'));
   }
 });
+
+
+test('therapy attendance notice is pink, readable and only shown for group therapy',()=>{
+ const read=relative=>fs.readFileSync(path.join(__dirname,'..',relative),'utf8');
+ const callbacks={};
+ const classes=new Set();
+ const banner={
+  innerHTML:'',
+  classList:{
+   add(...names){for(const name of names)classes.add(name)},
+   remove(...names){for(const name of names)classes.delete(name)},
+   contains(name){return classes.has(name)}
+  }
+ };
+ const document={
+  getElementById(id){
+   if(id==='reportDisclaimer')return banner;
+   if(['btnMorning','btnEvening','btnPsychology'].includes(id))
+     return {addEventListener(event,cb){assert.equal(event,'click');callbacks[id]=cb}};
+   return null;
+  }
+ };
+ vm.runInNewContext(read('parents/report-disclaimer.js'),{
+  document,setTimeout:cb=>{cb();return 1}
+ });
+ assert.equal(typeof callbacks.btnPsychology,'function');
+ callbacks.btnPsychology();
+ const shown=banner.innerHTML;
+ assert.ok(classes.has('report-disclaimer-psychology'));
+ assert.equal((shown.match(/class="psychology-participation-notice"/g)||[]).length,1);
+ for(const passage of [
+  'Уважаемые родители!',
+  'Если имя вашего ребёнка не упомянуто в отчёте о групповой психотерапии, это не означает, что он пропустил занятие.',
+  'Психологи обычно отмечают наиболее активных участников. Групповую терапию посещают все дети, за исключением особых случаев.',
+  'Информацию об участии в терапии или её пропуске мы также стараемся указывать в дневных отчётах.',
+  'Благодарим за понимание!',
+  'Отчёты об индивидуальной работе с вашим ребёнком вам предоставит ваш психолог.'
+ ]){
+  assert.ok(shown.includes(passage),'Missing approved text: '+passage);
+ }
+ assert.doesNotMatch(shown,/\p{Extended_Pictographic}/u,'Notice must have no emoji');
+ callbacks.btnPsychology();
+ assert.equal(banner.innerHTML,shown,'The warning must not duplicate on reentry');
+ for(const button of ['btnMorning','btnEvening']){
+  callbacks[button]();
+  assert.ok(!banner.innerHTML.includes('psychology-participation-notice'),
+    button+' must not display the group therapy notice');
+  assert.ok(!banner.innerHTML.includes('Уважаемые родители!'));
+ }
+ const css=read('parents/dashboard-ui.css');
+ assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{/);
+ assert.match(css,/\.psychology-participation-lead\{/);
+ assert.match(css,/@media\(max-width:560px\)/);
+ const main=read('index.html');
+ assert.ok(main.includes('/parents/dashboard-ui.css?v=20261127-therapy-attendance-1'));
+ assert.ok(main.includes('/parents/report-disclaimer.js?v=20261127-therapy-attendance-1'));
+});

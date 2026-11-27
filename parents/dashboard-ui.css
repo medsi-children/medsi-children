@@ -16,3 +16,59 @@ body[data-screen="screenStart"] #headerBlock,body[data-screen="screenNames"] #he
 .registration-success{padding:8px 0 4px;text-align:center}.registration-success-icon{width:58px;height:58px;margin:4px auto 16px;border-radius:50%;display:grid;place-items:center;background:linear-gradient(135deg,#58c7a4,#2da883);color:#fff;font-size:34px;font-weight:700;box-shadow:0 10px 24px rgba(45,168,131,.24)}.credential-card{margin:22px 0 18px;padding:16px 18px;border:1px solid rgba(49,116,126,.14);border-radius:18px;background:linear-gradient(145deg,#f7fcfc,#edf8f6);text-align:left}.credential-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:9px 0;color:#66838a;font-size:.9rem}.credential-row+ .credential-row{border-top:1px solid rgba(49,116,126,.1)}.credential-row strong{color:#164d56;font-size:1.06rem;letter-spacing:.06em}.credential-row.password{flex-wrap:wrap}.credential-copy{margin-left:auto;border:0;border-radius:10px;padding:7px 10px;background:#d9f0eb;color:#167b70;font:inherit;font-size:.82rem;cursor:pointer}.credential-hint{margin:0 auto 18px;max-width:390px;color:#68858a;font-size:.9rem;line-height:1.45}.credential-confirm{display:flex;align-items:center;justify-content:center;gap:9px;margin:0 0 16px;color:#315e65;font-size:.92rem;cursor:pointer}.credential-confirm input{width:18px;height:18px;accent-color:#2da883}.parent-confirm-overlay{position:fixed;inset:0;z-index:20;display:grid;place-items:center;padding:20px;background:rgba(16,58,65,.34);backdrop-filter:blur(5px)}.parent-confirm-card{width:min(100%,390px);padding:26px 22px;border-radius:24px;background:#fff;box-shadow:0 20px 60px rgba(14,63,71,.25);text-align:center}.parent-confirm-icon{width:42px;height:42px;margin:0 auto 12px;border-radius:50%;display:grid;place-items:center;background:#fff1d1;color:#bc7a12;font-size:26px;font-weight:800}.parent-confirm-card h2{margin:0 0 8px;color:#174d56;font-size:1.25rem}.parent-confirm-card p{margin:0 0 20px;color:#68858a;line-height:1.45}.parent-confirm-danger{background:#e98787!important;color:#fff!important}.parent-confirm-card .grid2{gap:10px}
 .credential-row.password{flex-wrap:nowrap}.credential-value{display:inline-flex;align-items:center;justify-content:flex-end;gap:8px;margin-left:auto}.credential-row.password strong{user-select:all;-webkit-user-select:all;cursor:text}.credential-copy{display:grid;place-items:center;flex:0 0 34px;width:34px;height:34px;margin-left:0;padding:0;border-radius:10px;transition:background-color .18s ease,color .18s ease,transform .18s ease}.credential-copy svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}.credential-copy:active{transform:scale(.94)}.credential-copy.is-copied{background:#bfe9dc;color:#14705f}
 .field-optional{margin-left:5px;color:#789399;font-size:.8em;font-weight:500}
+
+
+/* Group therapy: readable pink attendance explanation, scoped to this report. */
+.report-disclaimer.report-disclaimer-psychology{
+  background:linear-gradient(135deg,#fff0f5 0%,#ffe3ee 53%,#ffd7e6 100%);
+  color:#603248!important;
+  border:1px solid rgba(185,79,124,.32);
+  box-shadow:0 14px 32px rgba(180,82,124,.16);
+  font-size:.96rem!important;
+  line-height:1.55;
+}
+.report-disclaimer.report-disclaimer-psychology>strong{
+  color:#96345f;
+  font-size:1.04rem;
+  font-weight:850;
+}
+.report-disclaimer-psychology .chat-note-item:before{color:#b64d7e}
+.report-disclaimer-psychology .psychology-participation-notice{
+  margin-top:15px;
+  padding:15px 17px;
+  border:1px solid rgba(194,79,131,.30);
+  border-left:4px solid #ca6092;
+  border-radius:15px;
+  background:linear-gradient(135deg,rgba(255,255,255,.88),rgba(255,242,248,.86));
+  box-shadow:0 5px 18px rgba(166,75,116,.07);
+}
+.report-disclaimer-psychology .psychology-participation-notice>strong{
+  display:block;
+  margin:0 0 9px;
+  color:#8c2c58;
+  font-size:1.07rem;
+  line-height:1.35;
+  font-weight:850;
+}
+.report-disclaimer-psychology .psychology-participation-notice p{
+  margin:0 0 10px;
+  color:#593347;
+  font-size:.98rem;
+  line-height:1.58;
+  font-weight:580;
+}
+.report-disclaimer-psychology .psychology-participation-notice .psychology-participation-lead{
+  color:#6c2c4b;
+  font-weight:740;
+}
+.report-disclaimer-psychology .psychology-participation-notice .psychology-participation-thanks{
+  margin-bottom:0;
+  color:#873358;
+  font-weight:820;
+}
+@media(max-width:560px){
+  .report-disclaimer.report-disclaimer-psychology{padding:13px 14px;font-size:.93rem!important}
+  .report-disclaimer-psychology .psychology-participation-notice{margin-top:13px;padding:13px 14px}
+  .report-disclaimer-psychology .psychology-participation-notice>strong{font-size:1.04rem}
+  .report-disclaimer-psychology .psychology-participation-notice p{font-size:.96rem;line-height:1.56}
+}

@@ -101,6 +101,13 @@
       else if(/^Группа прошла(?=\s|[.,:;!?]|$)/iu.test(piece))title='Итоги';
       else if(/^Затем(?=\s|[.,:;!?]|$)/iu.test(piece))title='Ход занятия';
       const parts=bodyParts(piece);
+      // Short transitions contain no independent observation. Preserve their
+      // words in the preceding step instead of creating a one-line timeline
+      // entry such as "Далее обсуждение.".
+      if(steps.length&&/^Далее\\s+(?:обсуждение|беседа|рефлексия)[.!?]?$/iu.test(piece)){
+        steps[steps.length-1].parts.push(...parts);
+        continue;
+      }
       if(steps.length&&steps[steps.length-1].title===title)steps[steps.length-1].parts.push(...parts);
       else steps.push({number:'',title,parts});
     }
@@ -262,11 +269,70 @@
     flushParagraph();flushBullet();return out;
   }
   function appendParts(parent,parts){parts.forEach(part=>{if(part.type==='heading'){const h=document.createElement('h4');h.className='psych-subheading';h.textContent=part.text;parent.appendChild(h);return}if(part.type==='list'){const ul=document.createElement('ul');ul.className='psych-list';part.items.forEach(v=>{const li=document.createElement('li');li.textContent=v;ul.appendChild(li)});parent.appendChild(ul);return}if(part.type==='sub'){const box=document.createElement('div');box.className='psych-subsection';const h=document.createElement('div');h.className='psych-subheading';h.textContent=part.title;const p=document.createElement('p');p.textContent=part.text;box.append(h,p);parent.appendChild(box);return}const p=document.createElement('p');p.className='psych-paragraph';p.textContent=part.text;parent.appendChild(p)})}
+
+  // All author-written words must survive the pretty formatter, in order.
+  // Generated visual headings may add labels, but they cannot stand in for
+  // missing observations. A failed check always displays the exact source.
+  function reportWords(value){
+    return String(value||'').normalize('NFKC').toLocaleLowerCase('ru-RU')
+      .match(/[\p{L}\p{N}]+/gu)||[];
+  }
+  function contentOfParts(parts){
+    const values=[];
+    for(const part of parts||[]){
+      if(part.type==='list')values.push(...(part.items||[]));
+      else if(part.type==='sub')values.push(part.title||'',part.text||'');
+      else values.push(part.text||'');
+    }
+    return values.join(' ');
+  }
+  function losslessView(source,data){
+    const words=reportWords(source);
+    if(!words.length)return false;
+    const presented=[
+      ...(data.meta||[]).flatMap(item=>[item.title,item.body]),
+      contentOfParts(data.preface),
+      ...(data.sections||[]).flatMap(section=>[
+        section.number?String(section.number):'',
+        section.title,contentOfParts(section.parts)
+      ]),
+      contentOfParts(data.tail)
+    ].join(' ');
+    const shown=reportWords(presented);
+    let cursor=0;
+    for(const word of words){
+      while(cursor<shown.length&&shown[cursor]!==word)cursor++;
+      if(cursor===shown.length)return false;
+      cursor++;
+    }
+    return true;
+  }
+  function showExactSource(container,source){
+    const root=document.createElement('div');
+    root.className='psych-report psych-report-source-only';
+    const content=document.createElement('div');
+    content.className='psych-source-content';
+    content.textContent=source;
+    root.appendChild(content);
+    container.replaceChildren(root);
+    return true;
+  }
+  function addOriginalText(root,source){
+    const details=document.createElement('details');
+    details.className='psych-source-details';
+    const summary=document.createElement('summary');
+    summary.textContent='Показать полный исходный текст';
+    const content=document.createElement('div');
+    content.className='psych-source-content';
+    content.textContent=source;
+    details.append(summary,content);
+    root.appendChild(details);
+  }
   function isRedundantDocumentTitle(part){return part&&part.type==='p'&&/^отч[её]т\s+(?:по|о)\s+групповой\s+психотерапии[.!?]?$/i.test(String(part.text||'').trim())}
-  function render(container,v){if(!container)return false;const data=parse(v);const visibleTail=data.tail.filter(part=>!isRedundantDocumentTitle(part));if(!data.meta.length&&!data.sections.length){const fallback=plainParts(v);if(fallback.length<2){container.textContent=normalize(v).replace(/\[\[ARROW\]\]/g,' ');return false}const formatted=document.createElement('div');formatted.className='psych-report psych-report-plain';appendParts(formatted,fallback);container.replaceChildren(formatted);return true}const root=document.createElement('div');root.className='psych-report';if(data.meta.length){const intro=document.createElement('section');intro.className='psych-intro';data.meta.forEach(item=>{const row=document.createElement('div');row.className='psych-intro-row';const l=document.createElement('div');l.className='psych-intro-label';l.textContent=item.title;const val=document.createElement('div');val.className='psych-intro-value';val.textContent=item.body;row.append(l,val);intro.appendChild(row)});root.appendChild(intro)}if(data.preface&&data.preface.length){const before=document.createElement('section');before.className='psych-preface';appendParts(before,data.preface.filter(part=>!isRedundantDocumentTitle(part)));root.appendChild(before)}if(data.sections.length){const flow=document.createElement('div');flow.className='psych-flow';data.sections.forEach((section,i)=>{const item=document.createElement('section');item.className='psych-step';const rail=document.createElement('div');rail.className='psych-step-rail';const n=document.createElement('div');n.className='psych-step-number';n.textContent=(section.number||String(i+1))+'.';rail.appendChild(n);const body=document.createElement('div');body.className='psych-step-body';const h=document.createElement('h3');h.className='psych-step-title';h.textContent=section.title;body.appendChild(h);appendParts(body,section.parts);item.append(rail,body);flow.appendChild(item)});root.appendChild(flow)}if(visibleTail.length){const tail=document.createElement('section');tail.className='psych-tail';appendParts(tail,visibleTail);root.appendChild(tail)}container.replaceChildren(root);return true}
+  function render(container,v){if(!container)return false;const source=String(v||'');const data=parse(source);if(!losslessView(source,data))return showExactSource(container,source);const visibleTail=data.tail.filter(part=>!isRedundantDocumentTitle(part));if(!data.meta.length&&!data.sections.length){const fallback=plainParts(v);if(fallback.length<2){return showExactSource(container,source)}const formatted=document.createElement('div');formatted.className='psych-report psych-report-plain';appendParts(formatted,fallback);container.replaceChildren(formatted);return true}const root=document.createElement('div');root.className='psych-report';if(data.meta.length){const intro=document.createElement('section');intro.className='psych-intro';data.meta.forEach(item=>{const row=document.createElement('div');row.className='psych-intro-row';const l=document.createElement('div');l.className='psych-intro-label';l.textContent=item.title;const val=document.createElement('div');val.className='psych-intro-value';val.textContent=item.body;row.append(l,val);intro.appendChild(row)});root.appendChild(intro)}if(data.preface&&data.preface.length){const before=document.createElement('section');before.className='psych-preface';appendParts(before,data.preface.filter(part=>!isRedundantDocumentTitle(part)));root.appendChild(before)}if(data.sections.length){const flow=document.createElement('div');flow.className='psych-flow';data.sections.forEach((section,i)=>{const item=document.createElement('section');item.className='psych-step';const rail=document.createElement('div');rail.className='psych-step-rail';const n=document.createElement('div');n.className='psych-step-number';n.textContent=(section.number||String(i+1))+'.';rail.appendChild(n);const body=document.createElement('div');body.className='psych-step-body';const h=document.createElement('h3');h.className='psych-step-title';h.textContent=section.title;body.appendChild(h);appendParts(body,section.parts);item.append(rail,body);flow.appendChild(item)});root.appendChild(flow)}if(visibleTail.length){const tail=document.createElement('section');tail.className='psych-tail';appendParts(tail,visibleTail);root.appendChild(tail)}addOriginalText(root,source);container.replaceChildren(root);return true}
   function isPsych(){const title=document.getElementById('title');return document.body.dataset.screen==='screenReport'&&title&&/психотерап/i.test(title.textContent||'')}
   function tryFormat(){const box=document.getElementById('reportContent');if(!box||!isPsych()||box.querySelector('.psych-report')||box.querySelector('.report-loading'))return;const text=box.textContent||'';if(text.trim())render(box,text)}
   function start(){const box=document.getElementById('reportContent');if(!box)return;new MutationObserver(()=>setTimeout(tryFormat,0)).observe(box,{childList:true,subtree:true,characterData:true});document.getElementById('btnPsychology')?.addEventListener('click',()=>setTimeout(tryFormat,0));tryFormat()}
-  window.MedsiPsychologyFormatter={parse,plainParts,render,tryFormat};
+  window.MedsiPsychologyFormatter={parse,plainParts,losslessView,render,tryFormat};
   if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();

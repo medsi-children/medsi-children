@@ -218,3 +218,81 @@ test('existing explicitly headed therapy sections stay intact and do not steal p
  assert.match(body,/Участник А объяснял/);
  assert.match(body,/Все молодцы/);
 });
+
+
+test('long quoted therapy topic uses full-width content and preserves activity chronology',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const node=tag=>({
+  tag,className:'',textContent:'',children:[],
+  append(...items){this.children.push(...items)},
+  appendChild(item){this.children.push(item);return item},
+  replaceChildren(...items){this.children=[...items]}
+ });
+ const window={};
+ const document={readyState:'loading',addEventListener(){},createElement:node};
+ vm.runInNewContext(source,{window,document});
+ const formatter=window.MedsiPsychologyFormatter;
+ // Entirely fictional group session, with the same structural problem as a
+ // prose-heavy topic field: test data must never contain real patient notes.
+ const phrases=[
+  'Вначале занятия участники оценили настроение по шкале.',
+  'Затем разминка: участники отвечали на нейтральные вопросы.',
+  'Далее обсуждение того, что помогает услышать другого.',
+  'Практическое задание: придумать три поддерживающие фразы.',
+  'Далее обсуждение примеров.',
+  'Активно участвовали Участник А и Участник Б. Участник В задавал уточняющие вопросы.',
+  'В конце занятия дали задание вести заметки.',
+  'Группа прошла спокойно.'
+ ];
+ const raw='Тема групповой психотерапии: "Навыки конструктивного диалога". '+phrases.join(' ');
+ const parsed=formatter.parse(raw);
+ assert.deepEqual(Array.from(parsed.meta.map(item=>item.title)),['Тема групповой психотерапии']);
+ assert.equal(parsed.meta[0].body,'"Навыки конструктивного диалога"');
+ assert.deepEqual(Array.from(parsed.sections.map(step=>step.title)),[
+  'Начало занятия','Разминка','Обсуждение','Практическая часть',
+  'Обсуждение','Наблюдения за участниками','Завершение','Итоги'
+ ]);
+ const body=parsed.sections.flatMap(step=>step.parts.map(part=>part.text||'')).join(' ');
+ for(const phrase of phrases){
+  assert.ok(body.includes(phrase),phrase);
+  assert.equal(body.split(phrase).length-1,1,'Each synthetic source sentence must appear once');
+ }
+ const container=node('div');
+ assert.equal(formatter.render(container,raw),true);
+ const root=container.children[0];
+ assert.equal(root.children[0].className,'psych-intro');
+ const introRow=root.children[0].children[0];
+ assert.equal(introRow.children[0].textContent,'Тема групповой психотерапии');
+ assert.equal(introRow.children[1].textContent,'"Навыки конструктивного диалога"');
+ assert.equal(root.children[1].className,'psych-flow');
+ const css=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.css'),'utf8');
+ assert.match(css,/\.psych-intro-row\{[^}]*grid-template-columns:minmax\(0,1fr\)/);
+ assert.doesNotMatch(css,/\.psych-intro-row\{[^}]*grid-template-columns:minmax\(180px/);
+ assert.match(css,/\.psych-intro-value\{[^}]*overflow-wrap:break-word/);
+});
+
+test('ambiguous therapy prose stays untouched rather than inventing stages',()=>{
+ const source=fs.readFileSync(path.join(__dirname,'../parents/psychology-format.js'),'utf8');
+ const window={},document={readyState:'loading',addEventListener(){}};
+ vm.runInNewContext(source,{window,document});
+ const format=window.MedsiPsychologyFormatter;
+ const short='Тема: "Общение". Вначале занятия участники поделились мыслями.';
+ const parsed=format.parse(short);
+ assert.equal(parsed.meta.length,1);
+ assert.equal(parsed.meta[0].body,'"Общение". Вначале занятия участники поделились мыслями.');
+ assert.equal(parsed.sections.length,0);
+ const unquoted='Тема: Сотрудничество. На занятии ребята обсуждали правила взаимодействия.';
+ const free=format.parse(unquoted);
+ assert.equal(free.meta[0].body,'Сотрудничество. На занятии ребята обсуждали правила взаимодействия.');
+ assert.equal(free.sections.length,0);
+});
+
+test('therapy stylesheet and script refresh in both parent report and assistant shadow root',()=>{
+ const read=relative=>fs.readFileSync(path.join(__dirname,'..',relative),'utf8');
+ const main=read('index.html'),assistant=read('parents/smart-bot-widget.js');
+ const version='20261127-therapy-readability-1';
+ for(const markup of [main,assistant]){
+  assert.ok(markup.includes('/parents/psychology-format.js?v='+version));
+  assert.ok(markup.includes('/parents/psychology-format.css?v='+version));
+ }
+});

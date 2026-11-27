@@ -449,7 +449,9 @@ test('therapy attendance notice is pink, readable and only shown for group thera
  assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{/);
  assert.match(css,/\.psychology-participation-lead\{/);
  assert.match(css,/@media\(max-width:560px\)/);
+ assert.match(css,/\.report-disclaimer\.report-disclaimer-psychology\{[^}]*padding:9px 11px;[^}]*font-size:\.80rem!important;[^}]*line-height:1\.32;/);
+ assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{[^}]*border:0;[^}]*background:transparent;/);
  const main=read('index.html');
- assert.ok(main.includes('/parents/dashboard-ui.css?v=20261127-therapy-attendance-1'));
+ assert.ok(main.includes('/parents/dashboard-ui.css?v=20261127-therapy-attendance-compact-2'));
  assert.ok(main.includes('/parents/report-disclaimer.js?v=20261127-therapy-attendance-1'));
 });

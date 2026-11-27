@@ -116,3 +116,13 @@ test('slower menu prefetch never overwrites a newer confirmed report',async()=>{
   assert.equal(await old,null);
   assert.equal(env.reportCache.psychology.text,'Новый отчёт');
 });
+
+test('opening or refreshing reports exposes their actual kind to the formatter',async()=>{
+ const {ctx}=screenHarness();
+ for(const kind of ['psychology','morning','evening']){
+  await ctx.openReport(kind);
+  assert.equal(ctx.document.body.dataset.reportKind,kind);
+  await ctx.openReport(kind,true);
+  assert.equal(ctx.document.body.dataset.reportKind,kind);
+ }
+});

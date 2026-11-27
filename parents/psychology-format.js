@@ -321,7 +321,8 @@
     const root=document.createElement('div');
     root.className='psych-report psych-report-natural';
     let narrative=source;
-    const heading=/^\s*(?:Тема(?: групповой психотерапии| занятия)?)\s*:\s*([«"][^»"\n]{3,180}[»"])[.!?]?\s*/iu.exec(source);
+    const heading=/^\s*(?:Тема(?: групповой психотерапии| занятия)?)\s*:\s*([«"][^»"\n]{3,180}[»"])[.!?]?\s*/iu.exec(source)
+      ||/^\s*(?:Тема(?: групповой психотерапии| занятия)?)\s*:\s*([^\n]{3,160})\n+/iu.exec(source);
     if(heading){
       const intro=document.createElement('section');intro.className='psych-intro';
       const row=document.createElement('div');row.className='psych-intro-row';

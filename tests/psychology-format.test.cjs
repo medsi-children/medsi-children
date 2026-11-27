@@ -290,7 +290,7 @@ test('ambiguous therapy prose stays untouched rather than inventing stages',()=>
 test('therapy stylesheet and script refresh in both parent report and assistant shadow root',()=>{
  const read=relative=>fs.readFileSync(path.join(__dirname,'..',relative),'utf8');
  const main=read('index.html'),assistant=read('parents/smart-bot-widget.js');
- const version='20261127-therapy-readable-2';
+ const version='20261127-therapy-compact-3';
  for(const markup of [main,assistant]){
   assert.ok(markup.includes('/parents/psychology-format.js?v='+version));
   assert.ok(markup.includes('/parents/psychology-format.css?v='+version));
@@ -392,7 +392,7 @@ test('uncertain therapy parsing still renders an elegant complete report',()=>{
 test('therapy formatting assets refresh in parent report and assistant',()=>{
   const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
   for(const markup of [read('index.html'),read('parents/smart-bot-widget.js')]){
-    assert.ok(markup.includes('/parents/psychology-format.js?v=20261127-therapy-readable-2'));
-    assert.ok(markup.includes('/parents/psychology-format.css?v=20261127-therapy-readable-2'));
+    assert.ok(markup.includes('/parents/psychology-format.js?v=20261127-therapy-compact-3'));
+    assert.ok(markup.includes('/parents/psychology-format.css?v=20261127-therapy-compact-3'));
   }
 });

@@ -11,10 +11,10 @@ import {createPostgresSql} from '../src/connection.mjs';
 import {createDoctorsRouter} from '../app/doctors-router.mjs';
 import {createDoctorsPlans,selectCurrentPlans} from '../app/doctors-plans.mjs';
 import {createDoctorsLocalDates} from '../app/doctors-local-dates.mjs';
-import {createDoctorsDiskRead,candidateFolder,candidateRootPlan,chooseReadOnlyPlan,nearAdmission} from '../app/doctors-disk-read.mjs';
+import {createDoctorsDiskRead,candidateFolder,candidateRootPlan,chooseReadOnlyPlan,nearAdmission,collectNestedPlans} from '../app/doctors-disk-read.mjs';
 import {smartWritePolicy} from '../app/doctors-smart-write.mjs';
 import {doctorNameParts,doctorNameOptions,createDoctorNameMatcher,resolveDoctorFolder} from '../app/doctors-names.mjs';
-import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath} from '../app/doctors-disk.mjs';
+import {createDoctorsDisk,DOCTORS_TEST_ROOT,directDiskChild,validDiskRoot,diskVersion,verifyDiskBytes,testDiskWriteEnabled,diskWritePolicy,allowedPlanWritePath,allowedSmartPlanWritePath,MAX_PLAN_SUBFOLDER_DEPTH} from '../app/doctors-disk.mjs';
 import {createGreenwoodSource,decodeGreenwood} from '../app/doctors-greenwood.mjs';
 import {createDoctorsRoster} from '../app/doctors-roster.mjs';
 import {readPlanDates,updatePlanDischarge} from '../app/doctors-xlsx.mjs';
@@ -777,15 +777,17 @@ test('doctor edit writes verified folder and root plans, ignores older and unrel
   t.after(()=>pool.end());
   const sql=createPostgresSql(pool),root='disk:/',folder=root+'Тестов Пациент',id='synthetic-'+randomUUID();
   const patient={id,childName:'Тестов Пациент',episode:'2024-02-01',registry:true,registryDischarge:'2024-02-10'};
-  const ordinary=folder+'/План.xlsx',final=folder+'/План итог.xlsx',named=root+'План Тестов.xlsx',
-    old=folder+'/План старый.xlsx',wrong=folder+'/План чужой.xlsx';
+  const nested=folder+'/Ноябрь',deep=nested+'/Документы';
+  const ordinary=folder+'/План.xlsx',final=deep+'/План итог.xlsx',named=root+'План Тестов.xlsx',
+    old=nested+'/План старый.xlsx',wrong=deep+'/План чужой.xlsx';
   const records=new Map([[ordinary,book('01.02.2024')],[final,book('01.02.2024-16.02.2024')],
     [named,book('01.02.2024-14.02.2024')],[old,book('01.01.2024-16.01.2024')],
     [wrong,book('01.02.2024-18.02.2024','Другой Пациент')]]);
   const stat=path=>({type:'file',name:path.split('/').at(-1),path,sha256:hash(records.get(path)),modified:'2024-02-05T00:00:00Z'});
   const writes=[],backups=new Map();
-  const disk={async list(path){return path===root?[{type:'dir',name:'Тестов Пациент',path:folder},stat(named)]:
-    [...records.keys()].filter(p=>p.startsWith(path+'/')).map(stat);},
+  const dir=path=>({type:'dir',path,name:path.split('/').at(-1)});
+  const disk={async list(path){return path===root?[dir(folder),stat(named)]:
+    [...[nested,deep].map(dir),...[...records.keys()].map(stat)].filter(item=>directDiskChild(path,item));},
     async stat(path){return stat(path);},async download(path){return records.get(path);},
     async upload(path,bytes){assert.ok(backups.size>=6);writes.push(path);records.set(path,bytes);}};
   const storage={configured:true,async hasObject(key){return backups.has(key);},
@@ -898,4 +900,56 @@ test('one-day admission mismatch is only an unconfirmed read candidate, never a 
   assert.ok(!nearAdmission({...plan,admission:'2024-02-03'},patient,parts,identities,matcher));
   assert.ok(!nearAdmission({...plan,patient:'Тестов Другой'},patient,parts,identities,matcher));
   assert.ok(!nearAdmission(plan,patient,parts,[...identities,{p:{...patient,id:'duplicate'},options:parts}],matcher));
+});
+
+test('nested scanner finds generic final plans, rejects unrelated episodes, and does not certify partial searches',async()=>{
+  const root='disk:/',folder=root+'Тестов Пациент',nested=folder+'/2024',deep=nested+'/Документы',archive=folder+'/Архив',template=folder+'/Шаблон';
+  const current=deep+'/План итог.xlsx',old=archive+'/План итог.xlsx',wrong=deep+'/План другой.xlsx',ordinary=folder+'/План.xlsx',ignored=template+'/План итог.xlsx';
+  const files=new Map([[current,book('01.02.2024-23.02.2024')],[old,book('01.01.2024-17.01.2024')],[wrong,book('01.02.2024-28.02.2024','Другой Пациент')],[ordinary,book('01.02.2024-15.02.2024')],[ignored,book('01.02.2024-29.02.2024')]]);
+  const dir=path=>({type:'dir',path,name:path.split('/').at(-1)});
+  const stat=path=>({type:'file',path,name:path.split('/').at(-1),sha256:hash(files.get(path))});
+  let fail=false;
+  const visited=[];
+  const disk={async list(path){
+    visited.push(path);if(path===deep&&fail)throw Error('unavailable');
+    return [...[folder,nested,deep,archive,template].map(dir),...[...files.keys()].map(stat)].filter(item=>directDiskChild(path,item));
+  },async stat(path){return stat(path);},async download(path){assert.notEqual(path,ignored);return files.get(path);}};
+  const patient={id:'nested',childName:'Тестов Пациент',episode:'2024-02-01'};
+  const run=async()=>{
+    const scanner=createDoctorsDiskRead({env:{DOCTORS_DISK_ROOT:root,DOCTORS_GREENWOOD_SHEET_ID:'synthetic'},disk,listPatients:async()=>[patient]});
+    await scanner.start();scanner.stop();return {result:scanner.get(patient.id,patient.episode),issues:scanner.diagnostics().issues};
+  };
+  const first=await run();
+  assert.equal(first.result.discharge,'2024-02-23');
+  assert.deepEqual(new Set(first.result.targets.map(t=>t.path)),new Set([ordinary,current]));
+  assert.equal(first.issues.nestedFoldersRead,3);
+  assert.equal(first.issues.nestedPlansFound,3);
+  assert.equal(first.issues.otherEpisode,1);
+  assert.equal(first.issues.patientMismatch,1);
+  assert.ok(!visited.includes(template));
+  fail=true;
+  const incomplete=await run();
+  assert.equal(incomplete.result.status,'incomplete');
+  assert.equal(incomplete.result.discharge,null);
+  assert.equal(incomplete.result.writeReady,false);
+  assert.equal(incomplete.issues.folderRead,1);
+});
+test('nested depth and smart write paths share the same boundary',async()=>{
+  const root='disk:/',folder=root+'Тестов Пациент',counts={};
+  let depth=0;
+  const result=await collectNestedPlans(folder,async path=>{
+    depth++;
+    return [{type:'dir',name:'Вложенная',path:path+'/Вложенная'}];
+  },counts);
+  assert.equal(depth,MAX_PLAN_SUBFOLDER_DEPTH+1);
+  assert.equal(result.incomplete,true);
+  assert.equal(counts.nestedFolderLimit,1);
+  const limit=folder+'/Вложенная'.repeat(MAX_PLAN_SUBFOLDER_DEPTH);
+  assert.equal(allowedSmartPlanWritePath(root,limit+'/План.xlsx'),true);
+  assert.equal(allowedSmartPlanWritePath(root,limit+'/Ещё/План.xlsx'),false);
+  assert.equal(allowedSmartPlanWritePath(root,folder+'/../План.xlsx'),false);
+  assert.equal(allowedSmartPlanWritePath(root,folder+'/Шаблон/План.xlsx'),false);
+  assert.equal(allowedSmartPlanWritePath(root,folder+'/medsi-doctors-test/План.xlsx'),false);
+  assert.equal(allowedSmartPlanWritePath('disk:/Рабочая',folder+'/План.xlsx'),false);
+  assert.equal(allowedPlanWritePath(root,folder+'/Вложенная/План.xlsx'),false);
 });

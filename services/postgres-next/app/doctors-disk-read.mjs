@@ -1,4 +1,4 @@
-import {createDoctorsDisk,validDiskRoot,directDiskChild,diskVersion,verifyDiskBytes,isPlan} from './doctors-disk.mjs';
+import {createDoctorsDisk,validDiskRoot,directDiskChild,diskVersion,verifyDiskBytes,isPlan,MAX_PLAN_SUBFOLDER_DEPTH,excludedPlanSegment} from './doctors-disk.mjs';
 import {readPlanDates,validIsoDate} from './doctors-xlsx.mjs';
 import {doctorNameOptions,createDoctorNameMatcher} from './doctors-names.mjs';
 import {fullName} from './doctors-roster.mjs';
@@ -77,6 +77,37 @@ export function candidateRootPlan(name,options){
   const tokens=fullName(name).match(/\p{L}+(?:-\p{L}+)*/gu)||[];
   return options.some(parts=>parts.slice(0,2).some(word=>word.length>=4&&tokens.includes(word)));
 }
+// Walk only descendants of a matched patient folder. Partial traversals
+// must never certify a date or enqueue a write from an incomplete file set.
+export async function collectNestedPlans(folder,list,counts,stopped=()=>false){
+  const queue=[{path:folder,depth:0}],seen=new Set([folder]),plans=[];
+  let incomplete=false;
+  for(let index=0;index<queue.length;index++){
+    if(stopped())return {plans:[],incomplete:true};
+    const {path,depth}=queue[index];
+    let items;
+    try{items=await list(path);}
+    catch{increment(counts,'folderRead');incomplete=true;continue;}
+    if(depth>0)increment(counts,'nestedFoldersRead');
+    for(const item of items){
+      if(!directDiskChild(path,item)||excludedPlanSegment(item.name))continue;
+      if(item.type==='dir'){
+        if(seen.has(item.path))continue;
+        if(depth>=MAX_PLAN_SUBFOLDER_DEPTH||queue.length>=256){
+          increment(counts,'nestedFolderLimit');incomplete=true;continue;
+        }
+        seen.add(item.path);queue.push({path:item.path,depth:depth+1});
+      }else if(isPlan(item)){
+        if(plans.length>=1000){
+          increment(counts,'folderLimit');return {plans,incomplete:true};
+        }
+        plans.push(item);
+        if(depth>0)increment(counts,'nestedPlansFound');
+      }
+    }
+  }
+  return {plans,incomplete};
+}
 export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,storage,now=Date.now}){
   const root=env.DOCTORS_DISK_ROOT;
   const policy=sql?smartWritePolicy(env,storage):null;
@@ -109,11 +140,15 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
       const identities=patients.map(p=>({p,options:doctorNameOptions(p.childName)}));
       const rootItems=await source.list(root);
       const folders=rootItems.filter(x=>x.type==='dir'&&directDiskChild(root,x)&&
-        x.path!=='disk:/medsi-doctors-test'&&!excluded(x.name));
-      const rootPlans=rootItems.filter(x=>isPlan(x)&&directDiskChild(root,x)&&!/образец|шаблон/iu.test(x.name));
+        !excludedPlanSegment(x.name)&&!excluded(x.name));
+      const rootPlans=rootItems.filter(x=>isPlan(x)&&directDiskChild(root,x)&&!excludedPlanSegment(x.name));
       stats.patients=patients.length;
       stats.withCandidateDischarge=0;
       const folderCache=new Map();
+      const listFolder=async path=>{
+        if(!folderCache.has(path))folderCache.set(path,await source.list(path));
+        return folderCache.get(path);
+      };
       for(const {p,options} of identities){
         if(stopped)return;
         let result={status:'noCurrentPlan',discharge:null};
@@ -136,11 +171,12 @@ export function createDoctorsDiskRead({env,listPatients,nameVariants,disk,sql,st
             try{
               if(folder.root)items=rootCandidates;
               else{
-                if(!folderCache.has(folder.path))folderCache.set(folder.path,await source.list(folder.path));
-                items=folderCache.get(folder.path).filter(x=>isPlan(x)&&directDiskChild(folder.path,x)&&!/образец|шаблон/iu.test(x.name));
+                const found=await collectNestedPlans(folder.path,listFolder,counts,()=>stopped);
+                items=found.plans;
+                incomplete||=found.incomplete;
               }
             }catch{increment(counts,'folderRead');incomplete=true;continue;}
-            if(items.length>100){increment(counts,'folderLimit');incomplete=true;continue;}
+            if(items.length>1000){increment(counts,'folderLimit');incomplete=true;continue;}
             for(const file of items){
               if(stopped)return;
               const version=diskVersion(file);

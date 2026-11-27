@@ -76,13 +76,18 @@ async function bodyBytes(response) {
   return Buffer.concat(chunks,size);
 }
 
+// Same depth bound for discovery and the smart writer. The legacy writer
+// keeps its original direct-child-only scope.
+export const MAX_PLAN_SUBFOLDER_DEPTH=6;
+export const excludedPlanSegment=name=>name.toLowerCase()==='medsi-doctors-test'||/образец|шаблон/iu.test(name);
 export function allowedSmartPlanWritePath(root,path){
-  if(allowedPlanWritePath(root,path))return !/образец|шаблон/iu.test(path.split('/').at(-1));
   if(!validDiskRoot(root)||!validDiskRoot(path))return false;
   const prefix=root==='disk:/'?root:root+'/';
   if(!path.startsWith(prefix))return false;
-  const name=path.slice(prefix.length);
-  return safeSegment(name)&&isPlan({type:'file',name})&&!/образец|шаблон/iu.test(name);
+  const segments=path.slice(prefix.length).split('/');
+  return segments.length<=MAX_PLAN_SUBFOLDER_DEPTH+2 &&
+    segments.every(name=>safeSegment(name)&&!excludedPlanSegment(name))&&
+    isPlan({type:'file',name:segments.at(-1)});
 }
 export function createDoctorsDisk(token, request=fetch, {writeRoot=null,allowRootPlans=false}={}) {
   async function api(endpoint, params) {

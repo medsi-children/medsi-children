@@ -364,7 +364,7 @@
     const unread=refreshChatUnreadFromD1();
     const pending=Promise.allSettled([bootstrap,chat,unread]).finally(()=>{if(menuPending===pending)menuPending=null});menuPending=pending;return pending;
   }
-  function reportTitle(kind){return kind==='morning'?'Утренний отчёт':kind==='evening'?'Вечерний отчёт':'Психотерапия'}
+  function reportTitle(kind){return kind==='morning'?'Утренний отчёт':kind==='evening'?'Вечерний отчёт':'Групповая терапия'}
   function normalizeBlock(v){return String(v||'').replace(/\s+/g,' ').trim()}
   function dedupeExactReport(text){const raw=String(text||'').trim();if(!raw)return raw;const blocks=raw.split(/\n\s*\n+/).map(x=>x.trim()).filter(Boolean);if(blocks.length>1){const seen=new Set(),unique=[];for(const block of blocks){const key=normalizeBlock(block);if(!key||seen.has(key))continue;seen.add(key);unique.push(block)}if(unique.length<blocks.length)return unique.join('\n\n')}const lines=raw.split(/\n+/).map(x=>x.trim()).filter(Boolean);if(lines.length===2&&normalizeBlock(lines[0])===normalizeBlock(lines[1]))return lines[0];return raw}
   function hideReportBadge(kind){setBadge(kind==='morning'?'morningReportBadge':kind==='evening'?'eveningReportBadge':'psychologyReportBadge',false)}

@@ -431,10 +431,12 @@ test('therapy attendance notice is pink, readable and only shown for group thera
   'Если имя вашего ребёнка не упомянуто в отчёте о групповой психотерапии, это не означает, что он пропустил занятие.',
   'Психологи обычно отмечают наиболее активных участников. Групповую терапию посещают все дети, за исключением особых случаев.',
   'Информацию об участии в терапии или её пропуске мы также стараемся указывать в дневных отчётах.',
-  'Благодарим за понимание!',
-  'Отчёты об индивидуальной работе с вашим ребёнком вам предоставит ваш психолог.'
+  'Благодарим за понимание!'
  ]){
   assert.ok(shown.includes(passage),'Missing approved text: '+passage);
+ }
+ for(const removed of ['<strong>Групповая психотерапия</strong>','Здесь вы можете прочесть отчёт с групповой психотерапии.','Отчёты об индивидуальной работе с вашим ребёнком вам предоставит ваш психолог.','chat-note-list']){
+  assert.ok(!shown.includes(removed),'Removed introduction must not be shown: '+removed);
  }
  assert.doesNotMatch(shown,/\p{Extended_Pictographic}/u,'Notice must have no emoji');
  callbacks.btnPsychology();
@@ -450,8 +452,16 @@ test('therapy attendance notice is pink, readable and only shown for group thera
  assert.match(css,/\.psychology-participation-lead\{/);
  assert.match(css,/@media\(max-width:560px\)/);
  assert.match(css,/\.report-disclaimer\.report-disclaimer-psychology\{[^}]*padding:9px 11px;[^}]*font-size:\.80rem!important;[^}]*line-height:1\.32;/);
- assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{[^}]*border:0;[^}]*background:transparent;/);
+ assert.match(css,/\.report-disclaimer-psychology \.psychology-participation-notice\{[^}]*margin:0;[^}]*padding:0;[^}]*border:0;[^}]*background:transparent;/);
  const main=read('index.html');
- assert.ok(main.includes('/parents/dashboard-ui.css?v=20261127-therapy-attendance-compact-2'));
- assert.ok(main.includes('/parents/report-disclaimer.js?v=20261127-therapy-attendance-1'));
+ assert.ok(main.includes('/parents/dashboard-ui.css?v=20261128-group-therapy-heading-1'));
+ assert.ok(main.includes('/parents/report-disclaimer.js?v=20261128-group-therapy-heading-1'));
+ assert.ok(main.includes('/parents/full-web.js?v=20261128-group-therapy-heading-1'));
+ const app=read('parents/full-web.js');
+ const titleSource=app.match(/function reportTitle\(kind\)\{[^}]*\}/)?.[0];
+ assert.ok(titleSource);
+ const title=vm.runInNewContext(titleSource+';reportTitle');
+ assert.equal(title('psychology'),'Групповая терапия');
+ assert.equal(title('morning'),'Утренний отчёт');
+ assert.equal(title('evening'),'Вечерний отчёт');
 });

@@ -24,7 +24,7 @@
   <link rel="stylesheet" href="/parents/home-card-concept-v4.css?v=20261105-parent-home-v4-1">
   <script defer src="/parents/install-prompt.js?v=20261022-3"></script>
   <link rel="preload" as="image" href="/parents/blob.webp" fetchpriority="high">
-  <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261119-contacts-1">
+  <link rel="preload" as="script" href="/parents/smart-bot-widget.js?v=20261127-shared-replies-1">
   <script defer src="/chat-overlay/message-emoji.js?v=20261003-delivery-1"></script>
 </head>
 <body>
@@ -156,7 +156,7 @@
   window.MedsiLoadParentChat=function(){
     if(window.MedsiParentChatScreen)return Promise.resolve();
     if(chatPending)return chatPending;
-    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/chat-overlay/gallery-ui.js?v=20261125-spinner-1','/parents/smart-bot.js?v=20261119-contacts-1','/parents/prewarm.js?v=20261022-preview-isolation','/parents/chat-screen.js?v=20261119-media-10-1']).finally(function(){chatPending=null;});
+    chatPending=series(['/chat-overlay/transport.js?v=20261009-send-retry-1','/chat-overlay/gallery-ui.js?v=20261125-spinner-1','/parents/smart-bot.js?v=20261127-shared-replies-1','/parents/prewarm.js?v=20261022-preview-isolation','/parents/chat-screen.js?v=20261127-shared-replies-1']).finally(function(){chatPending=null;});
     return chatPending;
   };
   var status=document.getElementById('parentBootStatus');
@@ -171,7 +171,7 @@
     status.dataset.reason=code;
   }
   // Assistant and optional chat assets must not gate the parent menu.
-  window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261119-contacts-1',1).then(function(){
+  window.MedsiAssistantReady=load('/parents/smart-bot-widget.js?v=20261127-shared-replies-1',1).then(function(){
     return window.MedsiSmartBotWidget && window.MedsiSmartBotWidget.ready;
   }).catch(function(){});
   function loadAfterBoot(){

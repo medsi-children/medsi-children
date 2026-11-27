@@ -27,6 +27,9 @@ test('parent assistant offers only for confident mapped topics and still skips u
     MedsiOverlayTransport: { sendMessage:async()=>({}) }, addEventListener() {}
   };
   const document = { getElementById:element, addEventListener(){}, body:{dataset:{screen:'screenChat'}} };
+  const replyWindow = {};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'parents', 'smart-bot.js'), 'utf8'), { window: replyWindow });
+  window.MedsiQuickReplies = replyWindow.MedsiQuickReplies;
   vm.runInNewContext(instrumented,{window,document,Intl,Date,setTimeout,clearTimeout});
   assert.equal(window.__assistantIntent('report').kind,'morning');
   assert.equal(window.__assistantIntent('medical').key,'medical');
@@ -79,8 +82,7 @@ test('parent assistant uses the Medsi blob and existing report-delay wording, wi
   const source = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   assert.match(source, /src="\/parents\/blob\.webp"/);
   assert.match(source, /Сейчас идёт окно публикации:/);
-  assert.match(source, /Похоже, сегодня подготовка отчёта занимает немного больше времени\. Пожалуйста, подождите ещё немного\./);
-  assert.match(source, /Пожалуйста, попробуйте перезапустить приложение\. Если отчет все еще не появится, вероятно произошла ошибка\. Пожалуйста, сообщите воспитателям в чате 🙏/);
+  assert.match(source, /return quickReplies\.reportDelay;/);
   assert.match(source, /Вы про утренний отчёт или вечерний отчёт\?/);
   assert.doesNotMatch(source, /не могу (?:надёжно )?проверить|не смог проверить снимок публикации/);
   assert.match(source, /\/lab\/report-current/);
@@ -112,13 +114,16 @@ test('parent and educator doctor contacts match the assistant and stay in one qu
   const parentTest = fs.readFileSync(path.join(__dirname, '..', 'parents', 'chat-screen.js'), 'utf8');
   const parentAssistant = fs.readFileSync(path.join(__dirname, '..', 'parents', 'bot-chat-runtime.js'), 'utf8');
   const educatorTest = fs.readFileSync(path.join(__dirname, '..', 'chat-overlay', 'educator-chat.js'), 'utf8');
-  const unescapeNewlines = value => value.replace(/\\n/g, '\n');
-  const testParentContacts = parentTest.match(/doctors:'([^']*)'/)?.[1];
-  const sourceContacts = parentAssistant.match(/DOCTOR_CONTACTS_TEXT = "([^"]*)"/)?.[1];
-  const educatorContacts = educatorTest.match(/doctors:"([^"]*)"/)?.[1];
-  assert.ok(testParentContacts && sourceContacts && educatorContacts);
-  assert.equal(unescapeNewlines(testParentContacts), unescapeNewlines(sourceContacts));
-  assert.equal(unescapeNewlines(educatorContacts), unescapeNewlines(sourceContacts));
+  const sandbox = {window:{}};
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, '..', 'parents', 'smart-bot.js'), 'utf8'), sandbox);
+  const replies = sandbox.window.MedsiQuickReplies;
+  assert.match(replies.doctors, /Контакты врачей/);
+  assert.match(parentTest, /doctors:quickReplies\.doctors/);
+  assert.match(parentAssistant, /DOCTOR_CONTACTS_TEXT = quickReplies\.doctors/);
+  assert.match(educatorTest, /QUICK_REPLIES=window\.MedsiQuickReplies/);
+  assert.match(parentTest, /groupTherapyParticipants:quickReplies\.groupTherapyParticipants/);
+  assert.match(parentAssistant, /answer: quickReplies\.groupTherapyParticipants/);
+  assert.match(educatorTest, /\['groupTherapyParticipants','Участники групповой терапии'/);
   assert.equal((educatorTest.match(/\['doctors','Контакты врачей'/g) || []).length, 1);
   assert.doesNotMatch(educatorTest, /\['(?:anastasia|anton)','/);
 });

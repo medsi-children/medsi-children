@@ -298,10 +298,10 @@
   async function prepareChat() {
     if (shell) shell.remove();
     await Promise.all([
-      educator || window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261119-contacts-1'),
+      educator || window.MedsiSmartBot ? Promise.resolve() : script('/parents/smart-bot.js?v=20261127-shared-replies-1'),
       window.MedsiPsychologyFormatter ? Promise.resolve() : script('/parents/psychology-format.js?v=20261127-therapy-compact-3'),
       script('/parents/bot-chat-view.js?v=20261012-group-therapy-label-1'),
-      script('/parents/bot-chat-runtime.js?v=20261119-contacts-1'),
+      script('/parents/bot-chat-runtime.js?v=20261127-shared-replies-1'),
       avatarReady
     ]);
     frame = document.createElement('section');
